@@ -108,9 +108,9 @@ class SparsityManager:
                     sample_size = min(1_000_000, param_flat.numel())
                     indices = torch.randperm(param_flat.numel(), device=device)[:sample_size]
                     sampled = param_flat[indices]
-                    threshold = torch.quantile(sampled, sparsity)
+                    threshold = torch.quantile(sampled.float(), sparsity)
                 else:
-                    threshold = torch.quantile(param_flat, sparsity)
+                    threshold = torch.quantile(param_flat.float(), sparsity)
 
                 mask = (param.data.abs() >= threshold).float()
             else:
@@ -156,7 +156,7 @@ class SparsityManager:
         # Compute global threshold from samples
         if samples:
             all_samples = torch.cat(samples)
-            threshold = torch.quantile(all_samples, sparsity)
+            threshold = torch.quantile(all_samples.float(), sparsity)
             logger.info(f"Global threshold: {threshold:.6f}")
         else:
             threshold = 0.0
@@ -250,7 +250,7 @@ class SparsityManager:
 
                 else:
                     # Default: unstructured
-                    threshold = torch.quantile(param.data.abs().reshape(-1), sparsity)
+                    threshold = torch.quantile(param.data.abs().reshape(-1).float(), sparsity)
                     mask = (param.data.abs() >= threshold).float()
             else:
                 mask = torch.ones_like(param.data)
@@ -316,7 +316,7 @@ class SparsityManager:
             if name in gradients and 'weight' in name and len(param.shape) >= 2:
                 # Movement score: |weight * gradient|
                 movement = (param.data.abs() * gradients[name].abs())
-                threshold = torch.quantile(movement.reshape(-1), sparsity)
+                threshold = torch.quantile(movement.reshape(-1).float(), sparsity)
                 mask = (movement >= threshold).float()
             else:
                 mask = torch.ones_like(param.data)
