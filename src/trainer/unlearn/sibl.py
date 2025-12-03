@@ -42,7 +42,7 @@ class SIBL(UnlearnTrainer):
         eta_in: float = 1e-4,  # Inner learning rate
         rho: float = 1.0,  # Penalty parameter for AL
         gamma: float = 1e-4,  # L1 regularization coefficient
-        use_implicit: bool = True,  # Use implicit differentiation
+        use_implicit: bool = False,  # Use implicit differentiation
         cg_iters: int = 10,  # Conjugate gradient iterations
         cg_tol: float = 1e-3,  # CG tolerance
         **kwargs
