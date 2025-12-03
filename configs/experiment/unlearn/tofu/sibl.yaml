@@ -54,8 +54,9 @@ trainer:
     eta_in: 1e-4  # Inner LR
     rho: 1.0  # AL penalty
     gamma: 1e-4  # L1 regularization
-    use_implicit: false
+    use_implicit: true
     cg_iters: 10
     cg_tol: 1e-3
+    cg_damping: 0.001
 
 task_name: ???
