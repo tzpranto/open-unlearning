@@ -48,8 +48,8 @@ trainer:
 
     # S-BiAL parameters
     epsilon: 0.1  # Retain loss budget
-    T: 20  # Outer iterations
-    K: 10  # Inner iterations
+    T: 100  # Outer iterations
+    K: 20  # Inner iterations
     eta_theta: 1e-4  # Outer LR
     eta_in: 1e-4  # Inner LR
     rho: 1.0  # AL penalty

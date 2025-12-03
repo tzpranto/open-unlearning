@@ -5,10 +5,11 @@ models=(
 trainers_experiments=(
     "SIBL unlearn/tofu/sibl.yaml"
 #    "GradAscent unlearn/tofu/default.yaml"
-    "GradDiff unlearn/tofu/default.yaml"
-    "NPO unlearn/tofu/default.yaml"
-    "DPO unlearn/tofu/idk.yaml"
-    "RMU  unlearn/tofu/default.yaml"
+#    "GradDiff unlearn/tofu/default.yaml"
+#    "NPO unlearn/tofu/default.yaml"
+#    "DPO unlearn/tofu/idk.yaml"
+#    "RMU  unlearn/tofu/default.yaml"
+#     "BLURNPO unlearn/tofu/default.yaml"
 )
 splits=(
     "forget05 holdout05 retain95"
