@@ -30,7 +30,8 @@ class SIBL(UnlearnTrainer):
 
     def __init__(
         self,
-        # S-BiAL specific parameters
+        *args,
+        # S-BiAL specific parameters (keyword-only)
         use_sparsity: bool = True,
         sparsity: float = 0.9,
         sparsity_method: str = "layerwise_magnitude",
@@ -44,7 +45,6 @@ class SIBL(UnlearnTrainer):
         use_implicit: bool = True,  # Use implicit differentiation
         cg_iters: int = 10,  # Conjugate gradient iterations
         cg_tol: float = 1e-3,  # CG tolerance
-        *args,
         **kwargs
     ):
         super().__init__(*args, **kwargs)
