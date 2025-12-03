@@ -45,6 +45,7 @@ class SIBL(UnlearnTrainer):
         use_implicit: bool = False,  # Use implicit differentiation
         cg_iters: int = 10,  # Conjugate gradient iterations
         cg_tol: float = 1e-3,  # CG tolerance
+        cg_damping: float = 0.0,  # Hessian damping for CG stability
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -63,6 +64,7 @@ class SIBL(UnlearnTrainer):
         self.use_implicit = use_implicit
         self.cg_iters = cg_iters
         self.cg_tol = cg_tol
+        self.cg_damping = cg_damping
 
         # Initialize dual variable
         self.lambda_dual = 0.0
@@ -355,7 +357,8 @@ class SIBL(UnlearnTrainer):
             def hvp_func(vec):
                 vec_masked = vec * mask_flat
                 hvp = self.compute_hvp(L_inner, params_list, vec_masked)
-                return hvp * mask_flat
+                # Add damping term for better conditioning: (H + λI)v
+                return hvp * mask_flat + self.cg_damping * vec
 
             h = self.conjugate_gradient(hvp_func, v)
 
@@ -394,6 +397,8 @@ class SIBL(UnlearnTrainer):
         logger.info(f"\nStarting S-BiAL unlearning for {self.T} iterations...")
         logger.info(f"Retain budget ε = {self.epsilon:.4f}")
         logger.info(f"Use implicit correction: {self.use_implicit}")
+        if self.use_implicit and self.cg_damping > 0:
+            logger.info(f"CG damping (for Hessian conditioning): {self.cg_damping}")
 
         for t in range(self.T):
             t_start = time.time()
