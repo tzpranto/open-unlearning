@@ -230,8 +230,8 @@ class SIBL(UnlearnTrainer):
         dtype = b.dtype
         n = b.numel()
 
-        # Convert b to numpy
-        b_np = b.detach().cpu().numpy()
+        # Convert b to numpy (convert to float32 first as numpy doesn't support bfloat16)
+        b_np = b.detach().cpu().float().numpy()
 
         # Define the matrix-vector product function for LinearOperator
         def matvec(v):
@@ -239,8 +239,8 @@ class SIBL(UnlearnTrainer):
             v_torch = torch.from_numpy(v).to(device=device, dtype=dtype)
             # Compute Hessian-vector product
             Hv_torch = hvp_func(v_torch)
-            # Convert back to numpy
-            return Hv_torch.detach().cpu().numpy()
+            # Convert back to numpy (convert to float32 first as numpy doesn't support bfloat16)
+            return Hv_torch.detach().cpu().float().numpy()
 
         # Create LinearOperator
         A = LinearOperator((n, n), matvec=matvec, dtype=b_np.dtype)
