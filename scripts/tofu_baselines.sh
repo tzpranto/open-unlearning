@@ -3,9 +3,9 @@ models=(
     "Llama-3.2-1B-Instruct"
 )
 trainers_experiments=(
-    "SIBL unlearn/tofu/sibl.yaml"
-    "GradAscent unlearn/tofu/default.yaml"
-    "GradDiff unlearn/tofu/default.yaml"
+#    "SIBL unlearn/tofu/sibl.yaml"
+#    "GradAscent unlearn/tofu/default.yaml"
+#    "GradDiff unlearn/tofu/default.yaml"
     "NPO unlearn/tofu/default.yaml"
     "DPO unlearn/tofu/idk.yaml"
     "RMU  unlearn/tofu/default.yaml"
