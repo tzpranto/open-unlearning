@@ -4,19 +4,19 @@ models=(
 )
 trainers_experiments=(
     "SIBL unlearn/tofu/sibl.yaml"
-#    "GradAscent unlearn/tofu/default.yaml"
-#    "GradDiff unlearn/tofu/default.yaml"
-#    "NPO unlearn/tofu/default.yaml"
-#    "DPO unlearn/tofu/idk.yaml"
-#    "RMU  unlearn/tofu/default.yaml"
-#     "BLURNPO unlearn/tofu/default.yaml"
+    "GradAscent unlearn/tofu/default.yaml"
+    "GradDiff unlearn/tofu/default.yaml"
+    "NPO unlearn/tofu/default.yaml"
+    "DPO unlearn/tofu/idk.yaml"
+    "RMU  unlearn/tofu/default.yaml"
+    "BLURNPO unlearn/tofu/default.yaml"
 )
 splits=(
-    "forget05 holdout05 retain95"
+    "forget01 holdout01 retain99"
 )
 
 
-per_device_train_batch_size=8 # on two gpus would make effective batch size 32
+per_device_train_batch_size=12 # on two gpus would make effective batch size 32
 gradient_accumulation_steps=1
 
 
