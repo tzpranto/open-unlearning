@@ -48,13 +48,13 @@ trainer:
 
     # S-BiAL parameters
     epsilon: 0.1  # Retain loss budget
-    T: 20  # Outer iterations
+    T: 10  # Outer iterations
     K: 10  # Inner iterations
-    eta_theta: 1e-4  # Outer LR
+    eta_theta: 2e-4  # Outer LR
     eta_in: 1e-4  # Inner LR
     rho: 1.0  # AL penalty
     gamma: 1e-4  # L1 regularization
-    use_implicit: true
+    use_implicit: false
     cg_iters: 10
     cg_tol: 1e-3
     cg_damping: 0.001
