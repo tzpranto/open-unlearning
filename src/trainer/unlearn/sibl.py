@@ -450,6 +450,7 @@ class SIBL(UnlearnTrainer):
             # if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
                 # self.save_model()
 
+        self.evaluate()
         logger.info("Unlearning complete!")
 
         # Return training output
