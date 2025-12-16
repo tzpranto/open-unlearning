@@ -232,7 +232,7 @@ class HyperparameterTuner:
                     f"task_name={task_name}",
                     f"model.model_args.pretrained_model_name_or_path=saves/unlearn/{task_name}",
                     f"paths.output_dir=saves/unlearn/{task_name}/evals",
-                    f"retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json"
+                    f"retain_logs_path=saves/eval/tofu_{model}_{retain_split}/TOFU_EVAL.json"
                 ]
 
                 eval_result = subprocess.run(
