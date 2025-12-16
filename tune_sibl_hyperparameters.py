@@ -126,8 +126,8 @@ class HyperparameterTuner:
         """
         grid = {
             # Sparsity parameters
-            'use_sparsity': [True, False],
-            'sparsity': [0.5, 0.7, 0.9],
+            'use_sparsity': [True],
+            'sparsity': [0.1, 0.3, 0.5],
             'sparsity_method': [
                 'layerwise_magnitude',
                 'preserve_attn_embed',
@@ -137,10 +137,10 @@ class HyperparameterTuner:
             'epsilon': [0.05, 0.1, 0.2],  # Retain loss budget
             'T': [10],  # Outer iterations (fixed)
             'K': [10],  # Inner iterations (fixed)
-            'eta_in': [1e-4, 5e-5],  # Inner LR
-            'eta_theta_multiplier': [1.0, 2.0, 3.0],  # Multiplier for eta_theta
-            'rho': [0.5, 1.0, 2.0],  # AL penalty
-            'gamma': [1e-4, 5e-5],  # L1 regularization
+            'eta_in': [1e-4, 2e-4],  # Inner LR
+            'eta_theta_multiplier': [2.0],  # Multiplier for eta_theta
+            'rho': [1.0, 2.0],  # AL penalty
+            'gamma': [1e-4, 2e-4],  # L1 regularization
             'use_implicit': [False],  # Keep false for now
             'cg_iters': [10],  # Fixed
             'cg_tol': [1e-3],  # Fixed

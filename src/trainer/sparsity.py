@@ -12,6 +12,7 @@ Methods included:
 4. Gradual magnitude pruning (iterative)
 5. Movement pruning (data-driven)
 6. Magnitude with sampling (fastest)
+7. Preserve attention and embedding layers (prune only FFN/MLP)
 """
 
 import torch
@@ -39,7 +40,7 @@ class SparsityManager:
         Args:
             model: The model to create mask for
             method: One of ['layerwise_magnitude', 'random', 'structured',
-                           'gradual', 'movement', 'magnitude_sampling']
+                           'gradual', 'movement', 'magnitude_sampling', 'preserve_attn_embed']
             sparsity: Target sparsity ratio (0.9 = 90% zeros)
             device: Device to place masks on
             **kwargs: Method-specific parameters
@@ -54,6 +55,7 @@ class SparsityManager:
             'gradual': SparsityManager._gradual_magnitude,
             'movement': SparsityManager._movement_pruning,
             'magnitude_sampling': SparsityManager._magnitude_with_sampling,
+            'preserve_attn_embed': SparsityManager._preserve_attn_embed,
         }
 
         if method not in method_map:
@@ -320,6 +322,81 @@ class SparsityManager:
                 mask = (movement >= threshold).float()
             else:
                 mask = torch.ones_like(param.data)
+
+            mask_dict[name] = mask.to(device)
+
+        return mask_dict
+
+    # =========================================================================
+    # Method 7: Preserve Attention and Embedding Layers
+    # =========================================================================
+
+    @staticmethod
+    def _preserve_attn_embed(
+        model: nn.Module,
+        sparsity: float,
+        device: str,
+        **kwargs
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Apply magnitude pruning only to FFN/MLP layers.
+        Preserve attention and embedding layers intact.
+
+        This is useful for maintaining model's core attention mechanism
+        while still achieving significant sparsity in the feedforward layers.
+        """
+        mask_dict = {}
+
+        # Define patterns for layers to preserve (no pruning)
+        preserve_patterns = [
+            'embed',  # Embedding layers
+            'wte', 'wpe',  # GPT-style embeddings
+            'attention', 'attn',  # Attention layers
+            'q_proj', 'k_proj', 'v_proj', 'o_proj',  # Attention projections
+            'self_attn',  # Self-attention
+            'cross_attn',  # Cross-attention
+        ]
+
+        # Define patterns for layers to prune (FFN/MLP layers)
+        prune_patterns = [
+            'mlp',  # MLP layers
+            'fc',  # Fully connected layers
+            'dense',  # Dense layers
+            'gate_proj', 'up_proj', 'down_proj',  # LLaMA-style FFN
+            'wi', 'wo',  # T5-style FFN
+        ]
+
+        for name, param in model.named_parameters():
+            if not param.requires_grad:
+                # Skip frozen parameters
+                mask_dict[name] = torch.ones_like(param.data).to(device)
+                continue
+
+            # Check if this parameter should be preserved
+            should_preserve = any(pattern in name.lower() for pattern in preserve_patterns)
+            should_prune = any(pattern in name.lower() for pattern in prune_patterns)
+
+            # Only prune if it matches prune patterns and doesn't match preserve patterns
+            if should_prune and not should_preserve and 'weight' in name and len(param.shape) >= 2:
+                # Apply magnitude pruning to this layer
+                param_flat = param.data.abs().reshape(-1)
+
+                if param_flat.numel() > 10_000_000:  # >10M elements
+                    # Sample for very large layers
+                    sample_size = min(1_000_000, param_flat.numel())
+                    indices = torch.randperm(param_flat.numel(), device=device)[:sample_size]
+                    sampled = param_flat[indices]
+                    threshold = torch.quantile(sampled.float(), sparsity)
+                else:
+                    threshold = torch.quantile(param_flat.float(), sparsity)
+
+                mask = (param.data.abs() >= threshold).float()
+                logger.info(f"  Pruning layer: {name} (sparsity: {sparsity:.1%})")
+            else:
+                # Keep this layer intact (no pruning)
+                mask = torch.ones_like(param.data)
+                if should_preserve:
+                    logger.info(f"  Preserving layer: {name}")
 
             mask_dict[name] = mask.to(device)
 
