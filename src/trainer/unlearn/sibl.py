@@ -444,11 +444,11 @@ class SIBL(UnlearnTrainer):
             self.state.global_step = t + 1
 
             # Evaluation and checkpointing
-            if self.args.evaluation_strategy != "no" and (t + 1) % self.args.eval_steps == 0:
-                self.evaluate()
+            # if self.args.evaluation_strategy != "no" and (t + 1) % self.args.eval_steps == 0:
+                # self.evaluate()
 
-            if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
-                self.save_model()
+            # if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
+                # self.save_model()
 
         logger.info("Unlearning complete!")
 
