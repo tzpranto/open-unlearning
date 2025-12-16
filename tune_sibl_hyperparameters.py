@@ -218,6 +218,10 @@ class HyperparameterTuner:
 
                 # Run evaluation - following tofu_baselines.sh pattern
                 logger.info(f"Evaluation step for run {run_id}...")
+                retain_split = 'retain99'
+                forget_split = 'forget01'
+                holdout_split = 'holdout01'
+                model = 'Llama-3.2-1B-Instruct'
                 eval_cmd = [
                     sys.executable,
                     "src/eval.py",
@@ -228,6 +232,7 @@ class HyperparameterTuner:
                     f"task_name={task_name}",
                     f"model.model_args.pretrained_model_name_or_path=saves/unlearn/{task_name}",
                     f"paths.output_dir=saves/unlearn/{task_name}/evals",
+                    f"retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json"
                 ]
 
                 eval_result = subprocess.run(
