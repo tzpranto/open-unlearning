@@ -3,18 +3,20 @@ models=(
     "Llama-3.2-1B-Instruct"
 )
 trainers_experiments=(
-#    "SIBL unlearn/tofu/sibl.yaml"
+    "SIBL unlearn/tofu/sibl.yaml"
 #    "GradAscent unlearn/tofu/default.yaml"
 #    "GradDiff unlearn/tofu/default.yaml"
-    "NPO unlearn/tofu/default.yaml"
-    "DPO unlearn/tofu/idk.yaml"
-    "RMU  unlearn/tofu/default.yaml"
-    "BLURNPO unlearn/tofu/default.yaml"
-)
-splits=(
-    "forget01 holdout01 retain99"
+#    "NPO unlearn/tofu/default.yaml"
+#   "DPO unlearn/tofu/idk.yaml"
+#    "RMU  unlearn/tofu/default.yaml"
+#    "BLURNPO unlearn/tofu/default.yaml"
 )
 
+splits=(
+#    "forget01 holdout01 retain99"
+#    "forget05 holdout05 retain95"
+    "forget10 holdout10 retain90"
+)
 
 per_device_train_batch_size=12 # on two gpus would make effective batch size 32
 gradient_accumulation_steps=1

@@ -52,8 +52,8 @@ trainer:
     K: 10  # Inner iterations
     eta_theta: 2e-4  # Outer LR
     eta_in: 1e-4  # Inner LR
-    rho: 1.0  # AL penalty
-    gamma: 1e-4  # L1 regularization
+    rho: 0.5  # AL penalty
+    gamma: 2e-4  # L1 regularization
     use_implicit: false
     cg_iters: 10
     cg_tol: 1e-3
