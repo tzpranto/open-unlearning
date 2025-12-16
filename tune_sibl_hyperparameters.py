@@ -127,14 +127,14 @@ class HyperparameterTuner:
         grid = {
             # Sparsity parameters
             'use_sparsity': [True],
-            'sparsity': [0.1, 0.3, 0.5],
+            'sparsity': [0.1, 0.3],
             'sparsity_method': [
                 'layerwise_magnitude',
                 'preserve_attn_embed',
             ],
 
             # SIBL parameters
-            'epsilon': [0.05, 0.1, 0.2],  # Retain loss budget
+            'epsilon': [0.05, 0.1],  # Retain loss budget
             'T': [10],  # Outer iterations (fixed)
             'K': [10],  # Inner iterations (fixed)
             'eta_in': [1e-4, 2e-4],  # Inner LR
