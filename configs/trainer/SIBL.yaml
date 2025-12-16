@@ -38,9 +38,9 @@ args:
   gradient_checkpointing: False
   save_strategy: 'epoch'
   save_only_model: True
-  save_steps: 5
+  save_steps: 10
   eval_strategy: 'epoch'
-  eval_steps: 5
+  eval_steps: 10
   do_train: True
   do_eval: True
   eval_on_start: True
