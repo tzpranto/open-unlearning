@@ -58,8 +58,8 @@ for model in "${models[@]}"; do
     fi
 
     task_name=PDU-TOFU$retain_split-E$num_train_epochs-lr$learning_rate-P1-$pref-Primal$retain_loss_eps-Step$dual_step_size-Warmup$dual_warmup_epochs-model_$model
-    CUDA_VISIBLE_DEVICES=0 python src/train.py --config_file configs/accelerate/default_config.yaml \
-        --config-name=unlearn.yaml experiment=unlearn/tofu/default \
+    CUDA_VISIBLE_DEVICES=0 python src/train.py \
+        --config-name=unlearn.yaml experiment=unlearn/tofu/default.yaml \
         forget_split=$forget_split retain_split=$retain_split\
         trainer=PDU\
         trainer.args.num_train_epochs=$num_train_epochs\
