@@ -13,9 +13,9 @@ trainers_experiments=(
 )
 
 splits=(
-#    "forget01 holdout01 retain99"
+    "forget01 holdout01 retain99"
 #    "forget05 holdout05 retain95"
-    "forget10 holdout10 retain90"
+#    "forget10 holdout10 retain90"
 )
 
 per_device_train_batch_size=12 # on two gpus would make effective batch size 32
