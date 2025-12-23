@@ -33,6 +33,7 @@ for model in "${models[@]}"; do
     elif [ "$retain_percentage" = "99" ]; then
       forget_split=forget01
       retain_split=retain99
+      holdout_split=holdout01
     else
     #  echo "hello"
       echo "Invalid retain percentage. Please set it to 90, 95, or 99."
@@ -72,5 +73,16 @@ for model in "${models[@]}"; do
         trainer.method_args.dual_update_upon="step" trainer.method_args.dual_warmup_epochs=$dual_warmup_epochs\
         task_name=$task_name\
         model=$model model.model_args.pretrained_model_name_or_path=$pretrained_model_name_or_path
+    
+
+    CUDA_VISIBLE_DEVICES=0 python src/eval.py \
+            experiment=eval/tofu/default.yaml \
+            forget_split=${forget_split} \
+            holdout_split=${holdout_split} \
+            model=${model} \
+            task_name=${task_name} \
+            model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
+            paths.output_dir=saves/unlearn/${task_name}/evals \
+            retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json
   done
 done
