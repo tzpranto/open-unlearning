@@ -57,8 +57,8 @@ for model in "${models[@]}"; do
       echo "Invalid model name. Please set it to Llama-3.2-1B-Instruct, Llama-3.2-3B-Instruct, Llama-3.1-8B-Instruct, or gemma-7b-it."
       exit 1
     fi
-
-    task_name=PDU-TOFU$retain_split-E$num_train_epochs-lr$learning_rate-P1-$pref-Primal$retain_loss_eps-Step$dual_step_size-Warmup$dual_warmup_epochs-model_$model
+    trainer='PDU'
+    task_name=tofu_${model}_${forget_split}_${trainer}
     CUDA_VISIBLE_DEVICES=0 python src/train.py \
         --config-name=unlearn.yaml experiment=unlearn/tofu/default.yaml \
         forget_split=$forget_split retain_split=$retain_split\
@@ -72,6 +72,7 @@ for model in "${models[@]}"; do
         trainer.method_args.dual_step_size=$dual_step_size\
         trainer.method_args.dual_update_upon="step" trainer.method_args.dual_warmup_epochs=$dual_warmup_epochs\
         task_name=$task_name\
+        retain_logs_path=saves/eval/tofu_${model}_${retain_split}/TOFU_EVAL.json \
         model=$model model.model_args.pretrained_model_name_or_path=$pretrained_model_name_or_path
     
 
