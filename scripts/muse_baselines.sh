@@ -54,7 +54,7 @@ for data_split in "${data_splits[@]}"; do
         trainer.args.gradient_checkpointing=true
 
         CUDA_VISIBLE_DEVICES=0 python src/eval.py \
-        experiment=eval/muse/default.yaml \
+        experiment=${experiment} \
         data_split=${data_split} \ 
         task_name=${task_name} \
         model=${model} \
