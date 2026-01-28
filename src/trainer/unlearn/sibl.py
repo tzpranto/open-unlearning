@@ -83,7 +83,7 @@ class SIBL(UnlearnTrainer):
         self.mask_dict = None
     def _get_model_device(self):
         """Get the device where model parameters reside (for multi-GPU DDP compatibility)."""
-        return next(self.model.parameters()).device
+        return self.accelerator.device
    
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
