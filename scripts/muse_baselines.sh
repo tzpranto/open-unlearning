@@ -11,13 +11,13 @@ data_splits=(
 )
 
 trainers_experiments=(
-    #"SIBL unlearn/muse/sibl.yaml"
+    "SIBL unlearn/muse/sibl.yaml"
     #"GradAscent unlearn/muse/default.yaml"
     #"GradDiff unlearn/muse/default.yaml"
-    "NPO unlearn/muse/default.yaml"
-    "SimNPO unlearn/muse/default.yaml"
-    "DPO unlearn/tofu/idk.yaml"
-    "RMU  unlearn/muse/default.yaml"
+    #"NPO unlearn/muse/default.yaml"
+    #"SimNPO unlearn/muse/default.yaml"
+    #"DPO unlearn/tofu/idk.yaml"
+    #"RMU  unlearn/muse/default.yaml"
     # "BLURNPO unlearn/muse/default.yaml"
 )
 
