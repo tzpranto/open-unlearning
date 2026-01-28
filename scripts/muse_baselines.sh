@@ -46,7 +46,7 @@ for data_split in "${data_splits[@]}"; do
         task_name=muse_${model}_${data_split}_${trainer}
 
         CUDA_VISIBLE_DEVICES=0,1 accelerate launch --config_file configs/accelerate/default_config.yaml --main_process_port $MASTER_PORT \
-        python src/train.py --config-name=unlearn.yaml \
+        src/train.py --config-name=unlearn.yaml \
         experiment=${experiment} \
         model=${model} \
         data_split=${data_split} \
@@ -60,7 +60,7 @@ for data_split in "${data_splits[@]}"; do
 
         CUDA_VISIBLE_DEVICES=0 python src/eval.py \
         experiment=${experiment} \
-        data_split=${data_split} \ 
+        data_split=${data_split} \
         task_name=${task_name} \
         model=${model} \
         model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
