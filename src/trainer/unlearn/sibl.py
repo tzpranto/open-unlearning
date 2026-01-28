@@ -87,10 +87,10 @@ class SIBL(UnlearnTrainer):
    
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
+        device = self._get_model_device()
         if self.use_sparsity:
             logger.info(f"Creating sparsity mask with {self.sparsity_method} "
                        f"at {self.sparsity} sparsity...")
-            device = self._get_model_device()
             self.mask_dict = SparsityManager.create_mask(
                 self.model,
                 sparsity=self.sparsity,
