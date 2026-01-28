@@ -429,7 +429,7 @@ class SIBL(UnlearnTrainer):
 
             # Get forget and retain batches
             try:
-                #combined_batch = next(data_iter)
+                combined_batch = next(data_iter)
                 combined_batch = self._prepare_inputs(combined_batch)
                 forget_batch = combined_batch['forget']
                 retain_batch = combined_batch['retain']
