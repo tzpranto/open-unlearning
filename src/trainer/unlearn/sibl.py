@@ -81,12 +81,16 @@ class SIBL(UnlearnTrainer):
 
         # Initialize sparsity mask (will be created when training starts)
         self.mask_dict = None
-
+    def _get_model_device(self):
+        """Get the device where model parameters reside (for multi-GPU DDP compatibility)."""
+        return next(self.model.parameters()).device
+   
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
         if self.use_sparsity:
             logger.info(f"Creating sparsity mask with {self.sparsity_method} "
                        f"at {self.sparsity} sparsity...")
+            device = self._get_model_device()
             self.mask_dict = SparsityManager.create_mask(
                 self.model,
                 sparsity=self.sparsity,
@@ -97,14 +101,17 @@ class SIBL(UnlearnTrainer):
             # No sparsity: all ones mask
             logger.info("No sparsity constraints - using full model")
             self.mask_dict = {
-                name: torch.ones_like(param.data).to(self.args.device)
+                name: torch.ones_like(param.data).to(device)
                 for name, param in self.model.named_parameters()
             }
 
+   
+    
     def compute_forget_loss(self, batch):
         """Compute forget loss using logit margin flattening."""
-        input_ids = batch['input_ids'].to(self.args.device)
-        attention_mask = batch['attention_mask'].to(self.args.device)
+        device = self._get_model_device()
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -120,9 +127,10 @@ class SIBL(UnlearnTrainer):
 
     def compute_retain_loss(self, batch):
         """Compute retain loss (standard cross-entropy)."""
-        input_ids = batch['input_ids'].to(self.args.device)
-        attention_mask = batch['attention_mask'].to(self.args.device)
-        labels = batch.get('labels', input_ids).to(self.args.device)
+        device = self._get_model_device()
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
+        labels = batch.get('labels', input_ids).to(device)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -139,20 +147,21 @@ class SIBL(UnlearnTrainer):
                 mask = self.mask_dict[name]
                 reg += (param.abs() * mask).sum()
         return self.gamma * reg
+  
 
     def inner_step(self, batch):
         """Single inner optimization step on retain set."""
         self.model.train()
 
-        device = next(self.model.parameters()).device
+        device = self._get_model_device()
 
-        input_ids = batch['input_ids'].to(self.args.device)
-        attention_mask = batch['attention_mask'].to(self.args.device)
+        input_ids = batch['input_ids'].to(device)
+        attention_mask = batch['attention_mask'].to(device)
         # labels = batch.get('labels', input_ids).to(self.args.device)
 
         # for multi gpu system
         if 'labels' in batch:
-            labels = batch['labels'].to(self.args.device)
+            labels = batch['labels'].to(device)
         else:
             labels = input_ids.clone()  # Use clone since input_ids is already on device
 
@@ -211,12 +220,13 @@ class SIBL(UnlearnTrainer):
 
     def flatten_mask(self):
         """Flatten all masks to single vector."""
+        device = self._get_model_device()
         masks = []
         for name, param in self.model.named_parameters():
             if name in self.mask_dict:
                 masks.append(self.mask_dict[name].reshape(-1))
             else:
-                masks.append(torch.ones(param.numel(), device=self.args.device))
+                masks.append(torch.ones(param.numel(), device=device))
         return torch.cat(masks)
 
     def compute_hvp(self, loss, params, v):
@@ -303,10 +313,11 @@ class SIBL(UnlearnTrainer):
     def outer_step(self, forget_batch, retain_batch):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
+        device = self._get_model_device()
 
         # Compute forget loss
-        forget_ids = forget_batch['input_ids'].to(self.args.device)
-        forget_mask = forget_batch['attention_mask'].to(self.args.device)
+        forget_ids = forget_batch['input_ids'].to(device)
+        forget_mask = forget_batch['attention_mask'].to(device)
 
         forget_outputs = self.model(input_ids=forget_ids, attention_mask=forget_mask)
         logits = forget_outputs.logits
@@ -315,9 +326,9 @@ class SIBL(UnlearnTrainer):
         L_fgt = (max_logits - mean_logits).mean()
 
         # Compute retain loss
-        retain_ids = retain_batch['input_ids'].to(self.args.device)
-        retain_mask = retain_batch['attention_mask'].to(self.args.device)
-        retain_labels = retain_batch.get('labels', retain_ids).to(self.args.device)
+        retain_ids = retain_batch['input_ids'].to(device)
+        retain_mask = retain_batch['attention_mask'].to(device)
+        retain_labels = retain_batch.get('labels', retain_ids).to(device)
 
         retain_outputs = self.model(
             input_ids=retain_ids,
