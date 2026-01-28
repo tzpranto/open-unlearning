@@ -139,7 +139,7 @@ class HyperparameterTuner:
             'K': [10],  # Inner iterations (fixed)
             'eta_in': [1e-4],  # Inner LR
             'eta_theta_multiplier': [2.0, 1.5, 1.75],  # Multiplier for eta_theta
-            'rho': [1.0]  # AL penalty
+            'rho': [1.0],  # AL penalty
             'gamma': [2e-4],  # L1 regularization
             'use_implicit': [False],  # Keep false for now
             'cg_iters': [10],  # Fixed
