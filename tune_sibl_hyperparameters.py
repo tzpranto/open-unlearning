@@ -134,17 +134,17 @@ class HyperparameterTuner:
             ],
 
             # SIBL parameters
-            'epsilon': [0.1, 0.075, 0.050],  # Retain loss budget
+            'epsilon': [0.1, 0.075],  # Retain loss budget
             'T': [10],  # Outer iterations (fixed)
             'K': [10],  # Inner iterations (fixed)
-            'eta_in': [1e-4, 2e-4],  # Inner LR
+            'eta_in': [1e-4],  # Inner LR
             'eta_theta_multiplier': [2.0, 1.5, 1.75],  # Multiplier for eta_theta
-            'rho': [1.0, 0.75, 0.50],  # AL penalty
-            'gamma': [2e-4, 2.5e-4, 1.5e-4],  # L1 regularization
+            'rho': [1.0,  # AL penalty
+            'gamma': [2e-4],  # L1 regularization
             'use_implicit': [False],  # Keep false for now
             'cg_iters': [10],  # Fixed
             'cg_tol': [1e-3],  # Fixed
-            
+
         }
 
         return grid
