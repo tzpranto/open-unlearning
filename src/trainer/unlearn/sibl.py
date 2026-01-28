@@ -109,9 +109,9 @@ class SIBL(UnlearnTrainer):
     
     def compute_forget_loss(self, batch):
         """Compute forget loss using logit margin flattening."""
-        device = self._get_model_device()
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
+        # device = self._get_model_device()
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
 
         outputs = self.model(
             input_ids=input_ids,
@@ -127,10 +127,10 @@ class SIBL(UnlearnTrainer):
 
     def compute_retain_loss(self, batch):
         """Compute retain loss (standard cross-entropy)."""
-        device = self._get_model_device()
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        labels = batch.get('labels', input_ids).to(device)
+        # device = self._get_model_device()
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
+        labels = batch.get('labels', input_ids)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -153,17 +153,19 @@ class SIBL(UnlearnTrainer):
         """Single inner optimization step on retain set."""
         self.model.train()
 
-        device = self._get_model_device()
+        # device = self._get_model_device()
 
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask']
         # labels = batch.get('labels', input_ids).to(self.args.device)
-
-        # for multi gpu system
         if 'labels' in batch:
-            labels = batch['labels'].to(device)
-        else:
-            labels = input_ids.clone()  # Use clone since input_ids is already on device
+            labels = batch['labels']
+
+        # # for multi gpu system
+        # if 'labels' in batch:
+        #     labels = batch['labels'].to(device)
+        # else:
+        #     labels = input_ids.clone()  # Use clone since input_ids is already on device
 
         outputs = self.model(
             input_ids=input_ids,
@@ -313,11 +315,11 @@ class SIBL(UnlearnTrainer):
     def outer_step(self, forget_batch, retain_batch):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
-        device = self._get_model_device()
+        # device = self._get_model_device()
 
         # Compute forget loss
-        forget_ids = forget_batch['input_ids'].to(device)
-        forget_mask = forget_batch['attention_mask'].to(device)
+        forget_ids = forget_batch['input_ids']
+        forget_mask = forget_batch['attention_mask']
 
         forget_outputs = self.model(input_ids=forget_ids, attention_mask=forget_mask)
         logits = forget_outputs.logits
@@ -326,9 +328,9 @@ class SIBL(UnlearnTrainer):
         L_fgt = (max_logits - mean_logits).mean()
 
         # Compute retain loss
-        retain_ids = retain_batch['input_ids'].to(device)
-        retain_mask = retain_batch['attention_mask'].to(device)
-        retain_labels = retain_batch.get('labels', retain_ids).to(device)
+        retain_ids = retain_batch['input_ids']
+        retain_mask = retain_batch['attention_mask']
+        retain_labels = retain_batch.get('labels', retain_ids)
 
         retain_outputs = self.model(
             input_ids=retain_ids,
@@ -427,7 +429,8 @@ class SIBL(UnlearnTrainer):
 
             # Get forget and retain batches
             try:
-                combined_batch = next(data_iter)
+                #combined_batch = next(data_iter)
+                combined_batch = self._prepare_inputs(combined_batch)
                 forget_batch = combined_batch['forget']
                 retain_batch = combined_batch['retain']
             except (StopIteration, KeyError) as e:
