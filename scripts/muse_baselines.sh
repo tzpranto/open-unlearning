@@ -5,7 +5,7 @@ echo "Master Port: $MASTER_PORT"
 
 
 per_device_train_batch_size=8
-gradient_accumulation_steps=1
+gradient_accumulation_steps=2
 
 model=Llama-2-7b-hf
 
@@ -15,11 +15,11 @@ data_splits=(
 )
 
 trainers_experiments=(
-    "SIBL unlearn/muse/sibl.yaml"
+    #"SIBL unlearn/muse/sibl.yaml"
     #"GradAscent unlearn/muse/default.yaml"
     #"GradDiff unlearn/muse/default.yaml"
     #"NPO unlearn/muse/default.yaml"
-    #"SimNPO unlearn/muse/default.yaml"
+    "SimNPO unlearn/muse/default.yaml"
     #"DPO unlearn/tofu/idk.yaml"
     #"RMU  unlearn/muse/default.yaml"
     # "BLURNPO unlearn/muse/default.yaml"
