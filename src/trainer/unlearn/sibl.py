@@ -146,7 +146,13 @@ class SIBL(UnlearnTrainer):
 
         input_ids = batch['input_ids'].to(self.args.device)
         attention_mask = batch['attention_mask'].to(self.args.device)
-        labels = batch.get('labels', input_ids).to(self.args.device)
+        # labels = batch.get('labels', input_ids).to(self.args.device)
+
+        # for multi gpu system
+        if 'labels' in batch:
+            labels = batch['labels'].to(self.args.device)
+        else:
+            labels = input_ids.clone()  # Use clone since input_ids is already on device
 
         outputs = self.model(
             input_ids=input_ids,
