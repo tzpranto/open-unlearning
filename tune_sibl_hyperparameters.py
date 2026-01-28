@@ -144,6 +144,7 @@ class HyperparameterTuner:
             'use_implicit': [False],  # Keep false for now
             'cg_iters': [10],  # Fixed
             'cg_tol': [1e-3],  # Fixed
+            
         }
 
         return grid

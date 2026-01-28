@@ -1,5 +1,9 @@
 #!/bin/bash
 
+export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+echo "Master Port: $MASTER_PORT"
+
+
 per_device_train_batch_size=8
 gradient_accumulation_steps=1
 
@@ -41,7 +45,8 @@ for data_split in "${data_splits[@]}"; do
 
         task_name=muse_${model}_${data_split}_${trainer}
 
-        CUDA_VISIBLE_DEVICES=0 python src/train.py --config-name=unlearn.yaml \
+        CUDA_VISIBLE_DEVICES=0,1 accelerate launch --config_file configs/accelerate/default_config.yaml --main_process_port $MASTER_PORT \
+        python src/train.py --config-name=unlearn.yaml \
         experiment=${experiment} \
         model=${model} \
         data_split=${data_split} \
