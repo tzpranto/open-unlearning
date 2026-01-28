@@ -42,9 +42,9 @@ data:
 trainer:
   method_args:
     # Sparsity configuration
-    use_sparsity: true
-    sparsity: 0.1
-    sparsity_method: preserve_attn_embed
+    use_sparsity: false
+    sparsity: 0.9
+    sparsity_method: layerwise_magnitude
 
     # S-BiAL parameters
     epsilon: 0.1  # Retain loss budget
