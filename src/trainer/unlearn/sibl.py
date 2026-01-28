@@ -144,6 +144,8 @@ class SIBL(UnlearnTrainer):
         """Single inner optimization step on retain set."""
         self.model.train()
 
+        device = next(self.model.parameters()).device
+
         input_ids = batch['input_ids'].to(self.args.device)
         attention_mask = batch['attention_mask'].to(self.args.device)
         # labels = batch.get('labels', input_ids).to(self.args.device)
