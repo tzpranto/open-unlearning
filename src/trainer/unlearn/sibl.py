@@ -463,6 +463,13 @@ class SIBL(UnlearnTrainer):
         if self.mask_dict is None:
             self._initialize_mask()
 
+        # Enable gradient checkpointing for memory (SIBL bypasses _inner_training_loop)
+        if getattr(self.args, "gradient_checkpointing", False):
+            kwargs = getattr(self.args, "gradient_checkpointing_kwargs", None) or {}
+            self.model.gradient_checkpointing_enable(
+                gradient_checkpointing_kwargs=kwargs
+            )
+
         # Get data loaders
         train_dataloader = self.get_train_dataloader()
 

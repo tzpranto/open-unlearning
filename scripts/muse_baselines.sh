@@ -1,10 +1,13 @@
 #!/bin/bash
 
-export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
-echo "Master Port: $MASTER_PORT"
+# Reduce CUDA fragmentation (can help with OOM when memory is almost full)
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+# export MASTER_PORT=$(python -c "import socket; s=socket.socket(); s.bind(('', 0)); print(s.getsockname()[1]); s.close()")
+# echo "Master Port: $MASTER_PORT"
 
 
-per_device_train_batch_size=8
+per_device_train_batch_size=1
 gradient_accumulation_steps=2
 
 model=Llama-2-7b-hf
@@ -15,14 +18,14 @@ data_splits=(
 )
 
 trainers_experiments=(
-    "SIBL unlearn/muse/sibl.yaml"
+    # "SIBL unlearn/muse/sibl.yaml"
     #"GradAscent unlearn/muse/default.yaml"
     #"GradDiff unlearn/muse/default.yaml"
-    #"NPO unlearn/muse/default.yaml"
+    # "NPO unlearn/muse/default.yaml"
     # "SimNPO unlearn/muse/default.yaml"
     #"DPO unlearn/tofu/idk.yaml"
     #"RMU  unlearn/muse/default.yaml"
-    # "BLURNPO unlearn/muse/default.yaml"
+    "BLURNPO unlearn/muse/default.yaml"
 )
 
 
@@ -45,7 +48,8 @@ for data_split in "${data_splits[@]}"; do
 
         task_name=muse_${model}_${data_split}_${trainer}
 
-        CUDA_VISIBLE_DEVICES=0,1 accelerate launch --config_file configs/accelerate/default_config.yaml --main_process_port $MASTER_PORT \
+        # CUDA_VISIBLE_DEVICES=0 accelerate launch --config_file configs/accelerate/single_gpu_config.yaml --main_process_port $MASTER_PORT \
+        CUDA_VISIBLE_DEVICES=0 python \
         src/train.py --config-name=unlearn.yaml \
         experiment=${experiment} \
         model=${model} \
@@ -82,7 +86,7 @@ done
             
 #             task_name=muse_${model}_${data_split}_${trainer}_scal_${scal} \
             
-#             CUDA_VISIBLE_DEVICES=0,1 accelerate launch --config_file configs/accelerate/default_config.yaml --main_process_port $MASTER_PORT \
+#             CUDA_VISIBLE_DEVICES=0 accelerate launch --config_file configs/accelerate/single_gpu_config.yaml --main_process_port $MASTER_PORT \
 #             src/train.py --config-name=unlearn.yaml \
 #             experiment=unlearn/muse/scalability.yaml \
 #             model=${model} \
@@ -122,7 +126,7 @@ done
             
 #             task_name=muse_${model}_${data_split}_${trainer}_sust_${sust}
 
-#             CUDA_VISIBLE_DEVICES=0,1 accelerate launch --config_file configs/accelerate/default_config.yaml --main_process_port $MASTER_PORT \
+#             CUDA_VISIBLE_DEVICES=0 accelerate launch --config_file configs/accelerate/single_gpu_config.yaml --main_process_port $MASTER_PORT \
 #             src/train.py --config-name=unlearn.yaml \
 #             experiment=unlearn/muse/sustainabilty.yaml \
 #             model=${model} \
