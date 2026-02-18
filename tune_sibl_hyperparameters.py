@@ -126,10 +126,10 @@ class HyperparameterTuner:
         """
         grid = {
             # Sparsity parameters
-            'use_sparsity': [False, True],
+            'use_sparsity': [False],
             'sparsity': [0.1],
             'sparsity_method': [
-                'layerwise_magnitude', 'preserve_attn_embed',
+                'layerwise_magnitude'#, 'preserve_attn_embed',
              ],
 
             # SIBL parameters
@@ -147,7 +147,7 @@ class HyperparameterTuner:
             # Loss function configuration
             # Options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
             #'forget_loss_type': ['logit_margin', 'grad_ascent', 'grad_diff', 'npo', 'simnpo', 'pdu', 'rmu'],  # Default only, expand as needed
-	    'forget_loss_type' : ['logit_margin','npo','simnpo'],
+	       'forget_loss_type' : ['logit_margin','npo','simnpo'],
             # Regularization configuration
             # Options: l1, l2, elastic_net, none
             'regularization_type': ['l1', 'l2','elastic_net'],  # Default only, expand as needed
