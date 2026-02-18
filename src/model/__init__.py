@@ -50,6 +50,32 @@ def get_model(model_cfg: DictConfig):
     with open_dict(model_args):
         model_path = model_args.pop("pretrained_model_name_or_path", None)
     try:
+        # region agent log
+        try:
+            import json, time
+
+            timestamp_ms = int(time.time() * 1000)
+            log_payload = {
+                "id": f"log_{timestamp_ms}_before_load",
+                "timestamp": timestamp_ms,
+                "location": "src/model/__init__.py:get_model:before_load",
+                "message": "Attempting model load",
+                "data": {
+                    "model_path": model_path,
+                    "model_handler": model_handler,
+                    "torch_dtype": str(torch_dtype),
+                    "model_args_keys": list(model_args.keys()),
+                },
+                "runId": "pre-fix",
+                "hypothesisId": "H2_H3_H4",
+            }
+            with open(
+                "/datadrive/forked/open-unlearning/.cursor/debug.log", "a"
+            ) as f:
+                f.write(json.dumps(log_payload) + "\n")
+        except Exception:
+            pass
+        # endregion agent log
         model = model_cls.from_pretrained(
             pretrained_model_name_or_path=model_path,
             torch_dtype=torch_dtype,
@@ -58,6 +84,31 @@ def get_model(model_cfg: DictConfig):
         )
     except Exception as e:
         logger.warning(f"Model {model_path} requested with {model_cfg.model_args}")
+        # region agent log
+        try:
+            import json, time
+
+            timestamp_ms = int(time.time() * 1000)
+            log_payload = {
+                "id": f"log_{timestamp_ms}_load_error",
+                "timestamp": timestamp_ms,
+                "location": "src/model/__init__.py:get_model:load_error",
+                "message": "Model load failed",
+                "data": {
+                    "model_path": model_path,
+                    "model_handler": model_handler,
+                    "error": str(e),
+                },
+                "runId": "pre-fix",
+                "hypothesisId": "H2_H3_H4",
+            }
+            with open(
+                "/datadrive/forked/open-unlearning/.cursor/debug.log", "a"
+            ) as f:
+                f.write(json.dumps(log_payload) + "\n")
+        except Exception:
+            pass
+        # endregion agent log
         raise ValueError(
             f"Error {e} while fetching model using {model_handler}.from_pretrained()."
         )

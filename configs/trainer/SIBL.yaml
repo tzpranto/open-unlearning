@@ -21,8 +21,7 @@ method_args:
   use_implicit: true  # Use implicit differentiation (recommended)
   cg_iters: 10  # Conjugate gradient max iterations
   cg_tol: 1e-3  # Conjugate gradient tolerance
-
-    cg_damping: 0.0  # Hessian damping for CG stability
+  cg_damping: 0.0  # Hessian damping for CG stability
 
   # Loss function configuration
   # forget_loss_type options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
