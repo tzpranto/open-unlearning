@@ -126,24 +126,37 @@ class HyperparameterTuner:
         """
         grid = {
             # Sparsity parameters
-            'use_sparsity': [False, True],
-            'sparsity': [0.1, 0.3],
+            'use_sparsity': [False],
+            'sparsity': [0.1],
             'sparsity_method': [
-                'layerwise_magnitude',
-                'preserve_attn_embed',
-            ],
+                'layerwise_magnitude'#'preserve_attn_embed',
+             ],
 
             # SIBL parameters
-            'epsilon': [0.1, 0.075],  # Retain loss budget
+            'epsilon': [0.1],  # Retain loss budget
             'T': [10],  # Outer iterations (fixed)
             'K': [10],  # Inner iterations (fixed)
             'eta_in': [1e-4],  # Inner LR
-            'eta_theta_multiplier': [2.0, 1.5, 1.75],  # Multiplier for eta_theta
+            'eta_theta_multiplier': [2.0],  # Multiplier for eta_theta
             'rho': [1.0],  # AL penalty
-            'gamma': [2e-4],  # L1 regularization
+            'gamma': [2e-4],  # Regularization coefficient
             'use_implicit': [False],  # Keep false for now
             'cg_iters': [10],  # Fixed
             'cg_tol': [1e-3],  # Fixed
+
+            # Loss function configuration
+            # Options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
+            #'forget_loss_type': ['logit_margin', 'grad_ascent', 'grad_diff', 'npo', 'simnpo', 'pdu', 'rmu'],  # Default only, expand as needed
+	    'forget_loss_type' : ['logit_margin'],
+            # Regularization configuration
+            # Options: l1, l2, elastic_net, none
+            'regularization_type': ['l1', 'l2','elastic_net'],  # Default only, expand as needed
+
+            # Loss-specific parameters (used when relevant loss types are selected)
+            'npo_beta': [1.0],  # For NPO loss
+            'simnpo_beta': [1.0],  # For SimNPO loss
+            'simnpo_delta': [0.0],  # For SimNPO loss
+            'elastic_net_l1_ratio': [0.5],  # For elastic net regularization
         }
 
         return grid
@@ -194,6 +207,13 @@ class HyperparameterTuner:
             f"trainer.method_args.use_implicit={str(params['use_implicit']).lower()}",
             f"trainer.method_args.cg_iters={params['cg_iters']}",
             f"trainer.method_args.cg_tol={params['cg_tol']}",
+            # Loss function and regularization configuration
+            f"trainer.method_args.forget_loss_type={params['forget_loss_type']}",
+            f"trainer.method_args.regularization_type={params['regularization_type']}",
+            f"trainer.method_args.npo_beta={params['npo_beta']}",
+            f"trainer.method_args.simnpo_beta={params['simnpo_beta']}",
+            f"trainer.method_args.simnpo_delta={params['simnpo_delta']}",
+            f"trainer.method_args.elastic_net_l1_ratio={params['elastic_net_l1_ratio']}",
         ]
 
         # Run training
@@ -283,6 +303,13 @@ class HyperparameterTuner:
             'use_implicit': params['use_implicit'],
             'cg_iters': params['cg_iters'],
             'cg_tol': params['cg_tol'],
+            # Loss and regularization configuration
+            'forget_loss_type': params['forget_loss_type'],
+            'regularization_type': params['regularization_type'],
+            'npo_beta': params['npo_beta'],
+            'simnpo_beta': params['simnpo_beta'],
+            'simnpo_delta': params['simnpo_delta'],
+            'elastic_net_l1_ratio': params['elastic_net_l1_ratio'],
             # Metrics
             'model_utility': metrics.get('model_utility'),
             'forget_quality': metrics.get('forget_quality'),

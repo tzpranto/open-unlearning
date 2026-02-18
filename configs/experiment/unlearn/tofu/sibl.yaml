@@ -54,6 +54,20 @@ trainer:
     eta_in: 1e-4  # Inner LR
     rho: 1.0  # AL penalty
     gamma: 2e-4  # L1 regularization
+
+        # Loss function configuration
+    # forget_loss_type options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
+    forget_loss_type: logit_margin  # Default: original SIBL logit margin flattening
+
+    # Regularization configuration
+    # regularization_type options: l1, l2, elastic_net, none
+    regularization_type: l1  # Default: L1 sparsity-inducing regularization
+
+    # Loss-specific parameters
+    npo_beta: 1.0  # Temperature for NPO loss (used when forget_loss_type=npo)
+    simnpo_beta: 1.0  # Temperature for SimNPO loss (used when forget_loss_type=simnpo)
+    simnpo_delta: 0.0  # Offset for SimNPO loss (used when forget_loss_type=simnpo)
+    elastic_net_l1_ratio: 0.5  # L1 ratio for elastic net (0.5 = equal L1 and L2)
     use_implicit: false
     cg_iters: 10
     cg_tol: 1e-3

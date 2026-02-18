@@ -15,12 +15,29 @@ method_args:
   eta_theta: 1e-4  # Outer loop learning rate
   eta_in: 1e-4  # Inner loop learning rate
   rho: 1.0  # Penalty parameter for Augmented Lagrangian
-  gamma: 1e-4  # L1 sparsity regularization coefficient
+  gamma: 1e-4  # Regularization coefficient
 
   # Implicit differentiation settings
   use_implicit: true  # Use implicit differentiation (recommended)
   cg_iters: 10  # Conjugate gradient max iterations
   cg_tol: 1e-3  # Conjugate gradient tolerance
+
+    cg_damping: 0.0  # Hessian damping for CG stability
+
+  # Loss function configuration
+  # forget_loss_type options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
+  forget_loss_type: logit_margin  # Default: original SIBL logit margin flattening
+
+  # Regularization configuration
+  # regularization_type options: l1, l2, elastic_net, none
+  regularization_type: l1  # Default: L1 sparsity-inducing regularization
+
+  # Loss-specific parameters
+  npo_beta: 1.0  # Temperature for NPO loss (used when forget_loss_type=npo)
+  simnpo_beta: 1.0  # Temperature for SimNPO loss (used when forget_loss_type=simnpo)
+  simnpo_delta: 0.0  # Offset for SimNPO loss (used when forget_loss_type=simnpo)
+  elastic_net_l1_ratio: 0.5  # L1 ratio for elastic net (0.5 = equal L1 and L2)
+
 
 # Override trainer args for SIBL
 # Note: SIBL uses custom training loop, so some standard args may not apply

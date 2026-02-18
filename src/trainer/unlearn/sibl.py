@@ -4,6 +4,10 @@ SIBL (Sparse Bilevel Augmented Lagrangian) Unlearning Method
 
 Implements the S-BiAL algorithm for machine unlearning with sparsity constraints.
 Uses bilevel optimization with Augmented Lagrangian method and implicit differentiation.
+
+Supports multiple forget loss functions and regularization methods:
+- Forget losses: logit_margin (default), grad_ascent, grad_diff, npo, simnpo, pdu, rmu
+- Regularization: l1 (default), l2, elastic_net, none
 """
 
 import torch
@@ -14,6 +18,12 @@ import logging
 from typing import Dict, Optional
 from trainer.unlearn.base import UnlearnTrainer
 from trainer.sparsity import SparsityManager
+from trainer.unlearn.loss_functions import (
+    get_forget_loss_fn,
+    get_regularization_fn,
+    AVAILABLE_FORGET_LOSSES,
+    AVAILABLE_REGULARIZATIONS
+)
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +51,19 @@ class SIBL(UnlearnTrainer):
         eta_theta: float = 1e-4,  # Outer learning rate
         eta_in: float = 1e-4,  # Inner learning rate
         rho: float = 1.0,  # Penalty parameter for AL
-        gamma: float = 1e-4,  # L1 regularization coefficient
+        gamma: float = 1e-4,  # Regularization coefficient
         use_implicit: bool = False,  # Use implicit differentiation
         cg_iters: int = 10,  # Conjugate gradient iterations
         cg_tol: float = 1e-3,  # CG tolerance
         cg_damping: float = 0.0,  # Hessian damping for CG stability
+        # New configurable loss and regularization parameters
+        forget_loss_type: str = "logit_margin",  # Type of forget loss function
+        regularization_type: str = "l1",  # Type of regularization (l1, l2, elastic_net, none)
+        # Loss-specific parameters
+        npo_beta: float = 1.0,  # Beta for NPO loss
+        simnpo_beta: float = 1.0,  # Beta for SimNPO loss
+        simnpo_delta: float = 0.0,  # Delta offset for SimNPO loss
+        elastic_net_l1_ratio: float = 0.5,  # L1 ratio for elastic net (0.5 = equal L1 and L2)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -66,6 +84,35 @@ class SIBL(UnlearnTrainer):
         self.cg_tol = cg_tol
         self.cg_damping = cg_damping
 
+        # Store loss and regularization configuration
+        self.forget_loss_type = forget_loss_type
+        self.regularization_type = regularization_type
+        self.npo_beta = npo_beta
+        self.simnpo_beta = simnpo_beta
+        self.simnpo_delta = simnpo_delta
+        self.elastic_net_l1_ratio = elastic_net_l1_ratio
+
+        # Validate loss and regularization types
+        if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
+            raise ValueError(
+                f"Unknown forget_loss_type: {forget_loss_type}. "
+                f"Available: {AVAILABLE_FORGET_LOSSES}"
+            )
+        if regularization_type not in AVAILABLE_REGULARIZATIONS:
+            raise ValueError(
+                f"Unknown regularization_type: {regularization_type}. "
+                f"Available: {AVAILABLE_REGULARIZATIONS}"
+            )
+
+        # Get the loss and regularization functions
+        self._forget_loss_fn = get_forget_loss_fn(forget_loss_type)
+        self._regularization_fn = get_regularization_fn(regularization_type)
+
+        # Initialize reference model for NPO if needed
+        self.ref_model = None
+        if forget_loss_type == "npo":
+            logger.info("NPO loss requires reference model - will be initialized on first use")
+
         # Initialize dual variable
         self.lambda_dual = 0.0
 
@@ -81,13 +128,13 @@ class SIBL(UnlearnTrainer):
 
         # Initialize sparsity mask (will be created when training starts)
         self.mask_dict = None
-    def _get_model_device(self):
-        """Get the device where model parameters reside (for multi-GPU DDP compatibility)."""
-        return self.accelerator.device
-   
+
+        # Log configuration
+        logger.info(f"SIBL configured with forget_loss_type={forget_loss_type}, "
+                   f"regularization_type={regularization_type}")
+
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
-        device = self._get_model_device()
         if self.use_sparsity:
             logger.info(f"Creating sparsity mask with {self.sparsity_method} "
                        f"at {self.sparsity} sparsity...")
@@ -101,36 +148,51 @@ class SIBL(UnlearnTrainer):
             # No sparsity: all ones mask
             logger.info("No sparsity constraints - using full model")
             self.mask_dict = {
-                name: torch.ones_like(param.data).to(device)
+                name: torch.ones_like(param.data).to(self.args.device)
                 for name, param in self.model.named_parameters()
             }
 
-   
-    
+    def _prepare_ref_model(self):
+        """Prepare reference model for NPO loss (lazy initialization)."""
+        if self.ref_model is None and self.forget_loss_type == "npo":
+            logger.info("Creating reference model for NPO loss...")
+            self.ref_model = copy.deepcopy(self.model)
+            self.ref_model.eval()
+            for param in self.ref_model.parameters():
+                param.requires_grad = False
+            # Move to same device
+            self.ref_model = self.ref_model.to(self.args.device)
+            logger.info("Reference model created and frozen")
+
     def compute_forget_loss(self, batch):
-        """Compute forget loss using logit margin flattening."""
-        # device = self._get_model_device()
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
+        """
+        Compute forget loss using the configured loss function.
 
-        outputs = self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask
+        Supports: logit_margin (default), grad_ascent, grad_diff, npo, simnpo, pdu, rmu
+        """
+        # Prepare reference model for NPO if needed
+        if self.forget_loss_type == "npo":
+            self._prepare_ref_model()
+
+        # Build kwargs for the loss function
+        loss_kwargs = {
+            'ref_model': self.ref_model,
+            'beta': self.npo_beta if self.forget_loss_type == "npo" else self.simnpo_beta,
+            'delta': self.simnpo_delta,
+        }
+
+        return self._forget_loss_fn(
+            self.model,
+            batch,
+            self.args.device,
+            **loss_kwargs
         )
-
-        # Logit margin flattening
-        logits = outputs.logits
-        max_logits = logits.max(dim=-1)[0]
-        mean_logits = logits.mean(dim=-1)
-        margins = max_logits - mean_logits
-        return margins.mean()
 
     def compute_retain_loss(self, batch):
         """Compute retain loss (standard cross-entropy)."""
-        # device = self._get_model_device()
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        labels = batch.get('labels', input_ids)
+        input_ids = batch['input_ids'].to(self.args.device)
+        attention_mask = batch['attention_mask'].to(self.args.device)
+        labels = batch.get('labels', input_ids).to(self.args.device)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -140,32 +202,34 @@ class SIBL(UnlearnTrainer):
         return outputs.loss
 
     def compute_sparsity_regularizer(self):
-        """Compute L1 sparsity regularizer."""
-        reg = 0.0
-        for name, param in self.model.named_parameters():
-            if name in self.mask_dict:
-                mask = self.mask_dict[name]
-                reg += (param.abs() * mask).sum()
-        return self.gamma * reg
-  
+        """
+        Compute sparsity regularizer using the configured regularization type.
+
+        Supports: l1 (default), l2, elastic_net, none
+        """
+        if self.regularization_type == "elastic_net":
+            return self._regularization_fn(
+                self.model,
+                self.mask_dict,
+                self.gamma,
+                self.args.device,
+                l1_ratio=self.elastic_net_l1_ratio
+            )
+        else:
+            return self._regularization_fn(
+                self.model,
+                self.mask_dict,
+                self.gamma,
+                self.args.device
+            )
 
     def inner_step(self, batch):
         """Single inner optimization step on retain set."""
         self.model.train()
 
-        # device = self._get_model_device()
-
-        input_ids = batch['input_ids']
-        attention_mask = batch['attention_mask']
-        # labels = batch.get('labels', input_ids).to(self.args.device)
-        if 'labels' in batch:
-            labels = batch['labels']
-
-        # # for multi gpu system
-        # if 'labels' in batch:
-        #     labels = batch['labels'].to(device)
-        # else:
-        #     labels = input_ids.clone()  # Use clone since input_ids is already on device
+        input_ids = batch['input_ids'].to(self.args.device)
+        attention_mask = batch['attention_mask'].to(self.args.device)
+        labels = batch.get('labels', input_ids).to(self.args.device)
 
         outputs = self.model(
             input_ids=input_ids,
@@ -174,13 +238,9 @@ class SIBL(UnlearnTrainer):
         )
         loss = outputs.loss
 
-        # Add L1 sparsity regularizer
-        l1_reg = sum(
-            (p.abs() * self.mask_dict[name]).sum()
-            for name, p in self.model.named_parameters()
-            if name in self.mask_dict and p.requires_grad
-        )
-        loss_total = loss + self.gamma * l1_reg
+        # Add regularization using the configured type
+        reg_loss = self.compute_sparsity_regularizer()
+        loss_total = loss + reg_loss
 
         loss_total.backward()
 
@@ -222,13 +282,12 @@ class SIBL(UnlearnTrainer):
 
     def flatten_mask(self):
         """Flatten all masks to single vector."""
-        device = self._get_model_device()
         masks = []
         for name, param in self.model.named_parameters():
             if name in self.mask_dict:
                 masks.append(self.mask_dict[name].reshape(-1))
             else:
-                masks.append(torch.ones(param.numel(), device=device))
+                masks.append(torch.ones(param.numel(), device=self.args.device))
         return torch.cat(masks)
 
     def compute_hvp(self, loss, params, v):
@@ -315,22 +374,14 @@ class SIBL(UnlearnTrainer):
     def outer_step(self, forget_batch, retain_batch):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
-        # device = self._get_model_device()
 
-        # Compute forget loss
-        forget_ids = forget_batch['input_ids']
-        forget_mask = forget_batch['attention_mask']
-
-        forget_outputs = self.model(input_ids=forget_ids, attention_mask=forget_mask)
-        logits = forget_outputs.logits
-        max_logits = logits.max(dim=-1)[0]
-        mean_logits = logits.mean(dim=-1)
-        L_fgt = (max_logits - mean_logits).mean()
+        # Compute forget loss using the configured loss function
+        L_fgt = self.compute_forget_loss(forget_batch)
 
         # Compute retain loss
-        retain_ids = retain_batch['input_ids']
-        retain_mask = retain_batch['attention_mask']
-        retain_labels = retain_batch.get('labels', retain_ids)
+        retain_ids = retain_batch['input_ids'].to(self.args.device)
+        retain_mask = retain_batch['attention_mask'].to(self.args.device)
+        retain_labels = retain_batch.get('labels', retain_ids).to(self.args.device)
 
         retain_outputs = self.model(
             input_ids=retain_ids,
@@ -416,6 +467,8 @@ class SIBL(UnlearnTrainer):
         train_dataloader = self.get_train_dataloader()
 
         logger.info(f"\nStarting S-BiAL unlearning for {self.T} iterations...")
+        logger.info(f"Forget loss type: {self.forget_loss_type}")
+        logger.info(f"Regularization type: {self.regularization_type}")
         logger.info(f"Retain budget ε = {self.epsilon:.4f}")
         logger.info(f"Use implicit correction: {self.use_implicit}")
         if self.use_implicit and self.cg_damping > 0:
@@ -430,7 +483,6 @@ class SIBL(UnlearnTrainer):
             # Get forget and retain batches
             try:
                 combined_batch = next(data_iter)
-                combined_batch = self._prepare_inputs(combined_batch)
                 forget_batch = combined_batch['forget']
                 retain_batch = combined_batch['retain']
             except (StopIteration, KeyError) as e:
