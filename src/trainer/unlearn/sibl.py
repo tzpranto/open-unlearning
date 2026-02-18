@@ -53,9 +53,17 @@ class SIBL(UnlearnTrainer):
         rho: float = 1.0,  # Penalty parameter for AL
         gamma: float = 1e-4,  # Regularization coefficient
         use_implicit: bool = False,  # Use implicit differentiation
+        implicit_solver: str = "neumann",  # "neumann" (Truncated Neumann) or "cg"
         cg_iters: int = 10,  # Conjugate gradient iterations
         cg_tol: float = 1e-3,  # CG tolerance
         cg_damping: float = 0.0,  # Hessian damping for CG stability
+        # Truncated Neumann implicit correction (when implicit_solver == "neumann")
+        neumann_steps: int = 4,  # J: number of Neumann steps (3–5 typical)
+        neumann_mu: float = 0.01,  # μ: damping for (H + μI), stabilizes curvature
+        neumann_alpha_default: float = 0.1,  # fallback α if probe off or fails
+        neumann_use_probe_alpha: bool = True,  # adapt α from curvature probe each step
+        neumann_clip_norm: Optional[float] = None,  # clip v and g_corr; None = no clip
+        neumann_max_growth_ratio: float = 10.0,  # fallback if correction explodes
         # New configurable loss and regularization parameters
         forget_loss_type: str = "logit_margin",  # Type of forget loss function
         regularization_type: str = "l1",  # Type of regularization (l1, l2, elastic_net, none)
@@ -80,9 +88,20 @@ class SIBL(UnlearnTrainer):
         self.rho = rho
         self.gamma = gamma
         self.use_implicit = use_implicit
+        self.implicit_solver = implicit_solver.lower()
         self.cg_iters = cg_iters
         self.cg_tol = cg_tol
         self.cg_damping = cg_damping
+        self.neumann_steps = neumann_steps
+        self.neumann_mu = neumann_mu
+        self.neumann_alpha_default = neumann_alpha_default
+        self.neumann_use_probe_alpha = neumann_use_probe_alpha
+        self.neumann_clip_norm = neumann_clip_norm
+        self.neumann_max_growth_ratio = neumann_max_growth_ratio
+        if self.implicit_solver not in ("neumann", "cg"):
+            raise ValueError(
+                f"implicit_solver must be 'neumann' or 'cg', got {implicit_solver!r}"
+            )
 
         # Store loss and regularization configuration
         self.forget_loss_type = forget_loss_type
@@ -371,6 +390,83 @@ class SIBL(UnlearnTrainer):
         else:
             return self.conjugate_gradient_torch(hvp_func, b)
 
+    def _clip_by_global_norm(self, flat_tensor, max_norm):
+        """Clip flat tensor by global L2 norm; in-place if possible."""
+        norm = flat_tensor.norm().clamp(min=1e-12)
+        if norm <= max_norm:
+            return flat_tensor
+        return flat_tensor * (max_norm / norm)
+
+    def _truncated_neumann_correction(
+        self,
+        params_list,
+        g_alm_flat,
+        mask_flat,
+        L_alm,
+        L_inner,
+    ):
+        """
+        Truncated Neumann implicit correction: approximate h ≈ (H_inner + μI)^{-1} v
+        with v = masked outer gradient, then g_corr = v - H_outer(h_correct).
+
+        Uses only Hessian-vector products. Returns (g_corr_flat, status_string).
+        """
+        device = g_alm_flat.device
+        dtype = g_alm_flat.dtype
+
+        # 1) Masked outer gradient v
+        v = g_alm_flat * mask_flat
+        if self.neumann_clip_norm is not None:
+            v = self._clip_by_global_norm(v, self.neumann_clip_norm)
+
+        # 2) Damped masked HVP for inner Hessian: H_tilde(x) = mask ⊙ H_inner(mask ⊙ x) + μ (mask ⊙ x)
+        def H_in_tilde(x):
+            x_act = x * mask_flat
+            Hv = self.compute_hvp(L_inner, params_list, x_act)
+            Hv_act = Hv * mask_flat
+            return Hv_act + self.neumann_mu * x_act
+
+        # 3) Choose α (probe or default)
+        alpha = self.neumann_alpha_default
+        if self.neumann_use_probe_alpha:
+            u = torch.randn_like(v, device=device, dtype=dtype)
+            u = u * mask_flat
+            u_norm = u.norm().clamp(min=1e-12)
+            u = u / u_norm
+            Hu = H_in_tilde(u)
+            L_est = Hu.norm().clamp(min=1e-12) / u_norm
+            alpha = (0.5 / (L_est.item() + 1e-12))
+            if not (torch.isfinite(torch.tensor(alpha, device=device)) and alpha > 0):
+                alpha = self.neumann_alpha_default
+
+        # 4) Truncated Neumann: h_{i+1} = v + (I - α H_tilde) h_i  =>  h_∞ = (1/α) H_tilde^{-1} v
+        h = v.clone()
+        for _ in range(self.neumann_steps):
+            Hh = H_in_tilde(h)
+            tmp = h - alpha * Hh
+            h = v + tmp
+            if not torch.isfinite(h).all():
+                return v, "fallback_no_correction"
+
+        # Use h_neumann as approximation to H_tilde^{-1} v: scale by α so h_correct ≈ H_tilde^{-1} v
+        h_correct = alpha * h
+
+        # 5) Outer HVP for correction: c = mask ⊙ H_AL(h_correct)
+        h_act = h_correct * mask_flat
+        c = self.compute_hvp(L_alm, params_list, h_act)
+        c = c * mask_flat
+        g_corr = v - c
+
+        # 6) Safety: fallback if correction explodes
+        v_norm = v.norm().clamp(min=1e-12)
+        if g_corr.norm() > self.neumann_max_growth_ratio * v_norm:
+            return v, "fallback_exploding_correction"
+
+        if self.neumann_clip_norm is not None:
+            g_corr = self._clip_by_global_norm(g_corr, self.neumann_clip_norm)
+
+        return g_corr, "ok"
+
     def outer_step(self, forget_batch, retain_batch):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
@@ -410,39 +506,53 @@ class SIBL(UnlearnTrainer):
         # Clear gradients
         self.model.zero_grad()
 
-        # Implicit correction (if enabled)
+        # Implicit correction (if enabled): use outer gradient as RHS (masked g_alm)
         if self.use_implicit:
             L_ret_v = self.compute_retain_loss(retain_batch)
             R_theta_v = self.compute_sparsity_regularizer()
             L_inner = L_ret_v + R_theta_v
 
             params_list = [p for p in self.model.parameters() if p.requires_grad]
-
-            grads_inner = torch.autograd.grad(
-                L_inner, params_list,
-                create_graph=True, retain_graph=True
-            )
-
             mask_flat = self.flatten_mask()
-            v = torch.cat([g.reshape(-1) for g in grads_inner]) * mask_flat
+            g_alm_flat = torch.cat([
+                g_alm_dict[name].reshape(-1)
+                for name, param in self.model.named_parameters()
+                if param.requires_grad
+            ])
 
-            def hvp_func(vec):
-                vec_masked = vec * mask_flat
-                hvp = self.compute_hvp(L_inner, params_list, vec_masked)
-                # Add damping term for better conditioning: (H + λI)v
-                return hvp * mask_flat + self.cg_damping * vec
+            if self.implicit_solver == "neumann":
+                g_corr_flat, neumann_status = self._truncated_neumann_correction(
+                    params_list=params_list,
+                    g_alm_flat=g_alm_flat,
+                    mask_flat=mask_flat,
+                    L_alm=L_alm,
+                    L_inner=L_inner,
+                )
+                if neumann_status != "ok":
+                    logger.debug(f"Neumann correction: {neumann_status}")
+                correction_unflattened = self.unflatten_params(g_corr_flat, params_list)
+                for (name, param), g_update in zip(
+                    self.model.named_parameters(), correction_unflattened
+                ):
+                    if name in g_alm_dict:
+                        g_alm_dict[name] = g_update
+            else:
+                # CG path: solve (H_inner + damping)*h = v with v = masked g_alm (outer gradient)
+                v = g_alm_flat * mask_flat
 
-            h = self.conjugate_gradient(hvp_func, v)
+                def hvp_func(vec):
+                    vec_masked = vec * mask_flat
+                    hvp = self.compute_hvp(L_inner, params_list, vec_masked)
+                    return hvp * mask_flat + self.cg_damping * vec
 
-            hvp_correction = self.compute_hvp(L_alm, params_list, h)
-
-            correction_unflattened = self.unflatten_params(hvp_correction, params_list)
-
-            for (name, param), correction in zip(
-                self.model.named_parameters(), correction_unflattened
-            ):
-                if name in g_alm_dict:
-                    g_alm_dict[name] = g_alm_dict[name] - correction
+                h = self.conjugate_gradient(hvp_func, v)
+                hvp_correction = self.compute_hvp(L_alm, params_list, h)
+                correction_unflattened = self.unflatten_params(hvp_correction, params_list)
+                for (name, param), correction in zip(
+                    self.model.named_parameters(), correction_unflattened
+                ):
+                    if name in g_alm_dict:
+                        g_alm_dict[name] = g_alm_dict[name] - correction
 
         # Primal update
         with torch.no_grad():
@@ -478,8 +588,15 @@ class SIBL(UnlearnTrainer):
         logger.info(f"Regularization type: {self.regularization_type}")
         logger.info(f"Retain budget ε = {self.epsilon:.4f}")
         logger.info(f"Use implicit correction: {self.use_implicit}")
-        if self.use_implicit and self.cg_damping > 0:
-            logger.info(f"CG damping (for Hessian conditioning): {self.cg_damping}")
+        if self.use_implicit:
+            logger.info(f"Implicit solver: {self.implicit_solver}")
+            if self.implicit_solver == "cg" and self.cg_damping > 0:
+                logger.info(f"CG damping (for Hessian conditioning): {self.cg_damping}")
+            elif self.implicit_solver == "neumann":
+                logger.info(
+                    f"Neumann: steps={self.neumann_steps}, mu={self.neumann_mu}, "
+                    f"probe_alpha={self.neumann_use_probe_alpha}"
+                )
 
         for t in range(self.T):
             t_start = time.time()

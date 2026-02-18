@@ -63,9 +63,15 @@ trainer:
     simnpo_beta: 1.0  # Temperature for SimNPO loss (used when forget_loss_type=simnpo)
     simnpo_delta: 0.0  # Offset for SimNPO loss (used when forget_loss_type=simnpo)
     elastic_net_l1_ratio: 0.5  # L1 ratio for elastic net (0.5 = equal L1 and L2)
-    use_implicit: false
+    use_implicit: true
+    implicit_solver: neumann
     cg_iters: 10
     cg_tol: 1e-3
     cg_damping: 0.001
+    neumann_steps: 4
+    neumann_mu: 0.01
+    neumann_alpha_default: 0.1
+    neumann_use_probe_alpha: true
+    neumann_max_growth_ratio: 10.0
 
 task_name: ???
