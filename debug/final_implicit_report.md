@@ -16,7 +16,7 @@ Intuition:
 - A naive outer gradient says "push hard to forget."
 - Implicit correction says "push to forget, but discount directions that will badly damage the retain-constrained inner solution."
 
-This is exactly why implicit correction matters for stable unlearning: it is a curvature-aware correction to avoid over-aggressive forgetting steps that immediately break utility constraints.
+This is exactly why implicit correction matters for stable unlearning: it is a second-order sensitivity correction to avoid over-aggressive forgetting steps that immediately break utility constraints.
 
 ---
 
@@ -43,7 +43,7 @@ Everything is done with HVPs (no explicit Hessian matrix), which is computationa
 Even though CG is principled, we observed poor behavior in our setting:
 
 - High linear-system residuals in several blocks (sometimes very large).
-- Strong sensitivity to damping and curvature scale.
+- Strong sensitivity to damping and local scale of the linear solve.
 - Constraint residual \(r\) and dual variable \(\lambda\) could grow quickly in unstable runs.
 - In blockwise experiments, CG could produce very poor solve quality on some blocks even when others looked acceptable.
 
@@ -61,7 +61,7 @@ To check whether the system is fundamentally ill-conditioned, we used a lightwei
 
 Interpretation:
 
-- Very large ratio or many non-positive probes would suggest problematic curvature.
+- Very large ratio or many non-positive probes would suggest problematic local geometry in the solve.
 - Moderate ratio and mostly positive probes suggest conditioning may not be the main bottleneck.
 
 Findings:
@@ -75,7 +75,7 @@ Findings:
 
 We implemented a truncated Neumann-style inverse approximation with damping:
 
-- Define a damped masked operator for inner curvature.
+- Define a damped masked operator for the inner linear-response map.
 - Approximate inverse action for \(H^{-1}v\) iteratively.
 - Build corrected outer gradient from \(v\) and an outer-HVP correction term.
 - Add safeguards:
@@ -84,6 +84,41 @@ We implemented a truncated Neumann-style inverse approximation with damping:
   - adaptive alpha backtracking when corrections explode.
 
 This made the solver much more robust than naive first versions.
+
+### Parameters used in our Richardson-Neumann block
+
+- \(v\): masked outer gradient (right-hand side).
+- \(H_{\text{in}}\): inner-objective Hessian-vector product operator (implemented via autograd HVP).
+- \(\mu\): damping coefficient in \(H_{\text{in}} + \mu I\).
+- \(\alpha\): update step size for Richardson fixed-point iteration.
+- \(J\): number of Neumann/Richardson steps.
+- `max_growth_ratio`: reject correction if \(\|g_{\text{corr}}\|\) is too large relative to \(\|v\|\).
+- `backtrack_factor`, `backtrack_max_tries`: reduce \(\alpha\) when the correction is unstable.
+
+### Richardson method (pseudocode we are currently using)
+
+```text
+Input: v, H_in(.), H_alm(.), mask, mu, alpha0, J
+for attempt = 0 .. backtrack_max_tries-1:
+    alpha = clip(alpha0 * backtrack_factor^attempt, alpha_min, alpha_max)
+    h = 0
+    for t = 0 .. J:
+        # Damped masked operator
+        H_tilde(h) = mask * H_in(mask * h) + mu * (mask * h)
+        residual = v - H_tilde(h)
+        if residual or h is non-finite: mark unstable and break
+        h = h + alpha * residual
+
+    if unstable: continue
+    c = mask * H_alm(mask * h)
+    g_corr = v - c
+    if g_corr non-finite: continue
+    if ||g_corr|| > max_growth_ratio * ||v||: continue
+    accept g_corr and stop
+
+if no attempt accepted:
+    fallback to g_corr = v
+```
 
 ---
 
@@ -173,36 +208,39 @@ This supports keeping Neumann as the primary implicit direction while we improve
 
 ---
 
-## 12) Off-the-shelf bilevel solvers: should we use them?
+## 12) Off-the-shelf bilevel optimizers: direct answer to my question
 
-Short answer: **yes for prototyping and verification, not as a full drop-in replacement yet**.
+My question was about **off-the-shelf bilevel optimizers** (not just implicit solvers).
 
-Reason:
+### What exists off-the-shelf
 
-- Off-the-shelf packages are strong at the bilevel math plumbing (unrolling or implicit gradients),
-- but our pipeline has custom pieces (masked/blockwise updates, ALM dual dynamics, memory-constrained HVP design, custom forget/retain objectives) that still require method-specific engineering.
+- **JAXopt** can be used as an off-the-shelf bilevel framework: define inner solver + outer objective, then choose unrolled or implicit differentiation for hypergradients.
+- **TorchOpt** provides PyTorch tooling for differentiable optimization (explicit/unrolled/implicit), which can be used to build bilevel pipelines.
+- **higher** supports unrolled bilevel-style training loops in PyTorch, but it is archived, so I should treat it as a reference baseline rather than a long-term dependency.
 
-Good candidates:
+### Can these replace our Richardson block directly?
 
-1. **TorchOpt** (PyTorch): explicit + implicit differentiation, including linear-system based implicit gradients.  
-2. **higher** (PyTorch): differentiable unrolled optimizers (useful for "differentiate through K inner steps" baselines).  
-3. **JAXopt** (JAX): mature implicit-diff API with custom root/fixed-point decorators and clear argmin-diff interfaces.
+Short answer: **partially, but not as a one-line swap**.
 
-How these solvers compute gradient/update (intuition):
+- Their implicit modules usually compute hypergradients via:
+  - unrolling inner steps, or
+  - implicit differentiation through a root/fixed-point condition with a linear solver (often CG or similar iterative routines).
+- Our Richardson block is one specific iterative linear-solve strategy inside this larger implicit step.
+- So yes, an external implicit routine could replace parts of our Richardson implementation, but integrating it into our masked blockwise ALM update would still need custom glue code.
 
-- **Unrolled differentiation:** run inner optimizer for K steps, then backprop through those K updates.
-- **Implicit differentiation:** treat inner optimum as satisfying a stationarity equation, then solve a linear system (often via CG/fixed-point/HVP routines) to get hypergradients without full unrolling.
+### Is replacing Richardson overkill right now?
 
-Why this idea may still not fully solve our issue alone:
+For our current stage, likely **yes** if the goal is immediate stability:
 
-- Our instability is not only "missing solver API"; it is also driven by model-scale curvature heterogeneity, ALM coupling (\(\lambda, \rho\)), and block-specific correction explosions.
-- So external solvers help with correctness and cleaner abstractions, but we still need our blockwise/surgical constraints and stability guards.
+- We already have a working blockwise pipeline and targeted safeguards.
+- The main remaining issues are run-time stability and block selection, not missing bilevel math machinery.
+- A better near-term use of off-the-shelf tools is **validation** (gradient sanity checks on small blocks/toy settings), then selective adoption if it clearly improves robustness.
 
-Practical plan:
+### Practical recommendation
 
-- Use TorchOpt/JAXopt-style implicit APIs to cross-check gradients on reduced blocks/toy problems.
-- Keep current custom blockwise path for full-scale MUSE runs.
-- Treat off-the-shelf solvers as a validation baseline and possible refactor target after stability is settled.
+- Keep current SIBL blockwise-Richardson as the main path for experiments now.
+- Use JAXopt/TorchOpt in parallel to verify hypergradient correctness on reduced problems.
+- If validation shows consistent gains, migrate solver internals gradually instead of rewriting the full trainer.
 
 References (verified):
 
