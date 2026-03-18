@@ -171,3 +171,44 @@ Expected upside:
 
 This supports keeping Neumann as the primary implicit direction while we improve robustness and move to surgical targeting.
 
+---
+
+## 12) Off-the-shelf bilevel solvers: should we use them?
+
+Short answer: **yes for prototyping and verification, not as a full drop-in replacement yet**.
+
+Reason:
+
+- Off-the-shelf packages are strong at the bilevel math plumbing (unrolling or implicit gradients),
+- but our pipeline has custom pieces (masked/blockwise updates, ALM dual dynamics, memory-constrained HVP design, custom forget/retain objectives) that still require method-specific engineering.
+
+Good candidates:
+
+1. **TorchOpt** (PyTorch): explicit + implicit differentiation, including linear-system based implicit gradients.  
+2. **higher** (PyTorch): differentiable unrolled optimizers (useful for "differentiate through K inner steps" baselines).  
+3. **JAXopt** (JAX): mature implicit-diff API with custom root/fixed-point decorators and clear argmin-diff interfaces.
+
+How these solvers compute gradient/update (intuition):
+
+- **Unrolled differentiation:** run inner optimizer for K steps, then backprop through those K updates.
+- **Implicit differentiation:** treat inner optimum as satisfying a stationarity equation, then solve a linear system (often via CG/fixed-point/HVP routines) to get hypergradients without full unrolling.
+
+Why this idea may still not fully solve our issue alone:
+
+- Our instability is not only "missing solver API"; it is also driven by model-scale curvature heterogeneity, ALM coupling (\(\lambda, \rho\)), and block-specific correction explosions.
+- So external solvers help with correctness and cleaner abstractions, but we still need our blockwise/surgical constraints and stability guards.
+
+Practical plan:
+
+- Use TorchOpt/JAXopt-style implicit APIs to cross-check gradients on reduced blocks/toy problems.
+- Keep current custom blockwise path for full-scale MUSE runs.
+- Treat off-the-shelf solvers as a validation baseline and possible refactor target after stability is settled.
+
+References (verified):
+
+- TorchOpt documentation: https://torchopt.readthedocs.io/en/latest/
+- higher repository: https://github.com/facebookresearch/higher
+- JAXopt implicit differentiation docs: https://jaxopt.github.io/stable/implicit_diff.html
+- Lorraine et al., *Optimizing Millions of Hyperparameters by Implicit Differentiation* (AISTATS 2020): https://proceedings.mlr.press/v108/lorraine20a.html
+- Blondel et al., *Efficient and Modular Implicit Differentiation* (arXiv): https://arxiv.org/abs/2105.15183
+
