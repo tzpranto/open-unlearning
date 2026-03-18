@@ -52,9 +52,9 @@ trainer:
     epsilon: 0.1  # Retain loss budget
     T: 20  # Outer iterations
     K: 10  # Inner iterations
-    eta_theta: 2e-4  # Outer LR
+    eta_theta: 1e-4  # Outer LR (reduced for stability)
     eta_in: 1e-4  # Inner LR
-    rho: 1.0  # AL penalty
+    rho: 0.5  # AL penalty (reduced to slow lambda growth)
     gamma: 2e-4  # L1 regularization
     regularization_type: none  # Default: L1 sparsity-inducing regularization
 
@@ -69,17 +69,19 @@ trainer:
     implicit_block_last_n_layers: 2
     implicit_block_include_attn: true
     implicit_block_include_mlp: true
-    neumann_variant: legacy
+    neumann_variant: richardson
     cg_iters: 10
     cg_tol: 1e-3
-    cg_damping: 0.001
+    cg_damping: 0.01
     neumann_steps: 2
     neumann_mu: 1.0
     neumann_alpha_default: 0.01
-    neumann_alpha_min: 1e-6
-    neumann_alpha_max: 0.1
+    neumann_alpha_min: 1e-5
+    neumann_alpha_max: 0.02
     neumann_use_probe_alpha: false
-    neumann_max_growth_ratio: 10.0
+    neumann_max_growth_ratio: 5.0
+    neumann_backtrack_factor: 0.5
+    neumann_backtrack_max_tries: 4
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false
     debug_save_arrays: false

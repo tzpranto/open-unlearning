@@ -49,6 +49,13 @@ def get_model(model_cfg: DictConfig):
     model_cls = MODEL_REGISTRY[model_handler]
     with open_dict(model_args):
         model_path = model_args.pop("pretrained_model_name_or_path", None)
+    requested_attn_impl = model_args.get("attn_implementation", None)
+    load_kwargs = {
+        "pretrained_model_name_or_path": model_path,
+        "torch_dtype": torch_dtype,
+        **model_args,
+        "cache_dir": hf_home,
+    }
     try:
         # region agent log
         try:
@@ -76,13 +83,37 @@ def get_model(model_cfg: DictConfig):
         except Exception:
             pass
         # endregion agent log
-        model = model_cls.from_pretrained(
-            pretrained_model_name_or_path=model_path,
-            torch_dtype=torch_dtype,
-            **model_args,
-            cache_dir=hf_home,
-        )
+        model = model_cls.from_pretrained(**load_kwargs)
     except Exception as e:
+        err_msg = str(e).lower()
+        is_flash_attn_missing = (
+            requested_attn_impl == "flash_attention_2"
+            and (
+                "flash_attn" in err_msg
+                or "flash attention 2" in err_msg
+                or "flashattention2" in err_msg
+            )
+        )
+        if is_flash_attn_missing:
+            fallback_order = ("sdpa", "eager")
+            last_fallback_error = None
+            for fallback_impl in fallback_order:
+                try:
+                    fallback_kwargs = dict(load_kwargs)
+                    fallback_kwargs["attn_implementation"] = fallback_impl
+                    logger.warning(
+                        "FlashAttention2 unavailable for %s. Retrying with attn_implementation=%s.",
+                        model_path,
+                        fallback_impl,
+                    )
+                    model = model_cls.from_pretrained(**fallback_kwargs)
+                    tokenizer = get_tokenizer(tokenizer_args)
+                    return model, tokenizer
+                except Exception as fallback_e:
+                    last_fallback_error = fallback_e
+                    continue
+            if last_fallback_error is not None:
+                e = last_fallback_error
         logger.warning(f"Model {model_path} requested with {model_cfg.model_args}")
         # region agent log
         try:
