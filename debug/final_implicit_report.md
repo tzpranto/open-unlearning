@@ -55,6 +55,13 @@ Empirically, this translated to unstable retain behavior and weaker practical un
 
 To check whether the system is fundamentally ill-conditioned, we used a lightweight Rayleigh proxy:
 
+- **Rayleigh value (definition):** for a direction \(q\),
+  \[
+  R(q) = \frac{q^\top H q}{q^\top q}
+  \]
+  and when \(q\) is normalized, \(R(q) = q^\top H q\).
+  Intuitively, this is the "effective strength" of \(H\) along direction \(q\).
+
 - Sample random normalized probe vectors \(q\).
 - Compute \(q^\top H q\) (via HVP).
 - Track min/max Rayleigh values, ratio, and number of non-positive probes.
@@ -119,6 +126,33 @@ for attempt = 0 .. backtrack_max_tries-1:
 if no attempt accepted:
     fallback to g_corr = v
 ```
+
+### Pseudocode in plain language
+
+- We start from the current outer-gradient signal \(v\).
+- We try to compute a corrected direction by repeatedly refining a helper vector \(h\).
+- If the correction becomes numerically unsafe (too large or non-finite), we do not trust it.
+- Instead, we reduce step size \(\alpha\) and try again.
+- If all retries fail, we safely fall back to the original \(v\) update.
+
+This keeps training moving while avoiding catastrophic correction steps.
+
+### Backtracking: what, why, and how
+
+- **What is backtracking?**  
+  A safety mechanism that shrinks step size \(\alpha\) when an attempted correction is unstable.
+
+- **Why do we need it?**  
+  A step size that is fine on one block/iteration can be too aggressive on another.  
+  Without backtracking, one bad step can explode the correction and destabilize training.
+
+- **How are we doing it?**  
+  We start from a base \(\alpha\), then retry with smaller values:
+  \[
+  \alpha,\ \alpha \cdot \beta,\ \alpha \cdot \beta^2,\dots
+  \]
+  where \(\beta \in (0,1)\) is `backtrack_factor` and number of retries is `backtrack_max_tries`.  
+  We accept the first stable correction; otherwise we fall back to \(v\).
 
 ---
 
@@ -208,39 +242,13 @@ This supports keeping Neumann as the primary implicit direction while we improve
 
 ---
 
-## 12) Off-the-shelf bilevel optimizers: direct answer to my question
+## 12) Off-the-shelf bilevel tools (current note)
 
-My question was about **off-the-shelf bilevel optimizers** (not just implicit solvers).
+I am exploring these off-the-shelf bilevel tools and how to integrate them into our system:
 
-### What exists off-the-shelf
-
-- **JAXopt** can be used as an off-the-shelf bilevel framework: define inner solver + outer objective, then choose unrolled or implicit differentiation for hypergradients.
-- **TorchOpt** provides PyTorch tooling for differentiable optimization (explicit/unrolled/implicit), which can be used to build bilevel pipelines.
-- **higher** supports unrolled bilevel-style training loops in PyTorch, but it is archived, so I should treat it as a reference baseline rather than a long-term dependency.
-
-### Can these replace our Richardson block directly?
-
-Short answer: **partially, but not as a one-line swap**.
-
-- Their implicit modules usually compute hypergradients via:
-  - unrolling inner steps, or
-  - implicit differentiation through a root/fixed-point condition with a linear solver (often CG or similar iterative routines).
-- Our Richardson block is one specific iterative linear-solve strategy inside this larger implicit step.
-- So yes, an external implicit routine could replace parts of our Richardson implementation, but integrating it into our masked blockwise ALM update would still need custom glue code.
-
-### Is replacing Richardson overkill right now?
-
-For our current stage, likely **yes** if the goal is immediate stability:
-
-- We already have a working blockwise pipeline and targeted safeguards.
-- The main remaining issues are run-time stability and block selection, not missing bilevel math machinery.
-- A better near-term use of off-the-shelf tools is **validation** (gradient sanity checks on small blocks/toy settings), then selective adoption if it clearly improves robustness.
-
-### Practical recommendation
-
-- Keep current SIBL blockwise-Richardson as the main path for experiments now.
-- Use JAXopt/TorchOpt in parallel to verify hypergradient correctness on reduced problems.
-- If validation shows consistent gains, migrate solver internals gradually instead of rewriting the full trainer.
+- **JAXopt**
+- **TorchOpt**
+- **higher**
 
 References (verified):
 
