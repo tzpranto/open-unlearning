@@ -11,6 +11,7 @@ per_device_train_batch_size=1
 gradient_accumulation_steps=2
 
 model=Llama-2-7b-hf
+debug_mode=${DEBUG_SIBL:-0}
 
 data_splits=(
     "News"
@@ -18,14 +19,14 @@ data_splits=(
 )
 
 trainers_experiments=(
-    # "SIBL unlearn/muse/sibl.yaml"
+    "SIBL unlearn/muse/sibl.yaml"
     #"GradAscent unlearn/muse/default.yaml"
     #"GradDiff unlearn/muse/default.yaml"
     # "NPO unlearn/muse/default.yaml"
     # "SimNPO unlearn/muse/default.yaml"
     #"DPO unlearn/tofu/idk.yaml"
     #"RMU  unlearn/muse/default.yaml"
-    "BLURNPO unlearn/muse/default.yaml"
+    #"BLURNPO unlearn/muse/default.yaml"
 )
 
 
@@ -47,9 +48,23 @@ for data_split in "${data_splits[@]}"; do
         experiment=$(echo $trainer_experiment | cut -d' ' -f2)
 
         task_name=muse_${model}_${data_split}_${trainer}
+        extra_overrides=()
+        if [[ "${debug_mode}" == "1" && "${trainer}" == "SIBL" ]]; then
+            task_name=${task_name}_debug_implicit
+            extra_overrides+=(
+                trainer.method_args.use_implicit=true
+                trainer.method_args.debug_implicit=true
+                trainer.method_args.debug_save_arrays=true
+                trainer.method_args.debug_stop_after_outer=2
+                trainer.method_args.T=3
+                trainer.method_args.K=1
+                trainer.method_args.neumann_variant=richardson
+                trainer.method_args.implicit_solver=neumann
+            )
+        fi
 
         # CUDA_VISIBLE_DEVICES=0 accelerate launch --config_file configs/accelerate/single_gpu_config.yaml --main_process_port $MASTER_PORT \
-        CUDA_VISIBLE_DEVICES=0 python \
+        if CUDA_VISIBLE_DEVICES=0 python \
         src/train.py --config-name=unlearn.yaml \
         experiment=${experiment} \
         model=${model} \
@@ -60,16 +75,19 @@ for data_split in "${data_splits[@]}"; do
         trainer.args.per_device_train_batch_size=${per_device_train_batch_size} \
         trainer.args.gradient_accumulation_steps=${gradient_accumulation_steps} \
         trainer.args.ddp_find_unused_parameters=true \
-        trainer.args.gradient_checkpointing=true
-
-        CUDA_VISIBLE_DEVICES=0 python src/eval.py \
-        experiment=eval/muse/default.yaml \
-        data_split=${data_split} \
-        task_name=${task_name} \
-        model=${model} \
-        model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
-        paths.output_dir=saves/unlearn/${task_name}/evals \
-        retain_logs_path=saves/eval/muse_${model}_${data_split}_retrain/MUSE_EVAL.json
+        trainer.args.gradient_checkpointing=true \
+        "${extra_overrides[@]}"; then
+            CUDA_VISIBLE_DEVICES=0 python src/eval.py \
+            experiment=eval/muse/default.yaml \
+            data_split=${data_split} \
+            task_name=${task_name} \
+            model=${model} \
+            model.model_args.pretrained_model_name_or_path=saves/unlearn/${task_name} \
+            paths.output_dir=saves/unlearn/${task_name}/evals \
+            retain_logs_path=saves/eval/muse_${model}_${data_split}_retrain/MUSE_EVAL.json
+        else
+            echo "[WARN] Training failed for ${task_name}, skipping eval."
+        fi
     done
 done
 

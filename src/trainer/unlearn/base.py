@@ -49,8 +49,16 @@ from transformers.trainer_utils import (
 )
 from transformers.utils import (
     is_apex_available,
-    is_torch_tpu_available,
 )
+try:
+    # transformers < 4.56
+    from transformers.utils import is_torch_tpu_available
+except ImportError:
+    # transformers >= 4.56 removed TPU helper in favor of XLA helper
+    from transformers.utils import is_torch_xla_available
+
+    def is_torch_tpu_available(check_device: bool = False):
+        return is_torch_xla_available()
 
 if version.parse(accelerate_version) > version.parse("0.23.0"):
     from accelerate.data_loader import SeedableRandomSampler

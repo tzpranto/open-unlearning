@@ -17,6 +17,23 @@ data/
 !*/data/ 
 evals/
 !*/evals/  
+
+# Local artifacts (keep off remote)
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.pt
+*.pth
+*.ckpt
+*.jsonl
+
+# Generated debug outputs
+debug/**/summary.json
+debug/**/blockwise_report.json
+debug/**/conditioning_rows.json
+debug/conditioning_sparsity_stats.json
+debug/results/*.json
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
