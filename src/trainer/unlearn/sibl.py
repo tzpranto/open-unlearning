@@ -439,16 +439,21 @@ class SIBL(UnlearnTrainer):
             if not (torch.isfinite(torch.tensor(alpha, device=device)) and alpha > 0):
                 alpha = self.neumann_alpha_default
 
-        # 4) Truncated Neumann: h_{i+1} = v + (I - α H_tilde) h_i  =>  h_∞ = (1/α) H_tilde^{-1} v
-        h = v.clone()
-        for _ in range(self.neumann_steps):
-            Hh = H_in_tilde(h)
-            tmp = h - alpha * Hh
-            h = v + tmp
+        # 4) Truncated Neumann (stable accumulation): h = Σ_{i=0}^J (α H_tilde)^i v => h ≈ (I - α H_tilde)^{-1} v
+        #    Then H_tilde^{-1} v = α h. Recurrence: p_0 = v, p_{k+1} = α H_tilde(p_k), h = Σ p_k.
+        h = torch.zeros_like(v, device=device, dtype=dtype)
+        p = v.clone()
+        for _ in range(self.neumann_steps + 1):
+            h = h + p
             if not torch.isfinite(h).all():
+                logger.info(f"Neumann: fallback_no_correction (non-finite h); ||v||={v.norm().item():.6f}")
+                return v, "fallback_no_correction"
+            p = alpha * H_in_tilde(p)
+            if not torch.isfinite(p).all():
+                logger.info(f"Neumann: fallback_no_correction (non-finite p); ||v||={v.norm().item():.6f}")
                 return v, "fallback_no_correction"
 
-        # Use h_neumann as approximation to H_tilde^{-1} v: scale by α so h_correct ≈ H_tilde^{-1} v
+        # h ≈ (I - α H_tilde)^{-1} v  =>  H_tilde^{-1} v = α h
         h_correct = alpha * h
 
         # 5) Outer HVP for correction: c = mask ⊙ H_AL(h_correct)
@@ -458,13 +463,22 @@ class SIBL(UnlearnTrainer):
         g_corr = v - c
 
         # 6) Safety: fallback if correction explodes
-        v_norm = v.norm().clamp(min=1e-12)
-        if g_corr.norm() > self.neumann_max_growth_ratio * v_norm:
+        v_norm = v.norm().clamp(min=1e-12).item()
+        g_corr_norm = g_corr.norm().item()
+        h_norm = h_correct.norm().item()
+        if g_corr_norm > self.neumann_max_growth_ratio * v_norm:
+            logger.info(
+                f"Neumann: fallback_exploding_correction ||g_corr||={g_corr_norm:.6f} "
+                f"> {self.neumann_max_growth_ratio}*||v||={v_norm:.6f}; ||h||={h_norm:.6f}"
+            )
             return v, "fallback_exploding_correction"
 
         if self.neumann_clip_norm is not None:
             g_corr = self._clip_by_global_norm(g_corr, self.neumann_clip_norm)
 
+        logger.info(
+            f"Neumann: ||v||={v_norm:.6f} ||h||={h_norm:.6f} ||g_corr||={g_corr_norm:.6f} alpha={alpha:.6f}"
+        )
         return g_corr, "ok"
 
     def outer_step(self, forget_batch, retain_batch):
@@ -573,9 +587,16 @@ class SIBL(UnlearnTrainer):
         if self.mask_dict is None:
             self._initialize_mask()
 
-        # Enable gradient checkpointing for memory (SIBL bypasses _inner_training_loop)
+        # Enable gradient checkpointing for memory (SIBL bypasses _inner_training_loop).
+        # use_reentrant=False is required when use_implicit=True (HVPs use autograd.grad).
         if getattr(self.args, "gradient_checkpointing", False):
             kwargs = getattr(self.args, "gradient_checkpointing_kwargs", None) or {}
+            if self.use_implicit:
+                kwargs = dict(kwargs)
+                kwargs["use_reentrant"] = False
+                logger.info("Gradient checkpointing: use_reentrant=False (required for implicit/HVP).")
+            else:
+                kwargs.setdefault("use_reentrant", False)
             self.model.gradient_checkpointing_enable(
                 gradient_checkpointing_kwargs=kwargs
             )
