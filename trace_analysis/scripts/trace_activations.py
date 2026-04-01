@@ -591,7 +591,7 @@ def main():
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--output_dir", type=str,
-                        default="trace_analysis/saves/traces/muse_news_llama2_7b")
+                        default="trace_analysis/figures/traces/muse_news_llama2_7b")
     parser.add_argument("--causal_noise_std", type=float, default=3.0,
                         help="Noise multiplier (times embedding std)")
     parser.add_argument("--device", type=str, default="cuda")

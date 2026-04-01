@@ -37,7 +37,7 @@ By computing the ratio `forget_gradient / retain_gradient` for each parameter:
 
 ### Results
 
-![Gradient Differential](saves/traces/muse_news_full/gradient_differential.png)
+![Gradient Differential](figures/traces/muse_news_full/gradient_differential.png)
 
 **Distribution of all 291 parameter ratios:**
 - Min: 0.22, Max: 1.01, Mean: 0.84, Median: 0.96
@@ -56,7 +56,7 @@ By computing the ratio `forget_gradient / retain_gradient` for each parameter:
 
 **Key takeaway:** No layer is forget-dominant at the parameter level. The model stores forget knowledge **diffusely**, not in a neat compartment. Layers 20-26 are simply the least retain-biased -- they are near parity, not forget-specific.
 
-![Layer x Component Heatmap](saves/traces/analysis/layer_component_heatmap.png)
+![Layer x Component Heatmap](figures/traces/analysis/layer_component_heatmap.png)
 
 The heatmap above shows the gradient ratio for each (layer, component) pair. The diverging colormap is centered at 1.0: red = forget-biased, green = retain-biased, yellow = balanced. The retain-dominated early layers (0-7) are clearly visible as the green block in the top rows.
 
@@ -70,9 +70,9 @@ We hooked into every layer and recorded the hidden state activations as the mode
 
 ### Results
 
-![Activation Traces](saves/traces/muse_news_full/activation_traces.png)
+![Activation Traces](figures/traces/muse_news_full/activation_traces.png)
 
-![Activation Heatmap (L2 Norm)](saves/traces/analysis/activation_heatmap_l2_norm.png)
+![Activation Heatmap (L2 Norm)](figures/traces/analysis/activation_heatmap_l2_norm.png)
 
 **Layer-by-layer activation L2 norm differential (forget - retain):**
 
@@ -97,7 +97,7 @@ For each layer, we **injected calibrated noise** (3x the layer's activation stan
 
 ### Results (Full Corpus: 889 forget + 1777 retain)
 
-![Causal Traces](saves/traces/muse_news_full_causal/causal_traces.png)
+![Causal Traces](figures/traces/muse_news_full_causal/causal_traces.png)
 
 **Full-corpus causal tracing results:**
 
@@ -168,7 +168,7 @@ Script: `scripts/analyze_traces.py`
 
 **17% of neurons are forget-dominant** -- a substantial minority, even though no layer is forget-dominant overall. These neurons are masked by the layer average because the other ~83% of neurons in the same layer are retain-biased or balanced.
 
-![Neuron Differential Histogram](saves/traces/analysis/neuron_differential_histogram.png)
+![Neuron Differential Histogram](figures/traces/analysis/neuron_differential_histogram.png)
 
 The histogram shows the distribution is right-skewed with a long tail above 1.0. Most neurons cluster around 0.9-1.0 (balanced), but there is a meaningful population above 1.0.
 
@@ -208,22 +208,22 @@ The following heatmaps show the forget/retain ratio for every neuron in every la
 
 **MLP projections:**
 
-![MLP gate_proj Neuron Heatmap](saves/traces/analysis/neuron_heatmap_mlp_gate_proj.png)
-![MLP up_proj Neuron Heatmap](saves/traces/analysis/neuron_heatmap_mlp_up_proj.png)
-![MLP down_proj Neuron Heatmap](saves/traces/analysis/neuron_heatmap_mlp_down_proj.png)
+![MLP gate_proj Neuron Heatmap](figures/traces/analysis/neuron_heatmap_mlp_gate_proj.png)
+![MLP up_proj Neuron Heatmap](figures/traces/analysis/neuron_heatmap_mlp_up_proj.png)
+![MLP down_proj Neuron Heatmap](figures/traces/analysis/neuron_heatmap_mlp_down_proj.png)
 
 **Attention projections:**
 
-![Attn Q Neuron Heatmap](saves/traces/analysis/neuron_heatmap_attn_q_proj.png)
-![Attn K Neuron Heatmap](saves/traces/analysis/neuron_heatmap_attn_k_proj.png)
-![Attn V Neuron Heatmap](saves/traces/analysis/neuron_heatmap_attn_v_proj.png)
-![Attn O Neuron Heatmap](saves/traces/analysis/neuron_heatmap_attn_o_proj.png)
+![Attn Q Neuron Heatmap](figures/traces/analysis/neuron_heatmap_attn_q_proj.png)
+![Attn K Neuron Heatmap](figures/traces/analysis/neuron_heatmap_attn_k_proj.png)
+![Attn V Neuron Heatmap](figures/traces/analysis/neuron_heatmap_attn_v_proj.png)
+![Attn O Neuron Heatmap](figures/traces/analysis/neuron_heatmap_attn_o_proj.png)
 
 ### Forget neuron bitmap
 
 The bitmap below shows a binary view: red = forget-dominant (ratio > 1.0), gray = not. This is the raw mask that could be used for neuron-level SIBL targeting.
 
-![Forget Neuron Bitmap](saves/traces/analysis/forget_neuron_bitmap.png)
+![Forget Neuron Bitmap](figures/traces/analysis/forget_neuron_bitmap.png)
 
 ---
 
@@ -241,7 +241,7 @@ The bitmap below shows a binary view: red = forget-dominant (ratio > 1.0), gray 
 
 **Sparsity Mask:**
 - Layer-level masking (freeze layers 0-7, update 20-26) is a reasonable starting point for damage minimization, but it cannot precisely target forget knowledge since it is diffuse.
-- **Neuron-level masking** (using the bitmap from Section 5) would allow targeting the 17% of neurons that are actually forget-specific. The bitmap is saved at `saves/traces/analysis/forget_neuron_bitmap.pt`.
+- **Neuron-level masking** (using the bitmap from Section 5) would allow targeting the 17% of neurons that are actually forget-specific. The bitmap is saved at `figures/traces/analysis/forget_neuron_bitmap.pt`.
 
 **Implicit Correction Targeting:**
 - Current default: `implicit_block_last_n_layers=2` (layers 30-31)
@@ -264,26 +264,26 @@ All figures and analysis in this report can be reproduced with the following scr
 # Step 1: Collect gradient + activation traces (full corpus)
 python trace_analysis/scripts/trace_activations.py \
     --n_samples 10000 --batch_size 4 \
-    --output_dir trace_analysis/saves/traces/muse_news_full \
+    --output_dir trace_analysis/figures/traces/muse_news_full \
     --skip_causal
 
 # Step 2: Collect causal traces (full corpus, slow)
 python trace_analysis/scripts/trace_activations.py \
     --n_samples 10000 --batch_size 4 \
-    --output_dir trace_analysis/saves/traces/muse_news_full_causal \
+    --output_dir trace_analysis/figures/traces/muse_news_full_causal \
     --skip_gradients --skip_activations
 
 # Step 3: Neuron-level analysis + heatmaps
 python trace_analysis/scripts/analyze_traces.py \
     --n_samples 10000 --batch_size 4 \
-    --trace_file trace_analysis/saves/traces/muse_news_full/trace_results.pt \
-    --output_dir trace_analysis/saves/traces/analysis
+    --trace_file trace_analysis/figures/traces/muse_news_full/trace_results.pt \
+    --output_dir trace_analysis/figures/traces/analysis
 
 # Step 3 with cached neurons (skip GPU, reuse existing neuron_traces.pt):
 python trace_analysis/scripts/analyze_traces.py \
     --skip_neuron_collection \
-    --trace_file trace_analysis/saves/traces/muse_news_full/trace_results.pt \
-    --output_dir trace_analysis/saves/traces/analysis
+    --trace_file trace_analysis/figures/traces/muse_news_full/trace_results.pt \
+    --output_dir trace_analysis/figures/traces/analysis
 ```
 
 ---
@@ -292,22 +292,22 @@ python trace_analysis/scripts/analyze_traces.py \
 
 | File | Description |
 |------|-------------|
-| `saves/traces/muse_news_full/trace_results.pt` | Full gradient + activation traces (PyTorch tensors) |
-| `saves/traces/muse_news_full/summary.json` | JSON summary with top-50 params and per-layer differentials |
-| `saves/traces/muse_news_full/gradient_differential.png` | Per-layer gradient analysis (3 panels) |
-| `saves/traces/muse_news_full/activation_traces.png` | Per-layer activation norms (4 panels) |
-| `saves/traces/muse_news_full_causal/trace_results.pt` | Full-corpus causal traces |
-| `saves/traces/muse_news_full_causal/causal_traces.png` | Per-layer causal importance (3 panels) |
-| `saves/traces/muse_news_full_causal/summary.json` | Causal tracing JSON summary |
-| `saves/traces/analysis/neuron_traces.pt` | Per-neuron gradient data (15 MB) |
-| `saves/traces/analysis/neuron_analysis.json` | Neuron-level analysis summary |
-| `saves/traces/analysis/layer_component_heatmap.png` | Layer x component gradient ratio heatmap |
-| `saves/traces/analysis/neuron_heatmap_*.png` | Per-component neuron-level heatmaps (7 files) |
-| `saves/traces/analysis/neuron_differential_histogram.png` | Distribution of neuron-level ratios |
-| `saves/traces/analysis/forget_neuron_bitmap.png` | Binary forget-dominant neuron map |
-| `saves/traces/analysis/forget_neuron_bitmap.pt` | Bitmap tensor for downstream use in SIBL |
-| `saves/traces/analysis/activation_heatmap_*.png` | Activation heatmaps (L2 norm, mean_abs, variance) |
-| `saves/traces/muse_news_llama2_7b/` | 100-sample pilot run (all 3 techniques) |
+| `figures/traces/muse_news_full/trace_results.pt` | Full gradient + activation traces (PyTorch tensors) |
+| `figures/traces/muse_news_full/summary.json` | JSON summary with top-50 params and per-layer differentials |
+| `figures/traces/muse_news_full/gradient_differential.png` | Per-layer gradient analysis (3 panels) |
+| `figures/traces/muse_news_full/activation_traces.png` | Per-layer activation norms (4 panels) |
+| `figures/traces/muse_news_full_causal/trace_results.pt` | Full-corpus causal traces |
+| `figures/traces/muse_news_full_causal/causal_traces.png` | Per-layer causal importance (3 panels) |
+| `figures/traces/muse_news_full_causal/summary.json` | Causal tracing JSON summary |
+| `figures/traces/analysis/neuron_traces.pt` | Per-neuron gradient data (15 MB) |
+| `figures/traces/analysis/neuron_analysis.json` | Neuron-level analysis summary |
+| `figures/traces/analysis/layer_component_heatmap.png` | Layer x component gradient ratio heatmap |
+| `figures/traces/analysis/neuron_heatmap_*.png` | Per-component neuron-level heatmaps (7 files) |
+| `figures/traces/analysis/neuron_differential_histogram.png` | Distribution of neuron-level ratios |
+| `figures/traces/analysis/forget_neuron_bitmap.png` | Binary forget-dominant neuron map |
+| `figures/traces/analysis/forget_neuron_bitmap.pt` | Bitmap tensor for downstream use in SIBL |
+| `figures/traces/analysis/activation_heatmap_*.png` | Activation heatmaps (L2 norm, mean_abs, variance) |
+| `figures/traces/muse_news_llama2_7b/` | 100-sample pilot run (all 3 techniques) |
 
 ---
 

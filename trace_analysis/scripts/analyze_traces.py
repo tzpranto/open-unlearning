@@ -480,10 +480,10 @@ def main():
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--trace_file", type=str,
-                        default="trace_analysis/saves/traces/muse_news_full/trace_results.pt",
+                        default="trace_analysis/figures/traces/muse_news_full/trace_results.pt",
                         help="Existing param-level traces (for layer-component heatmap)")
     parser.add_argument("--output_dir", type=str,
-                        default="trace_analysis/saves/traces/analysis")
+                        default="trace_analysis/figures/traces/analysis")
     parser.add_argument("--forget_threshold", type=float, default=1.0,
                         help="Ratio threshold for marking a neuron as forget-dominant")
     parser.add_argument("--retain_threshold", type=float, default=0.5,
