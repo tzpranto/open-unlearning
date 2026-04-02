@@ -446,7 +446,7 @@ def plot_gradient_differential(forget_grads, retain_grads, diff_scores,
     axes[1].axhline(1.0, color="black", linewidth=0.8, linestyle="--")
     axes[1].set_xlabel("Layer")
     axes[1].set_ylabel("Ratio (Forget / Retain)")
-    axes[1].set_title("Per-Layer Forget-Specificity (Gradient)")
+    axes[1].set_title("Per-Layer Gradient Balance (Forget / Retain)")
     axes[1].grid(axis="y", alpha=0.3)
 
     top_n = 30
@@ -458,7 +458,7 @@ def plot_gradient_differential(forget_grads, retain_grads, diff_scores,
     axes[2].set_yticks(range(len(names)))
     axes[2].set_yticklabels(names, fontsize=7)
     axes[2].set_xlabel("Differential Score")
-    axes[2].set_title(f"Top {top_n} Forget-Specific Parameters")
+    axes[2].set_title(f"Top {top_n} Least Retain-Biased Parameters")
     axes[2].invert_yaxis()
     axes[2].grid(axis="x", alpha=0.3)
 
@@ -505,7 +505,7 @@ def plot_summary(causal_f, causal_r, forget_act, retain_act,
     axes[1, 0].axhline(1.0, color="black", linewidth=0.8, linestyle="--")
     axes[1, 0].set_xlabel("Layer")
     axes[1, 0].set_ylabel("Gradient Ratio")
-    axes[1, 0].set_title("Gradient Forget-Specificity per Layer")
+    axes[1, 0].set_title("Gradient Balance per Layer (Forget / Retain)")
     axes[1, 0].grid(axis="y", alpha=0.3)
 
     keys, idxs = _sorted_layer_keys(forget_act, "")
@@ -544,7 +544,7 @@ def print_summary(causal_f, causal_r, forget_grads, retain_grads,
         r = causal_r.get(layer, 0.0)
         print(f"{layer:>6d} {score:>12.4f} {r:>12.4f} {score - r:>12.4f}")
 
-    print("\n--- Gradient: Top 10 Layers by Forget-Specificity ---")
+    print("\n--- Gradient: Top 10 Layers by Forget/Retain Ratio ---")
     fg_l = _aggregate_grads_by_layer(forget_grads, n_layers)
     rg_l = _aggregate_grads_by_layer(retain_grads, n_layers)
     lr = [(l, fg_l[l] / (rg_l[l] + 1e-10)) for l in range(n_layers)]
@@ -554,7 +554,7 @@ def print_summary(causal_f, causal_r, forget_grads, retain_grads,
     for layer, ratio in lr[:10]:
         print(f"{layer:>6d} {fg_l[layer]:>14.6f} {rg_l[layer]:>14.6f} {ratio:>10.2f}")
 
-    print("\n--- Top 20 Most Forget-Specific Parameters ---")
+    print("\n--- Top 20 Least Retain-Biased Parameters ---")
     sp = sorted(diff_scores.items(), key=lambda x: x[1], reverse=True)
     print(f"{'Parameter':>55} {'Score':>10}")
     print("-" * 67)

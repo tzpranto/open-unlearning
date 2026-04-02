@@ -82,6 +82,17 @@ trainer:
     neumann_max_growth_ratio: 5.0
     neumann_backtrack_factor: 0.5
     neumann_backtrack_max_tries: 4
+    # Surgical unlearning: neuron-level mask from trace analysis
+    neuron_bitmap_path: null  # Legacy: path to forget_neuron_bitmap.pt
+    neuron_traces_path: null  # Path to neuron_traces.pt (raw ratios, preferred)
+    mask_th_low: 0.5  # ratio < th_low -> frozen
+    mask_th_high: 1.0  # ratio >= th_high -> full outer LR; else smooth
+    outer_lr_smooth: 0.6  # outer LR multiplier for mixed neurons (th_low <= ratio < th_high)
+    mask_freeze_layers: null  # e.g. [0,1,2,3,4,5,6,7] force freeze
+    retain_protection_layers: null  # Layer indices for aggressive retention inner LR
+    retain_lr_multiplier: 2.0
+    implicit_block_skip_layers: null  # Layer indices to SKIP in implicit correction
+
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false
     debug_save_arrays: false

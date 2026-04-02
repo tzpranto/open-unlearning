@@ -74,6 +74,8 @@ class SIBL(UnlearnTrainer):
         neumann_use_probe_alpha: bool = True,  # adapt α from curvature probe each step
         neumann_clip_norm: Optional[float] = None,  # clip v and g_corr; None = no clip
         neumann_max_growth_ratio: float = 10.0,  # fallback if correction explodes
+        neumann_backtrack_factor: float = 0.5,  # backtrack step reduction factor
+        neumann_backtrack_max_tries: int = 4,  # max backtrack attempts
         neumann_variant: str = "legacy",  # "legacy" or "richardson" (proper H^{-1} Neumann)
         # Debug controls for implicit-correction diagnostics
         debug_implicit: bool = False,
@@ -89,6 +91,16 @@ class SIBL(UnlearnTrainer):
         simnpo_beta: float = 1.0,  # Beta for SimNPO loss
         simnpo_delta: float = 0.0,  # Delta offset for SimNPO loss
         elastic_net_l1_ratio: float = 0.5,  # L1 ratio for elastic net (0.5 = equal L1 and L2)
+        # Surgical unlearning: neuron-level bitmap mask from trace analysis
+        neuron_bitmap_path: Optional[str] = None,  # Path to forget_neuron_bitmap.pt (legacy)
+        neuron_traces_path: Optional[str] = None,  # Path to neuron_traces.pt (raw ratios)
+        mask_th_low: float = 0.5,  # ratio < th_low -> mask=0 (frozen)
+        mask_th_high: float = 1.0,  # ratio >= th_high -> full outer LR; else smooth * outer LR
+        outer_lr_smooth: float = 0.6,  # LR multiplier for neurons with th_low <= ratio < th_high
+        mask_freeze_layers: Optional[list] = None,  # Layer indices forced to mask=0
+        retain_protection_layers: Optional[list] = None,  # Layer indices for aggressive retention LR
+        retain_lr_multiplier: float = 2.0,  # Inner LR multiplier for retain-protection layers
+        implicit_block_skip_layers: Optional[list] = None,  # Layer indices to SKIP in implicit correction
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -153,6 +165,17 @@ class SIBL(UnlearnTrainer):
         self.simnpo_beta = simnpo_beta
         self.simnpo_delta = simnpo_delta
         self.elastic_net_l1_ratio = elastic_net_l1_ratio
+
+        # Surgical unlearning configuration
+        self.neuron_bitmap_path = neuron_bitmap_path
+        self.neuron_traces_path = neuron_traces_path
+        self.mask_th_low = mask_th_low
+        self.mask_th_high = mask_th_high
+        self.outer_lr_smooth = outer_lr_smooth
+        self.mask_freeze_layers = set(mask_freeze_layers or [])
+        self.retain_protection_layers = set(retain_protection_layers or [])
+        self.retain_lr_multiplier = retain_lr_multiplier
+        self.implicit_block_skip_layers = set(implicit_block_skip_layers or [])
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -257,9 +280,157 @@ class SIBL(UnlearnTrainer):
             "nonpos_count": int(nonpos),
         }
 
+    def _load_neuron_bitmap_mask(self):
+        """Load neuron-level forget bitmap and convert to weight-level mask.
+
+        The bitmap (from trace analysis) maps param_name -> np.ndarray(int32)
+        of shape (out_features,) where 1 = forget-dominant neuron.
+        We broadcast each row indicator to a full weight mask:
+            mask[i, :] = bitmap[i]  for 2D weight matrices.
+        Parameters not in the bitmap (layernorm, embeddings, lm_head) get zeros.
+        """
+        bitmap_path = self.neuron_bitmap_path
+        logger.info(f"Loading neuron bitmap mask from {bitmap_path}")
+        bitmap = torch.load(bitmap_path, map_location="cpu", weights_only=False)
+
+        mask_dict = {}
+        total_active = 0
+        total_params = 0
+
+        for name, param in self.model.named_parameters():
+            if name in bitmap:
+                # Broadcast per-neuron (row) bitmap to full weight shape
+                row_mask = torch.from_numpy(bitmap[name]).float()  # (out_features,)
+                if param.dim() == 2:
+                    # Weight matrix: expand rows -> (out_features, in_features)
+                    weight_mask = row_mask.unsqueeze(1).expand_as(param.data)
+                elif param.dim() == 1:
+                    weight_mask = row_mask
+                else:
+                    weight_mask = row_mask.view(-1, *([1] * (param.dim() - 1))).expand_as(param.data)
+                mask_dict[name] = weight_mask.to(self.args.device)
+            else:
+                # Not in bitmap (layernorm, embeddings, etc.) -> frozen
+                mask_dict[name] = torch.zeros_like(param.data).to(self.args.device)
+
+            n_active = (mask_dict[name] > 0).sum().item()
+            total_active += n_active
+            total_params += param.numel()
+
+        pct = 100.0 * total_active / max(total_params, 1)
+        logger.info(f"Neuron bitmap mask: {total_active:,}/{total_params:,} active ({pct:.2f}%)")
+
+        # Log per-layer stats
+        layer_stats = {}
+        for name in mask_dict:
+            layer_id = self._layer_id_from_param_name(name)
+            if layer_id is not None:
+                if layer_id not in layer_stats:
+                    layer_stats[layer_id] = {"active": 0, "total": 0}
+                layer_stats[layer_id]["active"] += (mask_dict[name] > 0).sum().item()
+                layer_stats[layer_id]["total"] += mask_dict[name].numel()
+        for lid in sorted(layer_stats):
+            s = layer_stats[lid]
+            lpct = 100.0 * s["active"] / max(s["total"], 1)
+            logger.info(f"  Layer {lid:2d}: {s['active']:>10,}/{s['total']:>12,} active ({lpct:.2f}%)")
+
+        return mask_dict
+
+    def _load_neuron_traces_mask(self):
+        """Load raw neuron traces and build tiered mask with embedded LR scale.
+
+        Mask values encode both trainability and outer LR scale:
+          - 0.0 : frozen (ratio < th_low, or frozen layer)
+          - outer_lr_smooth : mixed neuron (th_low <= ratio < th_high)
+          - 1.0 : forget-dominant neuron (ratio >= th_high)
+
+        Inner step uses (mask > 0) for binary gating.
+        Outer step uses mask values directly as LR scale.
+        This avoids storing a separate LR scale dict (saves ~27GB GPU RAM).
+        """
+        traces_path = self.neuron_traces_path
+        logger.info(f"Loading neuron traces from {traces_path}")
+        traces = torch.load(traces_path, map_location="cpu", weights_only=False)
+        forget_traces = traces["forget"]
+        retain_traces = traces["retain"]
+
+        mask_dict = {}
+        total_active = 0
+        total_full_lr = 0
+        total_smooth_lr = 0
+        total_params = 0
+
+        for name, param in self.model.named_parameters():
+            layer_id = self._layer_id_from_param_name(name)
+
+            # Freeze layers in mask_freeze_layers, or params not in traces
+            if (layer_id is not None and layer_id in self.mask_freeze_layers) or name not in forget_traces:
+                mask_dict[name] = torch.zeros(param.data.shape, dtype=torch.float16, device=self.args.device)
+                total_params += param.numel()
+                continue
+
+            # Compute per-neuron ratio
+            f_act = torch.from_numpy(forget_traces[name]).float()
+            r_act = torch.from_numpy(retain_traces[name]).float()
+            ratio = f_act / (r_act + 1e-8)
+
+            # Build tiered mask: 0 / smooth / 1.0
+            neuron_mask = torch.where(
+                ratio >= self.mask_th_high,
+                torch.ones_like(ratio),
+                torch.where(
+                    ratio >= self.mask_th_low,
+                    torch.full_like(ratio, self.outer_lr_smooth),
+                    torch.zeros_like(ratio),
+                ),
+            )
+
+            # Expand to weight shape
+            if param.dim() == 2:
+                weight_mask = neuron_mask.unsqueeze(1).expand_as(param.data)
+            elif param.dim() == 1:
+                weight_mask = neuron_mask
+            else:
+                weight_mask = neuron_mask.view(-1, *([1] * (param.dim() - 1))).expand_as(param.data)
+
+            mask_dict[name] = weight_mask.half().to(self.args.device)
+
+            n_active = (weight_mask > 0).sum().item()
+            n_full = (weight_mask >= 1.0 - 1e-6).sum().item()
+            n_smooth = n_active - n_full
+            total_active += n_active
+            total_full_lr += n_full
+            total_smooth_lr += n_smooth
+            total_params += param.numel()
+
+        pct = 100.0 * total_active / max(total_params, 1)
+        logger.info(f"Traces mask: {total_active:,}/{total_params:,} active ({pct:.2f}%)")
+        logger.info(f"  Full outer LR (ratio>={self.mask_th_high}): {total_full_lr:,} params")
+        logger.info(f"  Smooth outer LR ({self.mask_th_low}<=ratio<{self.mask_th_high}): {total_smooth_lr:,} params")
+
+        # Log per-layer stats
+        layer_stats = {}
+        for name in mask_dict:
+            lid = self._layer_id_from_param_name(name)
+            if lid is not None:
+                if lid not in layer_stats:
+                    layer_stats[lid] = {"active": 0, "total": 0}
+                layer_stats[lid]["active"] += (mask_dict[name] > 0).sum().item()
+                layer_stats[lid]["total"] += mask_dict[name].numel()
+        for lid in sorted(layer_stats):
+            s = layer_stats[lid]
+            lpct = 100.0 * s["active"] / max(s["total"], 1)
+            logger.info(f"  Layer {lid:2d}: {s['active']:>10,}/{s['total']:>12,} active ({lpct:.2f}%)")
+
+        return mask_dict
+
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
-        if self.use_sparsity:
+        if self.neuron_traces_path:
+            self.mask_dict = self._load_neuron_traces_mask()
+        elif self.neuron_bitmap_path:
+            self.mask_dict = self._load_neuron_bitmap_mask()
+        elif self.use_sparsity:
             logger.info(f"Creating sparsity mask with {self.sparsity_method} "
                        f"at {self.sparsity} sparsity...")
             self.mask_dict = SparsityManager.create_mask(
@@ -368,11 +539,18 @@ class SIBL(UnlearnTrainer):
 
         loss_total.backward()
 
-        # Masked gradient update
+        # Masked gradient update with layer-wise LR scaling
+        # Inner step uses binary gating (mask > 0) so retain LR is uniform
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if param.grad is not None and name in self.mask_dict:
-                    param.data.sub_(self.eta_in * param.grad * self.mask_dict[name])
+                    lr = self.eta_in
+                    if self.retain_protection_layers:
+                        layer_id = self._layer_id_from_param_name(name)
+                        if layer_id is not None and layer_id in self.retain_protection_layers:
+                            lr = self.eta_in * self.retain_lr_multiplier
+                    binary_mask = (self.mask_dict[name] > 0).float()
+                    param.data.sub_(lr * param.grad * binary_mask)
                 param.grad = None
 
         return loss.item()
@@ -443,6 +621,29 @@ class SIBL(UnlearnTrainer):
 
         if max_layer < 0:
             return []
+
+        # When skip_layers is set, include ALL layers except those in the skip list.
+        # Split each layer into attn/mlp sub-blocks for memory efficiency.
+        # Otherwise, fall back to the original last_n_layers behavior.
+        if self.implicit_block_skip_layers:
+            blocks = []
+            for layer_id in sorted(by_layer.keys()):
+                if layer_id in self.implicit_block_skip_layers:
+                    continue
+                entries = by_layer[layer_id]
+                if len(entries) == 0:
+                    continue
+                # Split into attn and mlp sub-blocks to reduce per-block memory
+                attn_entries = [(n, p) for n, p in entries if ".self_attn." in n]
+                mlp_entries = [(n, p) for n, p in entries if ".mlp." in n]
+                other_entries = [(n, p) for n, p in entries if ".self_attn." not in n and ".mlp." not in n]
+                if attn_entries:
+                    blocks.append((f"layer_{layer_id}_attn", attn_entries))
+                if mlp_entries:
+                    blocks.append((f"layer_{layer_id}_mlp", mlp_entries))
+                if other_entries:
+                    blocks.append((f"layer_{layer_id}_other", other_entries))
+            return blocks
 
         min_keep = max(0, max_layer - self.implicit_block_last_n_layers + 1)
         blocks = []
@@ -516,8 +717,11 @@ class SIBL(UnlearnTrainer):
                 for name, corr_part in zip(names, corr_parts):
                     g_alm_dict[name] = g_alm_dict[name] - corr_part
 
-                lin_res = ((hvp_func(h) - v_block).norm() / (v_block.norm().clamp(min=1e-12))).item()
-                cond_proxy = self._rayleigh_condition_proxy(hvp_func, v_block, mask_block)
+                lin_res = 0.0
+                cond_proxy = {}
+                if self.debug_implicit:
+                    lin_res = ((hvp_func(h) - v_block).norm() / (v_block.norm().clamp(min=1e-12))).item()
+                    cond_proxy = self._rayleigh_condition_proxy(hvp_func, v_block, mask_block)
                 if self.debug_implicit:
                     self._log_implicit_debug_record({
                         "outer_iter": outer_iter,
@@ -735,10 +939,13 @@ class SIBL(UnlearnTrainer):
         if self.neumann_clip_norm is not None:
             g_corr = self._clip_by_global_norm(g_corr, self.neumann_clip_norm)
 
-        # 7) Solve quality and condition proxy for debugging
-        Hh = H_in_tilde(h_correct)
-        lin_res = ((Hh - v).norm() / (v.norm().clamp(min=1e-12))).item()
-        cond_proxy = self._rayleigh_condition_proxy(H_in_tilde, v, mask_flat)
+        # 7) Solve quality and condition proxy (expensive HVPs, only when debugging)
+        lin_res = 0.0
+        cond_proxy = {}
+        if self.debug_implicit:
+            Hh = H_in_tilde(h_correct)
+            lin_res = ((Hh - v).norm() / (v.norm().clamp(min=1e-12))).item()
+            cond_proxy = self._rayleigh_condition_proxy(H_in_tilde, v, mask_flat)
 
         logger.info(
             f"Neumann: ||v||={v_norm:.6f} ||h||={h_norm:.6f} ||g_corr||={g_corr_norm:.6f} alpha={alpha:.6f}"
@@ -861,8 +1068,11 @@ class SIBL(UnlearnTrainer):
 
                     h = self.conjugate_gradient(hvp_func, v)
                     hvp_correction = self.compute_hvp(L_alm, params_list, h)
-                    lin_res = ((hvp_func(h) - v).norm() / (v.norm().clamp(min=1e-12))).item()
-                    cond_proxy = self._rayleigh_condition_proxy(hvp_func, v, mask_flat)
+                    lin_res = 0.0
+                    cond_proxy = {}
+                    if self.debug_implicit:
+                        lin_res = ((hvp_func(h) - v).norm() / (v.norm().clamp(min=1e-12))).item()
+                        cond_proxy = self._rayleigh_condition_proxy(hvp_func, v, mask_flat)
                     if self.debug_implicit:
                         if outer_iter is not None:
                             self._save_debug_array(outer_iter, "v", v)
@@ -889,7 +1099,7 @@ class SIBL(UnlearnTrainer):
                         if name in g_alm_dict:
                             g_alm_dict[name] = g_alm_dict[name] - correction
 
-        # Primal update
+        # Primal update: mask values encode LR scale (0/smooth/1.0) when using traces
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if name in self.mask_dict and name in g_alm_dict:
