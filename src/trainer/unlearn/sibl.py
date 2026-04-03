@@ -103,6 +103,12 @@ class SIBL(UnlearnTrainer):
         retain_protection_layers: Optional[list] = None,  # Layer indices for aggressive retention LR
         retain_lr_multiplier: float = 2.0,  # Inner LR multiplier for retain-protection layers
         implicit_block_skip_layers: Optional[list] = None,  # Layer indices to SKIP in implicit correction
+        # Gradient disentanglement: project forget gradient orthogonal to retain gradient
+        gradient_projection: bool = False,  # Enable orthogonal gradient projection
+        gradient_projection_scope: str = "layer",  # "param", "layer", "global", or "aggressive"
+        projection_strength: float = 1.0,  # Fraction of retain-aligned component to remove (0=none, 1=full)
+        projection_schedule: str = "constant",  # "constant" or "linear_decay" (1→0 over T iters)
+        projection_rescale: bool = False,  # Rescale projected gradient to maintain original norm
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -180,6 +186,12 @@ class SIBL(UnlearnTrainer):
         self.retain_protection_layers = set(retain_protection_layers or [])
         self.retain_lr_multiplier = retain_lr_multiplier
         self.implicit_block_skip_layers = set(implicit_block_skip_layers or [])
+        self.gradient_projection = gradient_projection
+        self.gradient_projection_scope = gradient_projection_scope
+        self.projection_strength = projection_strength
+        self.projection_schedule = projection_schedule
+        self._projection_strength_base = projection_strength  # Store base for scheduling
+        self.projection_rescale = projection_rescale
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -976,6 +988,95 @@ class SIBL(UnlearnTrainer):
             "condition_proxy": cond_proxy,
         }
 
+    def _apply_gradient_projection(self, g_alm_dict, retain_batch,
+                                     g_forget_dict=None, al_retain_coeff=0.0):
+        """Project the forget component of the gradient orthogonal to the retain gradient.
+
+        Instead of projecting the full ALM gradient (which removes AL retain protection),
+        this decomposes G_alm = G_fgt + c*G_ret, projects only G_fgt orthogonally,
+        then reconstructs: G_update = G_fgt_proj + c*G_ret.
+
+        Args:
+            g_alm_dict: Full ALM gradient dict (name → tensor)
+            retain_batch: Retain data batch (to compute retain gradient)
+            g_forget_dict: Pre-computed forget gradient dict (if available)
+            al_retain_coeff: λ + ρ*(L_ret - ε) coefficient for AL retain terms
+        """
+        # Compute retain gradient
+        L_ret_proj = self.compute_retain_loss(retain_batch)
+        L_ret_proj.backward()
+
+        g_retain_dict = {}
+        for name, param in self.model.named_parameters():
+            if param.grad is not None:
+                g_retain_dict[name] = param.grad.clone()
+            param.grad = None
+        self.model.zero_grad()
+
+        scope = self.gradient_projection_scope
+        eps = 1e-10
+
+        # If we have separate forget gradient, use it for projection
+        # Otherwise, extract forget component: G_fgt = G_alm - al_retain_coeff * G_ret
+        if g_forget_dict is None:
+            g_forget_dict = {}
+            for name in g_alm_dict:
+                if name in g_retain_dict:
+                    g_forget_dict[name] = (
+                        g_alm_dict[name].float() - al_retain_coeff * g_retain_dict[name].float()
+                    )
+                else:
+                    g_forget_dict[name] = g_alm_dict[name].float()
+
+        def _project_layer(names):
+            """Project forget gradient of a group of params orthogonal to retain gradient."""
+            valid_names = [n for n in names if n in g_retain_dict and n in g_forget_dict]
+            if not valid_names:
+                return
+            g_f_parts = [g_forget_dict[n].flatten().float() for n in valid_names]
+            g_r_parts = [g_retain_dict[n].flatten().float() for n in valid_names]
+            g_f_flat = torch.cat(g_f_parts)
+            g_r_flat = torch.cat(g_r_parts)
+            dot = torch.dot(g_f_flat, g_r_flat)
+            g_r_norm_sq = torch.dot(g_r_flat, g_r_flat) + eps
+            coeff = self.projection_strength * (dot / g_r_norm_sq).item()
+            # Compute norms for optional rescaling
+            g_f_norm = g_f_flat.norm().item()
+            g_f_proj_flat = g_f_flat - coeff * g_r_flat
+            g_f_proj_norm = g_f_proj_flat.norm().item()
+            rescale = (g_f_norm / (g_f_proj_norm + eps)) if (self.projection_rescale and g_f_proj_norm > eps) else 1.0
+            # Reconstruct: G_update = rescale * G_fgt_proj + al_retain_coeff * G_ret
+            for name in valid_names:
+                g_fgt_proj = g_forget_dict[name].float() - coeff * g_retain_dict[name].float()
+                g_alm_dict[name] = (
+                    rescale * g_fgt_proj + al_retain_coeff * g_retain_dict[name].float()
+                ).to(g_alm_dict[name].dtype)
+
+        if scope == "param":
+            for name in list(g_alm_dict.keys()):
+                _project_layer([name])
+        elif scope == "layer":
+            by_layer = {}
+            for name in g_alm_dict:
+                layer_id = self._layer_id_from_param_name(name)
+                if layer_id is None:
+                    layer_id = -1
+                if layer_id not in by_layer:
+                    by_layer[layer_id] = []
+                by_layer[layer_id].append(name)
+            for layer_id, names in by_layer.items():
+                _project_layer(names)
+        elif scope == "global":
+            _project_layer(list(g_alm_dict.keys()))
+        else:
+            raise ValueError(f"Unknown gradient_projection_scope: {scope}")
+
+        # Clean up
+        del g_retain_dict, g_forget_dict
+        torch.cuda.empty_cache()
+
+        return g_alm_dict
+
     def outer_step(self, forget_batch, retain_batch, outer_iter: Optional[int] = None):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
@@ -1116,6 +1217,26 @@ class SIBL(UnlearnTrainer):
                         if name in g_alm_dict:
                             g_alm_dict[name] = g_alm_dict[name] - correction
 
+        # Gradient disentanglement: project forget component orthogonal to retain gradient
+        if self.gradient_projection:
+            # al_retain_coeff: how much of the AL retain gradient to add back
+            # When 0: project full ALM gradient (aggressive forget, less retain protection)
+            # When λ+ρr: preserve AL constraint terms (conservative, better retain)
+            if self.gradient_projection_scope == "aggressive":
+                # Special mode: project full gradient without AL decomposition
+                al_retain_coeff = 0.0
+                # Use regular layer-based projection
+                self.gradient_projection_scope = "layer"
+                g_alm_dict = self._apply_gradient_projection(
+                    g_alm_dict, retain_batch, al_retain_coeff=al_retain_coeff
+                )
+                self.gradient_projection_scope = "aggressive"
+            else:
+                al_retain_coeff = self.lambda_dual + self.rho * r
+                g_alm_dict = self._apply_gradient_projection(
+                    g_alm_dict, retain_batch, al_retain_coeff=al_retain_coeff
+                )
+
         # Primal update: mask values encode LR scale; outer_freeze_layers skipped
         with torch.no_grad():
             for name, param in self.model.named_parameters():
@@ -1181,6 +1302,10 @@ class SIBL(UnlearnTrainer):
                     f"probe_alpha={self.neumann_use_probe_alpha}, variant={self.neumann_variant}"
                 )
 
+        if self.gradient_projection:
+            sched_str = f", schedule={self.projection_schedule}" if self.projection_schedule != "constant" else ""
+            logger.info(f"Gradient projection: enabled (scope={self.gradient_projection_scope}, strength={self.projection_strength}{sched_str})")
+
         for t in range(self.T):
             t_start = time.time()
 
@@ -1202,6 +1327,10 @@ class SIBL(UnlearnTrainer):
 
             self.inner_loop(retain_loader)
 
+            # Update projection strength based on schedule
+            if self.gradient_projection and self.projection_schedule == "linear_decay":
+                self.projection_strength = self._projection_strength_base * (1.0 - t / max(self.T - 1, 1))
+
             # Outer loop
             L_fgt, L_ret, r = self.outer_step(forget_batch, retain_batch, outer_iter=t)
 
@@ -1220,9 +1349,10 @@ class SIBL(UnlearnTrainer):
 
             # Log progress
             if t % 2 == 0 or t == self.T - 1:
+                proj_str = f" | α={self.projection_strength:.2f}" if self.gradient_projection and self.projection_schedule != "constant" else ""
                 logger.info(
                     f"[{t:3d}/{self.T}] L_fgt={L_fgt:.4f} | L_ret={L_ret:.4f} | "
-                    f"r={r:+.4f} | λ={self.lambda_dual:.3f} | t={t_elapsed:.2f}s"
+                    f"r={r:+.4f} | λ={self.lambda_dual:.3f}{proj_str} | t={t_elapsed:.2f}s"
                 )
 
             # Update training state

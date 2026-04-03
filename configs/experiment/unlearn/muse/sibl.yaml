@@ -95,6 +95,13 @@ trainer:
     retain_lr_multiplier: 2.0
     implicit_block_skip_layers: null  # Layer indices to SKIP in implicit correction
 
+    # Gradient disentanglement
+    gradient_projection: false  # Project forget gradient orthogonal to retain gradient
+    gradient_projection_scope: layer  # "param", "layer", "global", or "aggressive"
+    projection_strength: 1.0  # Fraction of retain-aligned component to remove (0=none, 1=full)
+    projection_schedule: constant  # "constant" or "linear_decay" (strength decays 1→0 over T iters)
+    projection_rescale: false  # Rescale projected gradient to maintain original norm
+
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false
     debug_save_arrays: false

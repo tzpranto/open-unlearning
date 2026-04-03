@@ -49,6 +49,11 @@ method_args:
   retain_protection_layers: null
   retain_lr_multiplier: 2.0
   implicit_block_skip_layers: null
+  gradient_projection: false
+  gradient_projection_scope: layer
+  projection_strength: 1.0
+  projection_schedule: constant
+  projection_rescale: false
 
 # Override trainer args for SIBL
 # Note: SIBL uses custom training loop, so some standard args may not apply
