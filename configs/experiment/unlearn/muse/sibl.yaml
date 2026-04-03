@@ -88,7 +88,9 @@ trainer:
     mask_th_low: 0.5  # ratio < th_low -> frozen
     mask_th_high: 1.0  # ratio >= th_high -> full outer LR; else smooth
     outer_lr_smooth: 0.6  # outer LR multiplier for mixed neurons (th_low <= ratio < th_high)
-    mask_freeze_layers: null  # e.g. [0,1,2,3,4,5,6,7] force freeze
+    mask_freeze_layers: null  # e.g. [0,1,2,3,4,5,6,7] force freeze everywhere
+    outer_freeze_layers: null  # e.g. [0,1,2,3,4,5,6,7] freeze outer only, inner still updates
+    proportional_outer_lr: false  # Use ratio as LR scale instead of fixed smooth
     retain_protection_layers: null  # Layer indices for aggressive retention inner LR
     retain_lr_multiplier: 2.0
     implicit_block_skip_layers: null  # Layer indices to SKIP in implicit correction

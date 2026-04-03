@@ -44,6 +44,8 @@ method_args:
   mask_th_high: 1.0
   outer_lr_smooth: 0.6
   mask_freeze_layers: null
+  outer_freeze_layers: null
+  proportional_outer_lr: false
   retain_protection_layers: null
   retain_lr_multiplier: 2.0
   implicit_block_skip_layers: null

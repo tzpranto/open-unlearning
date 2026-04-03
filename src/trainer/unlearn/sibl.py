@@ -97,7 +97,9 @@ class SIBL(UnlearnTrainer):
         mask_th_low: float = 0.5,  # ratio < th_low -> mask=0 (frozen)
         mask_th_high: float = 1.0,  # ratio >= th_high -> full outer LR; else smooth * outer LR
         outer_lr_smooth: float = 0.6,  # LR multiplier for neurons with th_low <= ratio < th_high
-        mask_freeze_layers: Optional[list] = None,  # Layer indices forced to mask=0
+        mask_freeze_layers: Optional[list] = None,  # Layer indices forced to mask=0 everywhere
+        outer_freeze_layers: Optional[list] = None,  # Layer indices frozen in outer step only (inner still updates)
+        proportional_outer_lr: bool = False,  # Use ratio as LR scale (vs fixed smooth)
         retain_protection_layers: Optional[list] = None,  # Layer indices for aggressive retention LR
         retain_lr_multiplier: float = 2.0,  # Inner LR multiplier for retain-protection layers
         implicit_block_skip_layers: Optional[list] = None,  # Layer indices to SKIP in implicit correction
@@ -173,6 +175,8 @@ class SIBL(UnlearnTrainer):
         self.mask_th_high = mask_th_high
         self.outer_lr_smooth = outer_lr_smooth
         self.mask_freeze_layers = set(mask_freeze_layers or [])
+        self.outer_freeze_layers = set(outer_freeze_layers or [])
+        self.proportional_outer_lr = proportional_outer_lr
         self.retain_protection_layers = set(retain_protection_layers or [])
         self.retain_lr_multiplier = retain_lr_multiplier
         self.implicit_block_skip_layers = set(implicit_block_skip_layers or [])
@@ -374,16 +378,29 @@ class SIBL(UnlearnTrainer):
             r_act = torch.from_numpy(retain_traces[name]).float()
             ratio = f_act / (r_act + 1e-8)
 
-            # Build tiered mask: 0 / smooth / 1.0
-            neuron_mask = torch.where(
-                ratio >= self.mask_th_high,
-                torch.ones_like(ratio),
-                torch.where(
-                    ratio >= self.mask_th_low,
-                    torch.full_like(ratio, self.outer_lr_smooth),
-                    torch.zeros_like(ratio),
-                ),
-            )
+            # Build tiered mask encoding outer LR scale
+            if self.proportional_outer_lr:
+                # Proportional: use min(ratio, 1.0) as LR scale
+                neuron_mask = torch.where(
+                    ratio >= self.mask_th_high,
+                    torch.ones_like(ratio),
+                    torch.where(
+                        ratio >= self.mask_th_low,
+                        ratio.clamp(max=1.0),  # ratio itself as LR scale
+                        torch.zeros_like(ratio),
+                    ),
+                )
+            else:
+                # Fixed smooth factor
+                neuron_mask = torch.where(
+                    ratio >= self.mask_th_high,
+                    torch.ones_like(ratio),
+                    torch.where(
+                        ratio >= self.mask_th_low,
+                        torch.full_like(ratio, self.outer_lr_smooth),
+                        torch.zeros_like(ratio),
+                    ),
+                )
 
             # Expand to weight shape
             if param.dim() == 2:
@@ -1099,10 +1116,16 @@ class SIBL(UnlearnTrainer):
                         if name in g_alm_dict:
                             g_alm_dict[name] = g_alm_dict[name] - correction
 
-        # Primal update: mask values encode LR scale (0/smooth/1.0) when using traces
+        # Primal update: mask values encode LR scale; outer_freeze_layers skipped
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if name in self.mask_dict and name in g_alm_dict:
+                    # Skip outer update for frozen layers (they still get inner retain updates)
+                    if self.outer_freeze_layers:
+                        layer_id = self._layer_id_from_param_name(name)
+                        if layer_id is not None and layer_id in self.outer_freeze_layers:
+                            param.grad = None
+                            continue
                     mask = self.mask_dict[name]
                     param.data.sub_(self.eta_theta * g_alm_dict[name] * mask)
                 param.grad = None
