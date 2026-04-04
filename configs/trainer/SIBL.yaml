@@ -54,6 +54,12 @@ method_args:
   projection_strength: 1.0
   projection_schedule: constant
   projection_rescale: false
+  use_steering: false
+  steering_layers: [5, 6, 7]
+  steering_coeff: 20.0
+  steering_alpha: 1.0
+  steering_only: true
+  steering_retain_match: false
 
 # Override trainer args for SIBL
 # Note: SIBL uses custom training loop, so some standard args may not apply

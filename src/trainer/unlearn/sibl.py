@@ -109,6 +109,13 @@ class SIBL(UnlearnTrainer):
         projection_strength: float = 1.0,  # Fraction of retain-aligned component to remove (0=none, 1=full)
         projection_schedule: str = "constant",  # "constant" or "linear_decay" (1→0 over T iters)
         projection_rescale: bool = False,  # Rescale projected gradient to maintain original norm
+        # Activation steering: representation-space forget intervention
+        use_steering: bool = False,  # Enable activation steering as forget loss
+        steering_layers: Optional[list] = None,  # Layer indices for steering (default: [5,6,7])
+        steering_coeff: float = 20.0,  # Magnitude of random control vectors
+        steering_alpha: float = 1.0,  # Weight of steering loss (vs logit loss)
+        steering_only: bool = True,  # If True, use ONLY steering loss (no logit loss)
+        steering_retain_match: bool = False,  # If True, match retain activations instead of random
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -192,6 +199,16 @@ class SIBL(UnlearnTrainer):
         self.projection_schedule = projection_schedule
         self._projection_strength_base = projection_strength  # Store base for scheduling
         self.projection_rescale = projection_rescale
+
+        # Activation steering configuration
+        self.use_steering = use_steering
+        self.steering_layers = steering_layers or [5, 6, 7]
+        self.steering_coeff = steering_coeff
+        self.steering_alpha = steering_alpha
+        self.steering_only = steering_only
+        self.steering_retain_match = steering_retain_match
+        self._steering_vectors = {}  # Cache: layer_idx → random control vector
+        self._ref_retain_activations = {}  # Cache: layer_idx → retain activation (if steering_retain_match)
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -988,6 +1005,80 @@ class SIBL(UnlearnTrainer):
             "condition_proxy": cond_proxy,
         }
 
+    def _forward_with_hooks(self, batch, layer_indices):
+        """Forward pass capturing hidden states at specified layers.
+
+        Returns:
+            activations: Dict[layer_idx → Tensor(batch, seq, hidden)]
+            outputs: Model outputs
+        """
+        caches = {}
+        hooks = []
+        for layer_idx in layer_indices:
+            module = self.model.model.layers[layer_idx]
+            def make_hook(idx):
+                def hook_fn(mod, inp, out):
+                    caches[idx] = out[0] if isinstance(out, tuple) else out
+                return hook_fn
+            hooks.append(module.register_forward_hook(make_hook(layer_idx)))
+
+        input_ids = batch['input_ids'].to(self.args.device)
+        attention_mask = batch['attention_mask'].to(self.args.device)
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+
+        for h in hooks:
+            h.remove()
+        return caches, outputs
+
+    def _compute_steering_loss(self, forget_batch, retain_batch=None):
+        """Compute activation steering loss: push forget representations at target layers
+        toward random control vectors (RMU-style) or toward retain representations.
+
+        This operates in REPRESENTATION SPACE, bypassing weight-space gradient entanglement.
+        """
+        labels = forget_batch.get('labels', forget_batch['input_ids']).to(self.args.device)
+        mask = (labels != -100).float()
+
+        # Forward pass on forget data, capturing activations at steering layers
+        forget_caches, _ = self._forward_with_hooks(forget_batch, self.steering_layers)
+
+        # Optionally forward pass on retain data for retain-matching mode
+        retain_caches = {}
+        if self.steering_retain_match and retain_batch is not None:
+            with torch.no_grad():
+                retain_caches, _ = self._forward_with_hooks(retain_batch, self.steering_layers)
+
+        total_loss = torch.tensor(0.0, device=self.args.device)
+
+        for layer_idx, activation in forget_caches.items():
+            hidden_dim = activation.shape[-1]
+
+            if self.steering_retain_match and layer_idx in retain_caches:
+                # Target: match retain activations (make forget look like retain)
+                target = retain_caches[layer_idx].detach()
+                # Handle sequence length mismatch between forget and retain
+                min_seq = min(activation.shape[1], target.shape[1])
+                activation = activation[:, :min_seq, :]
+                target = target[:, :min_seq, :]
+                layer_mask = mask[:, :min_seq] if mask.shape[1] > min_seq else mask
+            else:
+                # Target: random control vector (RMU-style misdirection)
+                if layer_idx not in self._steering_vectors:
+                    rv = torch.randn(1, 1, hidden_dim, device=activation.device, dtype=activation.dtype)
+                    self._steering_vectors[layer_idx] = rv / rv.norm() * self.steering_coeff
+                target = self._steering_vectors[layer_idx].expand_as(activation)
+                layer_mask = mask
+
+            # MSE loss with label masking
+            diff = (activation - target) ** 2  # (batch, seq, hidden)
+            mask_exp = layer_mask.unsqueeze(-1).expand_as(diff)
+            per_sample = (diff * mask_exp).mean(dim=2).sum(dim=1)
+            n_tokens = layer_mask.sum(dim=1).clamp(min=1)
+            layer_loss = (per_sample / n_tokens).mean()
+            total_loss = total_loss + layer_loss
+
+        return total_loss / max(len(forget_caches), 1)
+
     def _apply_gradient_projection(self, g_alm_dict, retain_batch,
                                      g_forget_dict=None, al_retain_coeff=0.0):
         """Project the forget component of the gradient orthogonal to the retain gradient.
@@ -1081,8 +1172,16 @@ class SIBL(UnlearnTrainer):
         """Outer loop: Update parameters to forget while respecting budget."""
         self.model.train()
 
-        # Compute forget loss using the configured loss function
-        L_fgt = self.compute_forget_loss(forget_batch)
+        # Compute forget loss: either activation steering, logit-based, or mixed
+        if self.use_steering:
+            L_steer = self._compute_steering_loss(forget_batch, retain_batch)
+            if self.steering_only:
+                L_fgt = self.steering_alpha * L_steer
+            else:
+                L_logit = self.compute_forget_loss(forget_batch)
+                L_fgt = L_logit + self.steering_alpha * L_steer
+        else:
+            L_fgt = self.compute_forget_loss(forget_batch)
 
         # Compute retain loss
         retain_ids = retain_batch['input_ids'].to(self.args.device)
@@ -1306,6 +1405,11 @@ class SIBL(UnlearnTrainer):
             sched_str = f", schedule={self.projection_schedule}" if self.projection_schedule != "constant" else ""
             logger.info(f"Gradient projection: enabled (scope={self.gradient_projection_scope}, strength={self.projection_strength}{sched_str})")
 
+        if self.use_steering:
+            mode = "retain_match" if self.steering_retain_match else "random"
+            mix = "steering_only" if self.steering_only else f"mixed (α={self.steering_alpha})"
+            logger.info(f"Activation steering: enabled (layers={self.steering_layers}, coeff={self.steering_coeff}, mode={mode}, {mix})")
+
         for t in range(self.T):
             t_start = time.time()
 
@@ -1376,6 +1480,7 @@ class SIBL(UnlearnTrainer):
             # if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
             #     self.save_model()
 
+        self.save_model()
         self.evaluate()
         if self.debug_implicit and len(self._debug_records) > 0:
             summary_path = os.path.join(self.debug_dir, "implicit_debug_summary.json")

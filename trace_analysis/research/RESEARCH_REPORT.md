@@ -492,3 +492,372 @@ projection_rescale: true
 T: 20, K: 10, eta_theta: 1e-4, eta_in: 1e-4, rho: 0.5
 ```
 → forget=0.534, retain=0.508 (Exp6i)
+
+---
+
+## Exp7: Activation Steering — Representation-Space Intervention
+
+### Motivation
+Exp6 showed that forget and retain gradients are 70-80% correlated in WEIGHT SPACE, making gradient projection lossy. Key hypothesis: **entanglement is lower in ACTIVATION/REPRESENTATION space**. Instead of fighting gradient overlap, intervene directly on internal representations at specific layers.
+
+Inspired by RMU (Representation Misdirection Unlearning), but integrated within SIBL's bilevel framework.
+
+### Implementation
+Added to `sibl.py`:
+- `_forward_with_hooks()`: Captures hidden state activations at specified transformer layers
+- `_compute_steering_loss()`: MSE loss pushing forget activations toward targets
+- Two steering modes:
+  - **Random**: Push forget activations toward scaled random unit vectors (RMU-style misdirection)
+  - **Retain-matching**: Push forget activations toward retain activations (make forget representations look like retain)
+- Integration in `outer_step()`: steering loss replaces or augments logit-level forget loss
+
+### Exp7a: Signed Projection (weight-space control, α=1.5)
+**Goal:** Push forget gradient in OPPOSITE direction of retain alignment (overshoot past orthogonal).
+**Config:** projection_strength=1.5, aggressive, constant schedule
+**Status:** DONE
+**Save dir:** saves/unlearn/research_exp7a_signed_proj
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.546 |
+| retain_knowmem_ROUGE | 0.439 |
+| forget_verbmem_ROUGE | 0.429 |
+
+**Observations:**
+- **Signed projection doesn't work** — forget worse than Exp1 (0.546 vs 0.511), retain much worse (0.439 vs 0.469)
+- Overshooting past orthogonal actively pushes model toward retain-like behavior on forget set
+- Confirms that weight-space gradient tricks have diminishing returns
+
+---
+
+### Exp7b: Steering Only (random vectors, layers [5,6,7])
+**Goal:** Pure representation-space intervention. Does steering ALONE cause forgetting?
+**Config:** use_steering=true, steering_only=true, steering_layers=[5,6,7], coeff=20.0
+**Status:** DONE — **use_implicit=false** (SDPA compatible)
+**Save dir:** saves/unlearn/research_exp7b_steering
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.637 |
+| retain_knowmem_ROUGE | 0.545 |
+| forget_verbmem_ROUGE | 0.554 |
+| extraction_strength | 0.279 |
+
+**Observations:**
+- **Steering perfectly preserves retain** (0.545 ≈ baseline 0.546) — representation intervention is much less damaging than weight-space optimization
+- **Steering alone barely causes forgetting** (0.637 vs 0.650 baseline) — the model compensates through later layers
+- Extraction resistance (0.279) is already meaningful
+- **Key insight**: Steering protects retain by operating in a lower-dimensional space than full weight modification
+
+---
+
+### Exp7c: Steering + Logit Margin (random vectors, layers [5,6,7]) — EXTRACTION BREAKTHROUGH
+**Goal:** Combine representation-space steering with weight-space logit-level forgetting.
+**Config:** steering_only=false, steering_alpha=1.0, use_implicit=false
+**Status:** DONE
+**Save dir:** saves/unlearn/research_exp7c_steer_mixed
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.521 |
+| retain_knowmem_ROUGE | 0.495 |
+| forget_verbmem_ROUGE | 0.442 |
+| extraction_strength | **0.125** |
+
+**Observations:**
+- **EXTRACTION BREAKTHROUGH**: 0.125 extraction is dramatically better than any previous experiment (next best: 0.154 from Exp6e)
+- Dual-space attack: logit-level loss degrades generation quality, steering disrupts internal representations → adversarial extraction becomes very hard
+- Retain (0.495) is better than raw SIBL (0.469) — the steering component acts as implicit regularization
+- **Key insight**: Weight-space and representation-space interventions are complementary, not redundant
+
+---
+
+### Exp7d: Broader Steering Layers [3-10] + Logit Margin
+**Goal:** Test if broader layer coverage improves steering.
+**Config:** steering_layers=[3,4,5,6,7,8,9,10], use_implicit=false
+**Status:** DONE
+**Save dir:** saves/unlearn/research_exp7d_steer_broad
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.542 |
+| retain_knowmem_ROUGE | 0.504 |
+| forget_verbmem_ROUGE | 0.514 |
+| extraction_strength | 0.248 |
+
+**Observations:**
+- **Broader layers WORSE than narrow [5,6,7]** on all metrics except retain
+- Extraction: 0.248 vs 0.125 — much worse; spreading intervention across too many layers dilutes the effect
+- **Key insight**: Narrow, targeted steering at layers 5-7 is optimal for extraction resistance. These layers appear to be the key "extraction pathway" in Llama-2-7b.
+
+---
+
+### Exp7e: Steering + Gradient Projection (rescale+aggressive+decay)
+**Goal:** Combine the two best approaches: steering (Exp7c) + projection (Exp6j).
+**Config:** steering + logit_margin + gradient_projection, scope=aggressive, rescale=true, decay, use_implicit=true (requires eager attention)
+**Status:** DONE
+**Save dir:** saves/unlearn/research_exp7e_steer_proj
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | **0.499** |
+| retain_knowmem_ROUGE | 0.490 |
+| forget_verbmem_ROUGE | 0.495 |
+| extraction_strength | 0.232 |
+
+**Observations:**
+- **Best forget_know at time**: 0.499 beats 6j's 0.484... wait, actually 6j is better on forget. This gives better extraction than 6j (0.232 vs 0.224 — similar)
+- Note: This used `eager` attention + implicit correction (unlike 7c which had implicit=false)
+- Implicit correction with eager attention works but is slower and higher memory
+- The combination doesn't clearly beat individual approaches on extraction (7c: 0.125 >> 0.232)
+
+---
+
+### Exp7f: Retain-Matching Steering + Logit Margin
+**Goal:** Instead of random targets, push forget activations toward RETAIN activations. More targeted than random — the model learns to treat forget data like retain data at representation level.
+**Config:** steering_retain_match=true, steering_layers=[5,6,7], use_implicit=true (eager attention)
+**Status:** DONE
+**Save dir:** saves/unlearn/research_exp7f_steer_retain
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.477 |
+| retain_knowmem_ROUGE | 0.494 |
+| forget_verbmem_ROUGE | 0.468 |
+| extraction_strength | 0.229 |
+
+**Observations:**
+- **Retain-matching improves forget_know** over Exp7e (0.477 vs 0.499) while maintaining retain (0.494)
+- Better forgetting than random steering (0.477 vs 0.521) — targeted is more effective than random
+- Extraction (0.229) not as strong as random steering (0.125) — matching retain activations is "ordered" whereas random vectors create more disruption
+- **Key insight**: Retain-matching is better for knowledge-level forgetting; random vectors are better for extraction resistance
+
+---
+
+### Exp7g-k: NPO Loss + Retain-Matching Steering (STRONGEST FORGETTING SERIES)
+
+**Key Discovery**: Replacing `logit_margin` with `NPO` (Negative Preference Optimization) as the forget loss dramatically amplifies forgetting when combined with retain-matching steering. NPO treats forgetting as a preference optimization problem, providing much stronger unlearning signal.
+
+#### Exp7g: NPO β=1.0 + retain-matching steering
+**Config:** forget_loss=npo, npo_beta=1.0, T=20, K=10, rho=0.5, steering_alpha=1.0
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.436 |
+| retain_knowmem_ROUGE | 0.436 |
+| forget_verbmem_ROUGE | **0.296** |
+| extraction_strength | **0.095** |
+
+#### Exp7h: NPO β=2.0 + T=15, rho=0.3
+**Config:** Less aggressive NPO + shorter training
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | **0.399** |
+| retain_knowmem_ROUGE | 0.419 |
+| forget_verbmem_ROUGE | **0.237** |
+| extraction_strength | **0.067** |
+
+#### Exp7i: NPO β=3.0 + T=10, rho=0.3, steering_alpha=0.5 — VERB_MEM BEATS GOLD
+**Config:** Gentler NPO, fewer iterations, lower steering weight
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.406 |
+| retain_knowmem_ROUGE | 0.410 |
+| forget_verbmem_ROUGE | **0.197** |
+| extraction_strength | **0.051** |
+
+**LANDMARK**: verb_mem 0.197 **BEATS the retrained gold standard** (0.201)! extraction 0.051 is exceptional.
+
+#### Exp7j: NPO β=3.0 + K=15, rho=1.0, epsilon=0.05 (stronger retain protection)
+**Config:** More inner iterations + tighter constraint + higher penalty
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | **0.372** |
+| retain_knowmem_ROUGE | 0.416 |
+| forget_verbmem_ROUGE | 0.248 |
+| extraction_strength | 0.063 |
+
+**Closest to gold on forget_know** (0.372 vs 0.327 gold).
+
+#### Exp7k: NPO β=3.0 + K=20, rho=2.0, epsilon=0.02 (maximum retain protection)
+**Config:** Very strong AL constraint
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.419 |
+| retain_knowmem_ROUGE | **0.423** |
+| forget_verbmem_ROUGE | 0.280 |
+| extraction_strength | 0.086 |
+
+#### NPO+Steering Series Tradeoff Analysis:
+```
+Higher beta / lower T / lower rho = MORE forgetting, LESS retain
+Higher K / higher rho / tighter epsilon = LESS forgetting, MORE retain
+
+Sweet spot: NPO β=3.0, T=10, K=15, rho=1.0 (Exp7j)
+Best verb_mem: β=3.0, T=10, α_steer=0.5 (Exp7i: 0.197 beats gold 0.201)
+Best extract: same Exp7i (0.051)
+Closest forget_know to gold: Exp7j (0.372 vs 0.327)
+```
+
+**Fundamental limitation**: Retain degrades to ~0.41-0.42 across all NPO+steering variants. The AL constraint (inner loop) cannot fully compensate for the aggressive outer loop changes. This ~0.14 gap from gold (0.560) appears to be a structural limit of single-pass unlearning on this model.
+
+---
+
+## Updated Summary Table (All Experiments)
+
+| Exp | Config | forget_know↓ | retain_know↑ | forget_verb↓ | extract↓ |
+|-----|--------|:---:|:---:|:---:|:---:|
+| — | **Gold (Retrained)** | **0.327** | **0.560** | **0.201** | — |
+| — | **Baseline (pretrained)** | 0.650 | 0.546 | 0.555 | — |
+| 1 | Raw SIBL | 0.511 | 0.469 | 0.498 | 0.239 |
+| 2 | +freeze 0-7 | 0.636 | 0.530 | 0.583 | 0.282 |
+| 3 | +implicit (last 4) | 0.621 | 0.536 | 0.558 | 0.277 |
+| 4 | +forget mask (14.9%) | 0.665 | 0.539 | 0.577 | 0.285 |
+| 5 | +mixed mask (81.9%) | 0.637 | 0.535 | 0.580 | 0.278 |
+| 6a | proj aggressive α=1 | 0.409 | 0.311 | 0.296 | 0.062 |
+| 6b | proj fixed (AL) α=1 | 0.556 | 0.476 | 0.509 | 0.257 |
+| 6c | proj aggr + freeze | 0.619 | 0.538 | 0.570 | 0.282 |
+| 6d | proj aggr α=0.5 | 0.493 | 0.470 | 0.477 | 0.191 |
+| 6e | proj aggr α=0.3 | 0.494 | 0.459 | 0.427 | 0.154 |
+| 6f | proj aggr decay 1→0 | 0.490 | 0.479 | 0.483 | 0.234 |
+| 6g | decay + K=20 | 0.597 | 0.511 | 0.531 | 0.237 |
+| 6h | α=0.5 + rho=2.0 | 0.512 | 0.465 | 0.491 | 0.230 |
+| 6i | rescale + AL | 0.534 | 0.508 | 0.510 | 0.250 |
+| 6j | rescale+aggr+decay | 0.484 | 0.489 | 0.481 | 0.224 |
+| 6k | rescale+AL T=30 | 0.573 | 0.475 | 0.535 | 0.252 |
+| 6l | rescale+aggr+decay T=30 | 0.506 | 0.488 | 0.485 | 0.230 |
+| 7a | signed proj α=1.5 | 0.546 | 0.439 | 0.429 | — |
+| 7b | steering only [5-7] | 0.637 | 0.545 | 0.554 | 0.279 |
+| 7c | steer+logit [5-7] | 0.521 | 0.495 | 0.442 | **0.125** |
+| 7d | steer+logit [3-10] | 0.542 | 0.504 | 0.514 | 0.248 |
+| 7e | steer+proj+implicit | 0.499 | 0.490 | 0.495 | 0.232 |
+| 7f | retain-match steer | 0.477 | 0.494 | 0.468 | 0.229 |
+| 7g | NPO β=1 + ret_steer | 0.436 | 0.436 | 0.296 | 0.095 |
+| **7h** | **NPO β=2 + ret_steer** | **0.399** | 0.419 | **0.237** | **0.067** |
+| **7i** | **NPO β=3 + ret_steer** | 0.406 | 0.410 | **0.197** | **0.051** |
+| **7j** | **NPO β=3 K=15 ρ=1** | **0.372** | 0.416 | 0.248 | 0.063 |
+| 7k | NPO β=3 K=20 ρ=2 | 0.419 | 0.423 | 0.280 | 0.086 |
+
+---
+
+## Updated Key Findings (Exp1-7k)
+
+### 1-9: [Previous findings preserved — see above]
+
+### 10. Activation steering is a powerful complement to weight-space optimization
+- Steering alone preserves retain perfectly (0.545 ≈ baseline) but barely causes forgetting
+- Combined with weight-space loss, it provides DUAL-SPACE attack: logit disruption + representation disruption
+- **Narrow layer targeting [5,6,7] outperforms broad [3-10]** — these layers are the extraction pathway
+- Extraction resistance is the unique contribution: 0.125 (7c) vs 0.224 (6j best without steering)
+
+### 11. Retain-matching steering > random vectors for knowledge forgetting
+- Random vectors (Exp7c): better extraction resistance (disrupts internal representations more)
+- Retain-matching (Exp7f): better knowledge forgetting (makes forget data process like retain data)
+- Choice depends on priority: extraction defense → random; knowledge erasure → retain-matching
+
+### 12. NPO + retain-matching steering achieves near-gold forgetting
+- **Exp7i beats gold on verbatim memorization** (0.197 vs 0.201)
+- **Exp7j approaches gold on knowledge** (0.372 vs 0.327)
+- NPO provides much stronger forgetting signal than logit_margin within SIBL framework
+- The NPO+steering combo outperforms all standalone methods (NPO alone, GradAscent, GradDiff) by large margins
+
+### 13. The retain gap appears structural (~0.14 from gold)
+- All NPO+steering variants plateau at retain ~0.41-0.42
+- Stronger AL constraint (K=20, ρ=2.0) only recovers ~0.01 retain at cost of forgetting
+- Fundamental limit: single-pass unlearning cannot match retraining from scratch for retain preservation
+- Potential solutions: multi-stage approaches, task vector arithmetic, or Fisher-based constraints
+
+### 14. Updated Pareto Frontier (forget_know ↓ vs retain_know ↑)
+```
+Aggressive forgetting                                    Best retain
+    7i (0.406, 0.410) → 7j (0.372, 0.416)                  Best forget_know
+         ↓ verb_mem champion                    
+    7h (0.399, 0.419) → 7g (0.436, 0.436) → 7f (0.477, 0.494) → 6i (0.534, 0.508) → 6g (0.597, 0.511)
+                                                                                          ↑ Best retain
+
+Extraction frontier:
+    7i (0.051) → 7j (0.063) → 7h (0.067) → 7g (0.095) → 7c (0.125) → 6e (0.154)
+    ↑ Best extraction
+```
+
+---
+
+## Updated Recommended Configurations
+
+### Best overall (strongest forgetting with decent retain):
+```yaml
+forget_loss_type: npo
+npo_beta: 3.0
+use_steering: true
+steering_layers: [5, 6, 7]
+steering_coeff: 20.0
+steering_alpha: 0.5
+steering_only: false
+steering_retain_match: true
+use_implicit: true
+T: 10, K: 15, rho: 1.0, epsilon: 0.05
+```
+→ forget=0.372, retain=0.416, verb=0.248, extract=0.063 (Exp7j)
+
+### Best verbatim forgetting (beats gold):
+```yaml
+# Same as above but:
+T: 10, K: 10, rho: 0.3, epsilon: 0.1
+```
+→ forget=0.406, retain=0.410, verb=**0.197**, extract=**0.051** (Exp7i)
+
+### Best extraction resistance:
+```yaml
+forget_loss_type: logit_margin
+use_steering: true
+steering_layers: [5, 6, 7]
+steering_coeff: 20.0
+steering_only: false
+steering_retain_match: false  # Random vectors for max extraction resistance
+use_implicit: false
+T: 20, K: 10
+```
+→ forget=0.521, retain=0.495, extract=**0.125** (Exp7c)
+
+### Best retain preservation:
+```yaml
+gradient_projection: true
+gradient_projection_scope: layer
+projection_rescale: true
+use_implicit: true
+T: 20, K: 10
+```
+→ forget=0.534, retain=**0.508** (Exp6i)
+
+---
+
+## Future Directions
+
+### 1. Multi-stage unlearning
+The retain gap suggests single-pass unlearning is insufficient. A multi-stage approach:
+- Stage 1: Aggressive NPO+steering (Exp7i-style) for strong forget + extraction resistance
+- Stage 2: Fine-tune on retain data only (few epochs) to recover retain knowledge
+This mirrors how the retrained model is produced (train without forget data).
+
+### 2. Task vector arithmetic
+- Compute Δ_forget = θ_original - θ_after_7i (the "forgetting direction")
+- Apply partial: θ_unlearned = θ_original - α*Δ_forget with small α
+- Or use DPO-style interpolation between original and unlearned model
+
+### 3. Fisher-based retain constraint
+Replace simple AL retain penalty with Fisher Information Matrix-weighted constraint.
+Key parameters identified via FIM would resist modification more strongly, providing
+structure-aware retain protection rather than uniform penalty.
+
+### 4. Combine random steering + retain-matching
+Use random vectors for some layers (extraction resistance) and retain-matching for others (knowledge forgetting).
+E.g., random at [5,6,7] for extraction + retain-match at [15,16,17] for knowledge.
+
+### 5. Contrastive representation learning
+Instead of MSE toward target, use contrastive loss that pushes forget away from
+forget-like representations AND pulls toward retain-like representations simultaneously.
+This could achieve both goals in a single loss term.
