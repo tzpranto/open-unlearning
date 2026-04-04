@@ -1500,12 +1500,17 @@ class SIBL(UnlearnTrainer):
         if self.mask_dict is None:
             self._initialize_mask()
 
+        # Eagerly initialize NPO reference model so it snapshots the ORIGINAL model
+        # (before any inner/outer steps). Lazy init risks snapshotting a post-inner model.
+        if self.forget_loss_type == "npo" and self.ref_model is None:
+            self._prepare_ref_model()
+
         # Initialize inner representation anchor model if needed
         if self.inner_repr_anchor and self._repr_anchor_model is None:
             # Reuse NPO ref_model if available (same frozen copy), else create new
             if self.ref_model is not None:
                 self._repr_anchor_model = self.ref_model
-                logger.info("Inner repr anchor: reusing NPO reference model")
+                logger.info(f"Inner repr anchor: reusing NPO reference model, layers={self.inner_repr_layers}")
             else:
                 logger.info("Creating frozen reference model for inner repr anchor...")
                 self._repr_anchor_model = copy.deepcopy(self.model)
