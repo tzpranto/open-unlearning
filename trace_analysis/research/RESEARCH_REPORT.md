@@ -835,29 +835,114 @@ T: 20, K: 10
 
 ---
 
+---
+
+## Exp8 Series: FD-HVP Implicit Correction + Post-Inner Recovery
+**Date:** 2026-04-04  
+**Motivation:** Solve OOM for implicit correction (flash_attention_2 doesn't support double backward), improve retain_knowmem gap (0.41 vs gold 0.56), and push verbmem closer to gold 0.201.
+
+### Key Technical Finding: Flash Attention Incompatibility
+The original `compute_hvp` used `create_graph=True` which requires differentiating through flash attention's backward, which is not implemented. Fix: **finite-difference HVP (FD-HVP)**.
+
+**FD-HVP**: `H*v ≈ (∇L(θ+εv̂) - ∇L(θ-εv̂)) / (2ε) * ||v||`
+- Normalizes v before perturbation (avoids numerical issues with large-norm gradients)
+- Requires only first-order backward passes (works with any attention backend)
+- No `retain_graph=True` needed — saves memory
+- Two extra forward-backward passes per Neumann HVP evaluation
+
+### post_unlearn_inner_steps
+Added N pure CE inner steps after T outer iterations for retention recovery.
+**Finding**: post_inner steps improve retain_knowmem (+0.02-0.03) but also raise forget_verbmem. The inner steps restore some verbmem via shared representations.
+
+### Exp8 Results Table (all with NPO + steering=[5,6,7] retain_match):
+
+| Exp | β | T | K | implicit | post_inner | forget_km | retain_km | verbmem | extract |
+|-----|---|---|---|----------|------------|-----------|-----------|---------|---------|
+| Exp8g | 3.0 | 10 | 10 | No | 30 | 0.404 | 0.422 | 0.226 | 0.059 |
+| Exp8i | 1.5 | 10 | 10 | No | 30 | 0.381 | **0.434** | 0.233 | 0.059 |
+| **Exp8o** | **1.5** | **10** | **10** | **FD-HVP** | **0** | 0.410 | 0.407 | 0.207 | 0.055 |
+| **Exp8r** | **2.0** | **10** | **10** | **FD-HVP** | **0** | **0.371** | 0.417 | 0.211 | 0.053 |
+| Exp8q | 3.0 | 10 | 10 | FD-HVP | 0 | 0.634 | 0.544 | 0.567 | 0.291 |
+| Exp8p | 1.5 | 20 | 10 | FD-HVP | 0 | 0.436 | 0.417 | 0.291 | 0.093 |
+| Gold | — | — | — | — | — | ~0.2 | **0.560** | 0.201 | — |
+
+### Key Findings
+
+**1. FD-HVP enables flash_attention_2 compatibility**
+The implicit correction now works reliably with the default model config. No more
+`RuntimeError: derivative for aten::_scaled_dot_product_flash_attention_backward is not implemented`.
+
+**2. FD-HVP is VERY sensitive to NPO β**
+- β=1.5: fast forgetting (L_fgt → 0.04 by iter 4), normal dynamics, forget_km=0.41
+- β=2.0: slightly slower forgetting, forget_km=0.371 (more forgetting, less verbmem)  
+- β=3.0: implicit correction SUPPRESSES forgetting almost entirely! forget_km=0.634
+  - Because large β creates large outer gradient, which the implicit correction "protects" retain from (including forget's semantic content)
+  - The MUSE News forget and retain texts share representations (both news articles), so implicit correction to protect retain inadvertently protects forget too
+
+**3. T=20 is too long (λ runaway)**
+With T=20 and persistent constraint violations (L_ret > ε always), λ grows to 11.2, causing
+degenerate optimization. L_ret oscillates, extraction_strength=0.093. Use T=10.
+
+**4. post_inner steps trade verbmem for retain**
+Adding 30 pure CE inner steps after training: +0.02-0.03 retain, but +0.02-0.03 verbmem.
+Because inner CE training on retain samples also partially restores the forget representations
+(shared language model capacity).
+
+**5. Current best: Exp8r (β=2.0, FD-HVP, T=10, no post_inner)**
+- forget_km: **0.371** (best across all Exp8, 0.029 better than Exp8i)
+- retain_km: 0.417 (comparable to Exp8o/8i)
+- verbmem: **0.211** (just 0.010 above gold 0.201)
+- extraction: 0.053 (best)
+
+**6. ψ(ℓ) composite score (response to friend's analysis)**
+Computed ψ(ℓ) = causal_diff(ℓ) × activation_diff(ℓ) × gradient_ratio(ℓ):
+- Nearly uniform for layers 1-30 (causal traces are flat at 0.12-0.14 for all layers)
+- Exception: layer 31 is strongly negative ψ = -0.78 (only causally retain-critical layer)
+- Conclusion: ψ(ℓ) is ineffective as a differentiator for surgical targeting
+- Better differentiators: pct_forget from neuron analysis, layer_differential from gradient traces
+
+### Training Dynamics Summary
+
+The bilevel optimization with NPO + steering consistently shows:
+1. **iter 0**: Large initial forget gradient, L_ret starts at ~0.46 (near epsilon=0.1)
+2. **iter 2**: L_ret spikes to 1.9-2.4 (constraint violated, λ starts growing)  
+3. **iter 4-9**: Slow L_ret recovery (0.90 → 0.78), never satisfies constraint
+4. **End**: λ = 5.4-5.5, model is unlearned but not fully restored
+
+The Augmented Lagrangian never achieves feasibility — this is the fundamental bottleneck
+for retain_knowmem improvement.
+
+---
+
 ## Future Directions
 
-### 1. Multi-stage unlearning
-The retain gap suggests single-pass unlearning is insufficient. A multi-stage approach:
-- Stage 1: Aggressive NPO+steering (Exp7i-style) for strong forget + extraction resistance
+### 1. Masked post-inner recovery
+Post-inner steps restore verbmem because full CE training touches forget-associated circuits.
+Fix: use forget neuron bitmap as MASK — only update parameters with `bitmap=0` (retain-dominant)
+during post-inner. This recovers retention without restoring forget representations.
+
+### 2. Multi-stage unlearning
+- Stage 1: Aggressive NPO+steering (Exp8r-style) for strong forget
 - Stage 2: Fine-tune on retain data only (few epochs) to recover retain knowledge
 This mirrors how the retrained model is produced (train without forget data).
 
-### 2. Task vector arithmetic
-- Compute Δ_forget = θ_original - θ_after_7i (the "forgetting direction")
-- Apply partial: θ_unlearned = θ_original - α*Δ_forget with small α
-- Or use DPO-style interpolation between original and unlearned model
+### 3. Feasibility-improving inner loop
+The bilevel never achieves feasibility (L_ret > ε always). Options:
+- Increase K (inner iterations per outer iteration)
+- Use adaptive eta_in (higher LR when constraint is strongly violated)
+- Start with more inner steps before first outer step (warm start)
 
-### 3. Fisher-based retain constraint
+### 4. Steering at higher layers
+Layers 20-22 have 25-30% forget neuron density (vs ~0% for layers 5-7).
+Steering at higher layers might help semantic forgetting more than early layers.
+E.g., `steering_layers=[20,21,22]` with retain_match.
+
+### 5. NPO β schedule
+Start with low β (gradual forgetting) and increase over iterations to avoid the
+"implicit overcorrection" problem seen at β=3.0.
+β schedule: 1.0 → 1.5 → 2.0 → 2.5 over T=10 iterations.
+
+### 6. Fisher-based retain constraint
 Replace simple AL retain penalty with Fisher Information Matrix-weighted constraint.
-Key parameters identified via FIM would resist modification more strongly, providing
-structure-aware retain protection rather than uniform penalty.
-
-### 4. Combine random steering + retain-matching
-Use random vectors for some layers (extraction resistance) and retain-matching for others (knowledge forgetting).
-E.g., random at [5,6,7] for extraction + retain-match at [15,16,17] for knowledge.
-
-### 5. Contrastive representation learning
-Instead of MSE toward target, use contrastive loss that pushes forget away from
-forget-like representations AND pulls toward retain-like representations simultaneously.
-This could achieve both goals in a single loss term.
+FIM identifies parameters most important for retain knowledge, providing
+structure-aware protection rather than uniform penalty.
