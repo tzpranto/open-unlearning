@@ -123,6 +123,8 @@ class SIBL(UnlearnTrainer):
         inner_repr_anchor: bool = False,  # Add representation anchor to inner loop
         inner_repr_alpha: float = 1.0,  # Weight of representation anchor loss
         inner_repr_layers: Optional[list] = None,  # Layers for inner anchor (default: steering_layers)
+        # Post-unlearning retention recovery: pure inner steps after T outer iterations
+        post_unlearn_inner_steps: int = 0,  # N pure CE inner steps after main loop to recover retention
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -227,6 +229,7 @@ class SIBL(UnlearnTrainer):
         self.inner_repr_alpha = inner_repr_alpha
         self.inner_repr_layers = inner_repr_layers if inner_repr_layers is not None else self.steering_layers
         self._repr_anchor_model = None  # Frozen reference model for inner anchor
+        self.post_unlearn_inner_steps = post_unlearn_inner_steps
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -813,13 +816,17 @@ class SIBL(UnlearnTrainer):
     def _apply_blockwise_implicit_correction(
         self,
         g_alm_dict,
-        L_alm,
-        L_inner,
+        L_alm=None,
+        L_inner=None,
         outer_iter: Optional[int] = None,
+        inner_loss_fn=None,
+        alm_loss_fn=None,
     ):
         """
         Apply implicit correction block-by-block to avoid full-model flatten OOM.
         Updates g_alm_dict in-place.
+        Pass either (L_alm, L_inner) for double-backward HVP, or
+        (inner_loss_fn, alm_loss_fn) for FD-HVP compatible with any attention backend.
         """
         blocks = self._build_implicit_blocks()
         if len(blocks) == 0:
@@ -841,6 +848,8 @@ class SIBL(UnlearnTrainer):
                     mask_flat=mask_block,
                     L_alm=L_alm,
                     L_inner=L_inner,
+                    inner_loss_fn=inner_loss_fn,
+                    alm_loss_fn=alm_loss_fn,
                 )
                 corr_parts = self.unflatten_params(g_corr_flat, [g_alm_dict[name] for name in names])
                 for name, corr in zip(names, corr_parts):
@@ -862,11 +871,17 @@ class SIBL(UnlearnTrainer):
 
                 def hvp_func(vec):
                     vec_masked = vec * mask_block
-                    hvp = self.compute_hvp(L_inner, params, vec_masked)
+                    if inner_loss_fn is not None:
+                        hvp = self.compute_hvp_fd(inner_loss_fn, params, vec_masked)
+                    else:
+                        hvp = self.compute_hvp(L_inner, params, vec_masked)
                     return hvp * mask_block + self.cg_damping * vec
 
                 h = self.conjugate_gradient(hvp_func, v_block)
-                corr = self.compute_hvp(L_alm, params, h)
+                if alm_loss_fn is not None:
+                    corr = self.compute_hvp_fd(alm_loss_fn, params, h)
+                else:
+                    corr = self.compute_hvp(L_alm, params, h)
                 corr_parts = self.unflatten_params(corr, [g_alm_dict[name] for name in names])
                 for name, corr_part in zip(names, corr_parts):
                     g_alm_dict[name] = g_alm_dict[name] - corr_part
@@ -904,7 +919,9 @@ class SIBL(UnlearnTrainer):
         return torch.cat(masks)
 
     def compute_hvp(self, loss, params, v):
-        """Compute Hessian-vector product H*v."""
+        """Compute Hessian-vector product H*v via double backward (requires create_graph=True).
+        NOTE: This fails with flash_attention_2/sdpa. Use compute_hvp_fd() for those backends.
+        """
         grads = torch.autograd.grad(loss, params, create_graph=True, retain_graph=True)
         flat_grad = torch.cat([g.reshape(-1) for g in grads])
 
@@ -914,6 +931,55 @@ class SIBL(UnlearnTrainer):
         flat_hvp = torch.cat([h.reshape(-1) for h in hvp_grads])
 
         return flat_hvp
+
+    def compute_hvp_fd(self, loss_fn, params, v, eps=1e-3):
+        """Finite-difference HVP: H*v ≈ (grad(θ+εv̂) - grad(θ-εv̂)) / (2ε) * ||v||
+        Works with any attention backend (no create_graph=True needed).
+
+        Normalizes v before perturbation to ensure the step size is always ε regardless
+        of ||v||, then scales back. This avoids numerical issues with large-norm v.
+
+        params: list of parameter tensors (the block to differentiate w.r.t.)
+        v: flat vector of same size as flattened params
+        loss_fn: callable() -> scalar loss (recomputes from current model state)
+        """
+        v_norm = v.norm().clamp(min=1e-12)
+        v_unit = v / v_norm  # unit direction
+        v_unit_list = self.unflatten_params(v_unit, params)
+
+        # +ε perturbation in unit direction
+        with torch.no_grad():
+            for p, dv in zip(params, v_unit_list):
+                p.data.add_(eps * dv.to(p.dtype))
+        loss_p = loss_fn()
+        grads_p = torch.autograd.grad(loss_p, params, allow_unused=True)
+        grads_p_list = [
+            g.detach().clone() if g is not None else torch.zeros_like(p)
+            for g, p in zip(grads_p, params)
+        ]
+        del loss_p
+
+        # -ε perturbation in unit direction (from +ε → -ε, so subtract 2ε)
+        with torch.no_grad():
+            for p, dv in zip(params, v_unit_list):
+                p.data.sub_(2.0 * eps * dv.to(p.dtype))
+        loss_m = loss_fn()
+        grads_m = torch.autograd.grad(loss_m, params, allow_unused=True)
+        grads_m_list = [
+            g.detach().clone() if g is not None else torch.zeros_like(p)
+            for g, p in zip(grads_m, params)
+        ]
+        del loss_m
+
+        # Restore params to original state
+        with torch.no_grad():
+            for p, dv in zip(params, v_unit_list):
+                p.data.add_(eps * dv.to(p.dtype))
+
+        # HVP w.r.t. unit direction, then scale by ||v||:  H*(v) = ||v|| * H*(v̂)
+        hvp_unit_list = [(gp - gm) / (2.0 * eps) for gp, gm in zip(grads_p_list, grads_m_list)]
+        hvp_flat = torch.cat([h.reshape(-1) for h in hvp_unit_list])
+        return hvp_flat * v_norm.item()
 
     def conjugate_gradient_scipy(self, hvp_func, b):
         """Solve H*x = b using Conjugate Gradient (scipy implementation)."""
@@ -996,16 +1062,23 @@ class SIBL(UnlearnTrainer):
         params_list,
         g_alm_flat,
         mask_flat,
-        L_alm,
-        L_inner,
+        L_alm=None,
+        L_inner=None,
+        inner_loss_fn=None,
+        alm_loss_fn=None,
     ):
         """
         Truncated Neumann implicit correction: approximate h ≈ (H_inner + μI)^{-1} v
         with v = masked outer gradient, then g_corr = v - H_outer(h_correct).
 
-        Uses only Hessian-vector products.
+        Supports two HVP backends:
+        - Double backward (L_alm, L_inner): requires create_graph=True; fails with flash_attention_2.
+        - Finite difference (inner_loss_fn, alm_loss_fn): callables that recompute the loss;
+          works with any attention backend.
+
         Returns (g_corr_flat, status_string, meta_dict).
         """
+        use_fd = (inner_loss_fn is not None)
         device = g_alm_flat.device
         dtype = g_alm_flat.dtype
 
@@ -1021,7 +1094,10 @@ class SIBL(UnlearnTrainer):
         # 2) Damped masked HVP for inner Hessian: H_tilde(x) = mask ⊙ H_inner(mask ⊙ x) + μ (mask ⊙ x)
         def H_in_tilde(x):
             x_act = x * mask_flat
-            Hv = self.compute_hvp(L_inner, params_list, x_act)
+            if use_fd:
+                Hv = self.compute_hvp_fd(inner_loss_fn, params_list, x_act)
+            else:
+                Hv = self.compute_hvp(L_inner, params_list, x_act)
             Hv_act = Hv * mask_flat
             return Hv_act + self.neumann_mu * x_act
 
@@ -1075,7 +1151,10 @@ class SIBL(UnlearnTrainer):
 
         # 5) Outer HVP for correction: c = mask ⊙ H_AL(h_correct)
         h_act = h_correct * mask_flat
-        c = self.compute_hvp(L_alm, params_list, h_act)
+        if use_fd:
+            c = self.compute_hvp_fd(alm_loss_fn, params_list, h_act)
+        else:
+            c = self.compute_hvp(L_alm, params_list, h_act)
         c = c * mask_flat
         g_corr = v - c
 
@@ -1373,8 +1452,10 @@ class SIBL(UnlearnTrainer):
         # Augmented Lagrangian objective
         L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_tensor ** 2)
 
-        # Compute raw gradient
-        L_alm.backward(retain_graph=self.use_implicit)
+        # Compute raw gradient.
+        # FD-HVP: no retain_graph needed (graph freed here, FD recomputes from scratch).
+        # Legacy double-backward: retain_graph=True (keeps graph for create_graph HVP).
+        L_alm.backward(retain_graph=False)  # FD-HVP is now always used
 
         # Store raw gradients
         g_alm_dict = {}
@@ -1389,6 +1470,33 @@ class SIBL(UnlearnTrainer):
 
         # Implicit correction (if enabled): use outer gradient as RHS (masked g_alm)
         if self.use_implicit:
+            # FD-HVP loss functions: recompute from current model state (no create_graph needed)
+            # These are closures over retain_batch / forget_batch captured here.
+            def _inner_loss_fn():
+                """Recompute inner loss: retain CE + regularization."""
+                l = self.compute_retain_loss(retain_batch)
+                l = l + self.compute_sparsity_regularizer()
+                return l
+
+            def _alm_loss_fn():
+                """Recompute ALM loss: forget + λ*retain + ρ/2*(retain-ε)²."""
+                if self.use_steering:
+                    l_steer = self._compute_steering_loss(forget_batch, retain_batch)
+                    if self.steering_only:
+                        l_f = self.steering_alpha * l_steer
+                    else:
+                        l_f = self.compute_forget_loss(forget_batch) + self.steering_alpha * l_steer
+                else:
+                    l_f = self.compute_forget_loss(forget_batch)
+                l_r = self.compute_retain_loss(retain_batch)
+                r_t = l_r - self.epsilon
+                return l_f + self.lambda_dual * l_r + 0.5 * self.rho * (r_t ** 2)
+
+            # Keep legacy double-backward path available for non-flash-attention runs.
+            # Use FD unless L_alm.backward was already called without retain_graph=True.
+            # We detect flash/sdpa by checking if retain_graph was set (proxy: always use FD).
+            use_fd_hvp = True  # Always use FD: works with flash_attn_2, sdpa, and eager
+
             L_ret_v = self.compute_retain_loss(retain_batch)
             R_theta_v = self.compute_sparsity_regularizer()
             L_inner = L_ret_v + R_theta_v
@@ -1420,9 +1528,11 @@ class SIBL(UnlearnTrainer):
             if self.implicit_blockwise:
                 self._apply_blockwise_implicit_correction(
                     g_alm_dict=g_alm_dict,
-                    L_alm=L_alm,
-                    L_inner=L_inner,
+                    L_alm=None if use_fd_hvp else L_alm,
+                    L_inner=None if use_fd_hvp else L_inner,
                     outer_iter=outer_iter,
+                    inner_loss_fn=_inner_loss_fn if use_fd_hvp else None,
+                    alm_loss_fn=_alm_loss_fn if use_fd_hvp else None,
                 )
             else:
                 params_list = [p for p in self.model.parameters() if p.requires_grad]
@@ -1438,8 +1548,10 @@ class SIBL(UnlearnTrainer):
                         params_list=params_list,
                         g_alm_flat=g_alm_flat,
                         mask_flat=mask_flat,
-                        L_alm=L_alm,
-                        L_inner=L_inner,
+                        L_alm=None if use_fd_hvp else L_alm,
+                        L_inner=None if use_fd_hvp else L_inner,
+                        inner_loss_fn=_inner_loss_fn if use_fd_hvp else None,
+                        alm_loss_fn=_alm_loss_fn if use_fd_hvp else None,
                     )
                     if neumann_status != "ok":
                         logger.debug(f"Neumann correction: {neumann_status}")
@@ -1467,11 +1579,17 @@ class SIBL(UnlearnTrainer):
 
                     def hvp_func(vec):
                         vec_masked = vec * mask_flat
-                        hvp = self.compute_hvp(L_inner, params_list, vec_masked)
+                        if use_fd_hvp:
+                            hvp = self.compute_hvp_fd(_inner_loss_fn, params_list, vec_masked)
+                        else:
+                            hvp = self.compute_hvp(L_inner, params_list, vec_masked)
                         return hvp * mask_flat + self.cg_damping * vec
 
                     h = self.conjugate_gradient(hvp_func, v)
-                    hvp_correction = self.compute_hvp(L_alm, params_list, h)
+                    if use_fd_hvp:
+                        hvp_correction = self.compute_hvp_fd(_alm_loss_fn, params_list, h)
+                    else:
+                        hvp_correction = self.compute_hvp(L_alm, params_list, h)
                     lin_res = 0.0
                     cond_proxy = {}
                     if self.debug_implicit:
@@ -1686,6 +1804,29 @@ class SIBL(UnlearnTrainer):
 
             # if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
             #     self.save_model()
+
+        # Post-unlearning retention recovery: pure CE inner steps to close the retain gap
+        # The last outer step often leaves L_ret elevated with no recovery pass.
+        # Running N pure inner steps here restores retention without disrupting forgetting.
+        if self.post_unlearn_inner_steps > 0:
+            logger.info(f"Post-unlearning inner recovery: {self.post_unlearn_inner_steps} pure CE steps...")
+            # Temporarily disable repr anchor so recovery is pure CE only
+            _saved_anchor = self.inner_repr_anchor
+            self.inner_repr_anchor = False
+            retain_loader_post = self.get_train_dataloader()
+            data_iter_post = iter(retain_loader_post)
+            for k in range(self.post_unlearn_inner_steps):
+                try:
+                    combined = next(data_iter_post)
+                except StopIteration:
+                    data_iter_post = iter(retain_loader_post)
+                    combined = next(data_iter_post)
+                retain_batch = combined['retain']
+                self.inner_step(retain_batch)
+                if (k + 1) % 5 == 0 or k == self.post_unlearn_inner_steps - 1:
+                    logger.info(f"  Post-inner step {k+1}/{self.post_unlearn_inner_steps} done")
+            self.inner_repr_anchor = _saved_anchor
+            logger.info("Post-unlearning retention recovery complete.")
 
         self.save_model()
         self.evaluate()

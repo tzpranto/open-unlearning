@@ -115,6 +115,7 @@ trainer:
     inner_repr_anchor: false
     inner_repr_alpha: 1.0
     inner_repr_layers: null  # defaults to steering_layers
+    post_unlearn_inner_steps: 0  # Pure CE inner steps after T outer iters for retention recovery
 
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false

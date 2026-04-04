@@ -65,6 +65,7 @@ method_args:
   inner_repr_anchor: false
   inner_repr_alpha: 1.0
   inner_repr_layers: null
+  post_unlearn_inner_steps: 0  # Pure CE inner steps after T outer iters for retention recovery
 
 # Override trainer args for SIBL
 # Note: SIBL uses custom training loop, so some standard args may not apply
