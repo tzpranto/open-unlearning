@@ -1392,6 +1392,31 @@ class SIBL(UnlearnTrainer):
             L_ret_v = self.compute_retain_loss(retain_batch)
             R_theta_v = self.compute_sparsity_regularizer()
             L_inner = L_ret_v + R_theta_v
+            # If inner repr anchor is enabled, add its term to L_inner so that the
+            # implicit correction uses the CORRECT inner Hessian (matching actual inner loss).
+            if self.inner_repr_anchor and self._repr_anchor_model is not None:
+                ref_caches_imp = self._forward_with_hooks_on_model(
+                    self._repr_anchor_model, retain_batch, self.inner_repr_layers
+                )
+                cur_caches_imp, _ = self._forward_with_hooks(retain_batch, self.inner_repr_layers)
+                repr_labels = retain_batch.get('labels', retain_batch['input_ids']).to(self.args.device)
+                repr_token_mask = (repr_labels != -100).float()
+                repr_loss_imp = torch.tensor(0.0, device=self.args.device)
+                for layer_idx in self.inner_repr_layers:
+                    if layer_idx not in ref_caches_imp or layer_idx not in cur_caches_imp:
+                        continue
+                    ref_act = ref_caches_imp[layer_idx].detach()
+                    cur_act = cur_caches_imp[layer_idx]
+                    min_seq = min(cur_act.shape[1], ref_act.shape[1])
+                    cur_act = cur_act[:, :min_seq, :]
+                    ref_act = ref_act[:, :min_seq, :]
+                    lmask = repr_token_mask[:, :min_seq]
+                    diff = (cur_act - ref_act) ** 2
+                    lmask_exp = lmask.unsqueeze(-1).expand_as(diff)
+                    per_sample = (diff * lmask_exp).mean(dim=2).sum(dim=1) / lmask.sum(dim=1).clamp(min=1)
+                    repr_loss_imp = repr_loss_imp + per_sample.mean()
+                repr_loss_imp = repr_loss_imp / max(len(self.inner_repr_layers), 1)
+                L_inner = L_inner + self.inner_repr_alpha * repr_loss_imp
             if self.implicit_blockwise:
                 self._apply_blockwise_implicit_correction(
                     g_alm_dict=g_alm_dict,
