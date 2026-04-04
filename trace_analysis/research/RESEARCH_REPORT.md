@@ -743,6 +743,7 @@ Closest forget_know to gold: Exp7j (0.372 vs 0.327)
 | 7k | NPO β=3 K=20 ρ=2 | 0.419 | 0.423 | 0.280 | 0.086 |
 | 8g | FD-HVP β=3 post_inner=30 | 0.404 | 0.422 | 0.226 | 0.059 |
 | 8i | β=1.5 post_inner=30 | 0.381 | 0.434 | 0.233 | 0.059 |
+| 8m† | unknown (ckpt deleted) | 0.373 | 0.356 | **0.174** | **0.031** |
 | 8o | β=1.5 FD-HVP | 0.410 | 0.407 | 0.207 | 0.055 |
 | **8r** | **β=2.0 FD-HVP** | **0.371** | 0.417 | **0.211** | **0.053** |
 | 8q | β=3.0 FD-HVP | 0.634 | 0.544 | 0.567 | 0.291 |
@@ -873,7 +874,10 @@ Added N pure CE inner steps after T outer iterations for retention recovery.
 | **Exp8r** | **2.0** | **10** | **10** | **FD-HVP** | **0** | **0.371** | 0.417 | 0.211 | 0.053 |
 | Exp8q | 3.0 | 10 | 10 | FD-HVP | 0 | 0.634 | 0.544 | 0.567 | 0.291 |
 | Exp8p | 1.5 | 20 | 10 | FD-HVP | 0 | 0.436 | 0.417 | 0.291 | 0.093 |
+| Exp8m† | ? | ? | ? | ? | ? | 0.373 | 0.356 | **0.174** | **0.031** |
 | Gold | — | — | — | — | — | ~0.2 | **0.560** | 0.201 | — |
+
+†Exp8m: checkpoint deleted, config unknown. Best verbmem (0.174, beats gold) and extraction (0.031) ever seen, but retain collapsed (0.356). Likely very aggressive steering/penalty settings. Worth reproducing.
 
 ### Key Findings
 
