@@ -10,6 +10,7 @@
 # Usage:
 #   bash scripts/run_ds_bial.sh                              # MUSE News, default settings
 #   bash scripts/run_ds_bial.sh --data_split Books           # MUSE Books
+#   bash scripts/run_ds_bial.sh --benchmark wmdp             # WMDP (zephyr-7b-beta, lm_eval)
 #   bash scripts/run_ds_bial.sh --skip_trace                 # Skip trace collection (use existing)
 #   bash scripts/run_ds_bial.sh --task_name my_exp           # Custom experiment name
 #   DEBUG_SIBL=1 bash scripts/run_ds_bial.sh                 # Quick debug run (T=3, K=1)
@@ -21,8 +22,9 @@ set -euo pipefail
 export PYTORCH_ALLOC_CONF=expandable_segments:True
 
 # ─── Defaults ────────────────────────────────────────────────────────────────
+BENCHMARK="muse"     # muse or wmdp
 DATA_SPLIT="News"
-MODEL="Llama-2-7b-hf"
+MODEL=""             # auto-selected based on benchmark if empty
 TASK_NAME=""
 SKIP_TRACE=0
 DEBUG_MODE="${DEBUG_SIBL:-0}"
@@ -33,6 +35,7 @@ LAYER_RANGE_MAX=20
 # ─── Parse CLI args ───────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --benchmark)    BENCHMARK="$2"; shift 2 ;;
         --data_split)   DATA_SPLIT="$2"; shift 2 ;;
         --model)        MODEL="$2"; shift 2 ;;
         --task_name)    TASK_NAME="$2"; shift 2 ;;
@@ -43,8 +46,22 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -z "$TASK_NAME" ]]; then
-    TASK_NAME="muse_${MODEL}_${DATA_SPLIT}_DSBiAL"
+# ─── Benchmark-specific defaults ─────────────────────────────────────────────
+if [[ "$BENCHMARK" == "wmdp" ]]; then
+    [[ -z "$MODEL" ]] && MODEL="zephyr-7b-beta"
+    [[ -z "$TASK_NAME" ]] && TASK_NAME="wmdp_${MODEL}_${DATA_SPLIT}_DSBiAL"
+    EXPERIMENT="unlearn/wmdp/ds_bial"
+    EVAL_EXPERIMENT="eval/wmdp/default.yaml"
+    RETAIN_LOGS_ARGS=()  # WMDP eval uses lm_eval, no retain_logs_path
+    EVAL_RESULT_FILE="saves/unlearn/${TASK_NAME}/evals/lm_eval.json"
+else
+    # Default: MUSE benchmark
+    [[ -z "$MODEL" ]] && MODEL="Llama-2-7b-hf"
+    [[ -z "$TASK_NAME" ]] && TASK_NAME="muse_${MODEL}_${DATA_SPLIT}_DSBiAL"
+    EXPERIMENT="unlearn/muse/ds_bial"
+    EVAL_EXPERIMENT="eval/muse/default.yaml"
+    RETAIN_LOGS_ARGS=(retain_logs_path="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json")
+    EVAL_RESULT_FILE="saves/unlearn/${TASK_NAME}/evals/MUSE_EVAL.json"
 fi
 
 # ─── Python binary ───────────────────────────────────────────────────────────
@@ -76,13 +93,20 @@ elif [[ -f "$TRACE_RESULTS" ]]; then
     echo "[INFO] Trace results already exist at ${TRACE_RESULTS}, skipping collection."
     SKIP_TRACE=1
 else
-    echo "[INFO] Running trace collection for ${DATA_SPLIT} / ${MODEL}..."
+    echo "[INFO] Running trace collection for ${BENCHMARK}/${DATA_SPLIT} / ${MODEL}..."
     mkdir -p "$TRACE_DIR"
+    if [[ "$BENCHMARK" == "wmdp" ]]; then
+        TRACE_MODEL_NAME="HuggingFaceH4/zephyr-7b-beta"
+        TRACE_DATASET_NAME="muse-bench/MUSE-News"  # approximate; use wmdp-corpora for better traces
+    else
+        TRACE_MODEL_NAME="muse-bench/MUSE-${DATA_SPLIT}_target"
+        TRACE_DATASET_NAME="muse-bench/MUSE-${DATA_SPLIT}"
+    fi
     CUDA_VISIBLE_DEVICES=0 "${PYTHON_BIN}" trace_analysis/scripts/trace_activations.py \
         --skip_causal \
         --output_dir "$TRACE_DIR" \
-        --model_name "muse-bench/MUSE-${DATA_SPLIT}_target" \
-        --dataset_name "muse-bench/MUSE-${DATA_SPLIT}"
+        --model_name "${TRACE_MODEL_NAME}" \
+        --dataset_name "${TRACE_DATASET_NAME}"
     SKIP_TRACE=1
 fi
 
@@ -125,12 +149,12 @@ fi
 echo "[INFO] Starting DS-BiAL training: task_name=${TASK_NAME}"
 if CUDA_VISIBLE_DEVICES=0 "${PYTHON_BIN}" src/train.py \
     --config-name=unlearn.yaml \
-    experiment=unlearn/muse/ds_bial \
+    experiment="${EXPERIMENT}" \
     model="${MODEL}" \
     data_split="${DATA_SPLIT}" \
     trainer=SIBL \
     task_name="${TASK_NAME}" \
-    retain_logs_path="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json" \
+    "${RETAIN_LOGS_ARGS[@]}" \
     trainer.args.per_device_train_batch_size=1 \
     trainer.args.gradient_accumulation_steps=2 \
     trainer.args.ddp_find_unused_parameters=true \
@@ -145,16 +169,16 @@ if CUDA_VISIBLE_DEVICES=0 "${PYTHON_BIN}" src/train.py \
     # ─── Step 4: Evaluate ─────────────────────────────────────────────────────
     echo "[INFO] Evaluating: task_name=${TASK_NAME}"
     CUDA_VISIBLE_DEVICES=0 "${PYTHON_BIN}" src/eval.py \
-        experiment=eval/muse/default.yaml \
+        experiment="${EVAL_EXPERIMENT}" \
         data_split="${DATA_SPLIT}" \
         task_name="${TASK_NAME}" \
         model="${MODEL}" \
         model.model_args.pretrained_model_name_or_path="saves/unlearn/${TASK_NAME}" \
         "${ATTN_IMPL_OVERRIDE[@]}" \
         paths.output_dir="saves/unlearn/${TASK_NAME}/evals" \
-        retain_logs_path="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"
+        "${RETAIN_LOGS_ARGS[@]}"
 
-    echo "[INFO] Done. Results at: saves/unlearn/${TASK_NAME}/evals/MUSE_EVAL.json"
+    echo "[INFO] Done. Results at: ${EVAL_RESULT_FILE}"
 else
     echo "[WARN] Training failed for ${TASK_NAME}. Skipping eval."
     exit 1
