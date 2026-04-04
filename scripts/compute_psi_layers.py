@@ -5,53 +5,56 @@ Compute ψ(ℓ) layer importance scores for DS-BiAL steering layer selection.
 ψ(ℓ) = |activation_diff(ℓ)| × gradient_ratio(ℓ)
 
 where:
-  - activation_diff(ℓ) = mean L2 norm of (forget hidden states - retain hidden states) at layer ℓ
-  - gradient_ratio(ℓ) = mean(|∇_forget L| / |∇_retain L|) across parameters in layer ℓ
+  - activation_diff(ℓ) = L2 norm difference between forget and retain hidden states
+  - gradient_ratio(ℓ) = mean(|∇_forget L| / |∇_retain L|) across layer parameters
 
-Higher ψ means the layer has both large representation-space divergence between forget/retain
-AND is relatively more responsive to forget signal (less retain-dominated).
-
-Layer range selection:
-  Two modes, controlled by --layer_range_pct vs --layer_range:
-  1. Percentile range (default): --layer_range_pct LO HI selects the candidate window as
-     [floor(n_layers * LO/100), floor(n_layers * HI/100)]. Default: 10–25% of depth, which
-     maps to layers [3–8] for 32-layer Llama-2-7b. For same-domain tasks where ψ is flat in
-     this range, top-3 will be model-architecture-consistent (early-semantic zone).
-  2. Absolute range: --layer_range MIN MAX (overrides percentile mode).
-
-  For MUSE News (same-domain, flat ψ in early layers), [5,6,7] is the empirically validated
-  choice and is hardcoded as the ds_bial.yaml default. The percentile mode generalises this
-  to other model sizes without retuning absolute indices.
+Selection strategy (auto-detect flat vs informative ψ):
+  1. Compute CV (coefficient of variation) of ψ, excluding the last 2 layers.
+  2. FLAT (CV < cv_threshold, default 1.5) — same-domain task:
+       ψ signal is not reliable. Fall back to the empirical early-semantic zone:
+       layers in [round(n_layers * flat_lo%), round(n_layers * flat_hi%)].
+       Default flat_pct = (15, 22), which maps to layers [5, 7] for 32-layer Llama-2-7b
+       → candidate range [5,6,7] → top-3 = [5,6,7] ✓
+  3. INFORMATIVE (CV ≥ cv_threshold) — cross-domain task (WMDP, Books, etc.):
+       ψ reliably identifies forget-dominant layers. Take ψ-top-k from a broad range
+       excluding only the last 2 layers (which are output-dominated).
 
 Usage:
-    python scripts/compute_psi_layers.py --trace_path trace_analysis/figures/traces/muse_news_full/trace_results.pt
-    python scripts/compute_psi_layers.py --trace_path trace_results.pt --top_k 3 --layer_range_pct 10 25
-    python scripts/compute_psi_layers.py --trace_path trace_results.pt --top_k 3 --layer_range 0 20
+    # Auto mode (recommended):
+    python scripts/compute_psi_layers.py --trace_path trace_results.pt
+
+    # Force flat fallback (e.g. to preview what MUSE News would select):
+    python scripts/compute_psi_layers.py --trace_path trace_results.pt --force_flat
+
+    # Force informative mode:
+    python scripts/compute_psi_layers.py --trace_path trace_results.pt --force_psi
+
+    # JSON output for scripting:
+    python scripts/compute_psi_layers.py --trace_path trace_results.pt --json
 """
 
 import argparse
 import json
 import re
-import sys
 
 import torch
 
 
-def compute_psi(trace_path: str, top_k: int = 3, layer_range: tuple = None, layer_range_pct: tuple = (10, 25), percentile: float = 75.0):
+def compute_psi(
+    trace_path: str,
+    top_k: int = 3,
+    flat_pct: tuple = (15, 22),     # % of n_layers → [5,7] for 32L = [5,6,7]
+    cv_threshold: float = 1.5,       # CV below this → treat as flat
+    force_flat: bool = False,
+    force_psi: bool = False,
+):
     """
-    Load trace results and compute ψ scores per layer.
+    Load trace results and compute ψ scores, auto-selecting flat vs informative mode.
 
-    Args:
-        trace_path: Path to trace_results.pt produced by trace_activations.py
-        top_k: Number of steering layers to select
-        layer_range: (min_layer, max_layer) inclusive to consider for selection.
-                     Defaults to (0, 20): excludes very late layers that are harder to steer.
-        percentile: Not used for selection — kept for CLI compatibility.
-
-    Returns:
-        dict with keys: psi_scores, selected_layers, all_scores
+    Returns dict with keys:
+        psi_scores, selected_layers, n_layers, layer_range, mode, cv, is_flat
     """
-    trace = torch.load(trace_path, map_location="cpu")
+    trace = torch.load(trace_path, map_location="cpu", weights_only=False)
 
     layer_differential = trace.get("layer_differential", {})
     differential_scores = trace.get("differential_scores", {})
@@ -80,70 +83,101 @@ def compute_psi(trace_path: str, top_k: int = 3, layer_range: tuple = None, laye
         grad_ratio = sum(ratios) / len(ratios)
         psi_scores[layer] = act_diff * grad_ratio
 
-    # --- Resolve layer range (absolute overrides percentile) ---
-    if layer_range is not None:
-        min_l, max_l = layer_range
-    else:
-        lo_pct, hi_pct = layer_range_pct
-        min_l = int(n_layers * lo_pct / 100)
-        max_l = int(n_layers * hi_pct / 100)
+    # --- Detect flat vs informative (exclude last 2 layers to avoid output-dominated bias) ---
+    interior = [psi_scores[l] for l in range(n_layers - 2)]
+    mean_psi = sum(interior) / len(interior) if interior else 1.0
+    std_psi = (sum((v - mean_psi) ** 2 for v in interior) / len(interior)) ** 0.5
+    cv = std_psi / mean_psi if mean_psi > 1e-9 else 0.0
 
-    # --- Select top-k from layer_range ---
+    if force_flat:
+        is_flat = True
+    elif force_psi:
+        is_flat = False
+    else:
+        is_flat = cv < cv_threshold
+
+    # --- Select layer range and top-k ---
+    if is_flat:
+        # Flat: use empirical early-semantic zone (percentile of model depth)
+        lo_pct, hi_pct = flat_pct
+        min_l = round(n_layers * lo_pct / 100)
+        max_l = round(n_layers * hi_pct / 100)
+        mode = "flat_fallback"
+    else:
+        # Informative: full range excluding last 2 (output-dominated) layers
+        min_l = 0
+        max_l = n_layers - 3
+        mode = "psi_guided"
+
     candidates = {l: v for l, v in psi_scores.items() if min_l <= l <= max_l}
-    sorted_candidates = sorted(candidates.items(), key=lambda x: x[1], reverse=True)
-    selected_layers = sorted([l for l, _ in sorted_candidates[:top_k]])
+    sorted_cands = sorted(candidates.items(), key=lambda x: x[1], reverse=True)
+    selected_layers = sorted([l for l, _ in sorted_cands[:top_k]])
 
     return {
         "psi_scores": psi_scores,
         "selected_layers": selected_layers,
-        "all_scores": dict(sorted(psi_scores.items())),
         "n_layers": n_layers,
         "layer_range": (min_l, max_l),
+        "mode": mode,
+        "cv": cv,
+        "is_flat": is_flat,
         "top_k": top_k,
     }
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Compute ψ-layer importance scores for steering layer selection")
+    parser = argparse.ArgumentParser(description="ψ-layer selection for DS-BiAL steering")
     parser.add_argument("--trace_path", required=True, help="Path to trace_results.pt")
-    parser.add_argument("--top_k", type=int, default=3, help="Number of steering layers to select")
-    parser.add_argument("--layer_range", type=int, nargs=2, default=None, metavar=("MIN", "MAX"),
-                        help="Absolute layer index range (overrides --layer_range_pct)")
-    parser.add_argument("--layer_range_pct", type=float, nargs=2, default=[10.0, 25.0], metavar=("LO", "HI"),
-                        help="Candidate window as %% of model depth (default: 10 25 = early-semantic zone). "
-                             "For 32-layer models: 10%%=L3, 25%%=L8 → captures [5,6,7] empirical range.")
-    parser.add_argument("--json", action="store_true", help="Output JSON only (for scripting)")
+    parser.add_argument("--top_k", type=int, default=3, help="Number of steering layers")
+    parser.add_argument("--flat_pct", type=float, nargs=2, default=[15.0, 22.0],
+                        metavar=("LO", "HI"),
+                        help="Depth %% range for flat fallback (default: 15 22). "
+                             "Maps to L5–L7 for 32-layer Llama-2-7b → [5,6,7].")
+    parser.add_argument("--cv_threshold", type=float, default=1.5,
+                        help="CV threshold below which ψ is treated as flat (default: 1.5)")
+    parser.add_argument("--force_flat", action="store_true", help="Force flat-fallback mode")
+    parser.add_argument("--force_psi", action="store_true", help="Force ψ-guided mode")
+    parser.add_argument("--json", action="store_true", help="Output JSON for scripting")
     args = parser.parse_args()
 
     result = compute_psi(
         trace_path=args.trace_path,
         top_k=args.top_k,
-        layer_range=tuple(args.layer_range) if args.layer_range is not None else None,
-        layer_range_pct=tuple(args.layer_range_pct),
+        flat_pct=tuple(args.flat_pct),
+        cv_threshold=args.cv_threshold,
+        force_flat=args.force_flat,
+        force_psi=args.force_psi,
     )
 
-    min_l, max_l = result["layer_range"]
-
     if args.json:
-        print(json.dumps({"steering_layers": result["selected_layers"]}))
+        print(json.dumps({
+            "steering_layers": result["selected_layers"],
+            "mode": result["mode"],
+            "cv": round(result["cv"], 3),
+        }))
         return
 
-    pct_info = f" ({args.layer_range_pct[0]:.0f}–{args.layer_range_pct[1]:.0f}% depth)" if args.layer_range is None else ""
-    print(f"\nψ-Layer Importance Scores (range: L{min_l}-L{max_l}{pct_info})")
-    print("=" * 55)
-    print(f"{'Layer':>6}  {'ψ score':>10}  {'Selected':>10}")
-    print("-" * 55)
+    min_l, max_l = result["layer_range"]
+    mode_str = f"FLAT fallback ({args.flat_pct[0]:.0f}–{args.flat_pct[1]:.0f}% depth)" \
+        if result["is_flat"] else "ψ-GUIDED (informative domain)"
+
+    print(f"\nψ-Layer Importance Scores")
+    print(f"  n_layers={result['n_layers']}, CV={result['cv']:.3f} "
+          f"({'< ' if result['is_flat'] else '>= '}{args.cv_threshold} → {mode_str})")
+    print(f"  Candidate range: L{min_l}–L{max_l}")
+    print("=" * 60)
+    print(f"{'Layer':>6}  {'ψ score':>10}  {'':>12}")
+    print("-" * 60)
     for layer in range(result["n_layers"]):
         score = result["psi_scores"][layer]
         in_range = min_l <= layer <= max_l
-        is_selected = layer in result["selected_layers"]
-        flag = " <-- SELECTED" if is_selected else ""
+        flag = " <-- SELECTED" if layer in result["selected_layers"] else ""
         dim = "" if in_range else "  (out of range)"
         print(f"  L{layer:2d}  {score:10.5f}{flag}{dim}")
 
-    print("=" * 55)
-    print(f"\nSelected steering layers (top-{args.top_k}): {result['selected_layers']}")
-    print(f"Model depth: {result['n_layers']} layers, candidate range: L{min_l}–L{max_l}")
+    print("=" * 60)
+    print(f"\nMode: {mode_str}")
+    print(f"Selected steering layers: {result['selected_layers']}")
     print(f"\nAdd to DS-BiAL config:")
     print(f"  steering_layers: {result['selected_layers']}")
 
