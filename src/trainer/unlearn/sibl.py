@@ -1212,16 +1212,39 @@ class SIBL(UnlearnTrainer):
             g_forget_dict: Pre-computed forget gradient dict (if available)
             al_retain_coeff: λ + ρ*(L_ret - ε) coefficient for AL retain terms
         """
-        # Compute retain gradient
+        # Compute retain gradient — if projection_layers is set, only compute grads
+        # for params in those layers to save memory (skips grad alloc for other layers).
         L_ret_proj = self.compute_retain_loss(retain_batch)
-        L_ret_proj.backward()
-
-        g_retain_dict = {}
-        for name, param in self.model.named_parameters():
-            if param.grad is not None:
-                g_retain_dict[name] = param.grad.clone()
-            param.grad = None
-        self.model.zero_grad()
+        if self.projection_layers is not None:
+            # Only compute retain gradients for params in projection_layers (memory efficient)
+            target_named_params = [
+                (name, param) for name, param in self.model.named_parameters()
+                if param.requires_grad and
+                (self._layer_id_from_param_name(name) in self.projection_layers)
+            ]
+            if target_named_params:
+                grads = torch.autograd.grad(
+                    L_ret_proj,
+                    [p for _, p in target_named_params],
+                    retain_graph=False,
+                    allow_unused=True,
+                )
+                g_retain_dict = {
+                    name: g.detach() for (name, _), g in zip(target_named_params, grads)
+                    if g is not None
+                }
+            else:
+                g_retain_dict = {}
+            del L_ret_proj
+        else:
+            L_ret_proj.backward()
+            g_retain_dict = {}
+            for name, param in self.model.named_parameters():
+                if param.grad is not None:
+                    g_retain_dict[name] = param.grad.clone()
+                param.grad = None
+            self.model.zero_grad()
+        torch.cuda.empty_cache()
 
         scope = self.gradient_projection_scope
         eps = 1e-10
