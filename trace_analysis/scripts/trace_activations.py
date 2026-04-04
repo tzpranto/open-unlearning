@@ -68,10 +68,11 @@ class TextDataset(Dataset):
         }
 
 
-def load_and_tokenize(tokenizer, dataset_name, split_name, n_samples, max_length):
+def load_and_tokenize(tokenizer, dataset_name, split_name, n_samples, max_length,
+                      dataset_config="raw"):
     """Load a HuggingFace dataset split, tokenize, and return a Dataset."""
-    logger.info(f"Loading {dataset_name}  split={split_name}  (n_samples={n_samples})")
-    ds = load_dataset(dataset_name, name="raw", split=split_name)
+    logger.info(f"Loading {dataset_name} [{dataset_config}]  split={split_name}  (n_samples={n_samples})")
+    ds = load_dataset(dataset_name, name=dataset_config, split=split_name)
     if n_samples < len(ds):
         ds = ds.select(range(n_samples))
 
@@ -585,6 +586,8 @@ def main():
     parser.add_argument("--tokenizer", type=str,
                         default="meta-llama/Llama-2-7b-hf")
     parser.add_argument("--dataset", type=str, default="muse-bench/MUSE-News")
+    parser.add_argument("--dataset_config", type=str, default="raw",
+                        help="HuggingFace dataset config name (e.g. 'raw', 'train')")
     parser.add_argument("--forget_split", type=str, default="forget")
     parser.add_argument("--retain_split", type=str, default="retain1")
     parser.add_argument("--n_samples", type=int, default=100)
@@ -646,10 +649,10 @@ def main():
     # ------------------------------------------------------------------
     forget_ds = load_and_tokenize(
         tokenizer, args.dataset, args.forget_split, args.n_samples,
-        args.max_length)
+        args.max_length, dataset_config=args.dataset_config)
     retain_ds = load_and_tokenize(
         tokenizer, args.dataset, args.retain_split, args.n_samples,
-        args.max_length)
+        args.max_length, dataset_config=args.dataset_config)
 
     forget_loader = DataLoader(forget_ds, batch_size=args.batch_size,
                                shuffle=False, collate_fn=collate_fn)
@@ -664,6 +667,7 @@ def main():
             "model": args.model_name,
             "tokenizer": args.tokenizer,
             "dataset": args.dataset,
+            "dataset_config": args.dataset_config,
             "forget_split": args.forget_split,
             "retain_split": args.retain_split,
             "n_forget_samples": len(forget_ds),
