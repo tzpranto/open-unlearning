@@ -61,6 +61,10 @@ method_args:
   steering_alpha: 1.0
   steering_only: true
   steering_retain_match: false
+  steering_neuron_mask_path: null  # Path to forget_neuron_bitmap.pt
+  inner_repr_anchor: false
+  inner_repr_alpha: 1.0
+  inner_repr_layers: null
 
 # Override trainer args for SIBL
 # Note: SIBL uses custom training loop, so some standard args may not apply

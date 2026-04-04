@@ -117,6 +117,12 @@ class SIBL(UnlearnTrainer):
         steering_alpha: float = 1.0,  # Weight of steering loss (vs logit loss)
         steering_only: bool = True,  # If True, use ONLY steering loss (no logit loss)
         steering_retain_match: bool = False,  # If True, match retain activations instead of random
+        # Surgical neuron-masked steering: steer only forget-dominant hidden dims
+        steering_neuron_mask_path: Optional[str] = None,  # Path to forget_neuron_bitmap.pt
+        # Inner representation anchor: add activation MSE to inner retain loop
+        inner_repr_anchor: bool = False,  # Add representation anchor to inner loop
+        inner_repr_alpha: float = 1.0,  # Weight of representation anchor loss
+        inner_repr_layers: Optional[list] = None,  # Layers for inner anchor (default: steering_layers)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -211,6 +217,16 @@ class SIBL(UnlearnTrainer):
         self.steering_retain_match = steering_retain_match
         self._steering_vectors = {}  # Cache: layer_idx → random control vector
         self._ref_retain_activations = {}  # Cache: layer_idx → retain activation (if steering_retain_match)
+        # Neuron-masked steering
+        self.steering_neuron_mask_path = steering_neuron_mask_path
+        self._steering_neuron_masks = {}  # layer_idx → bool tensor [hidden_dim]
+        if steering_neuron_mask_path is not None:
+            self._build_steering_neuron_masks(steering_neuron_mask_path)
+        # Inner representation anchor
+        self.inner_repr_anchor = inner_repr_anchor
+        self.inner_repr_alpha = inner_repr_alpha
+        self.inner_repr_layers = inner_repr_layers if inner_repr_layers is not None else self.steering_layers
+        self._repr_anchor_model = None  # Frozen reference model for inner anchor
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -257,6 +273,39 @@ class SIBL(UnlearnTrainer):
         if self.debug_implicit:
             os.makedirs(self.debug_dir, exist_ok=True)
             logger.info(f"Implicit debug enabled. Outputs: {self.debug_dir}")
+
+    def _build_steering_neuron_masks(self, bitmap_path: str):
+        """Build per-layer hidden-dim neuron masks from forget_neuron_bitmap.pt.
+
+        For each steering layer, creates a boolean mask of shape (hidden_dim,) marking
+        forget-dominant output neurons from down_proj (MLP output) and o_proj (attn output).
+        Steering MSE will be applied ONLY at these dimensions.
+        """
+        try:
+            bitmap = torch.load(bitmap_path, map_location='cpu', weights_only=False)
+        except TypeError:
+            bitmap = torch.load(bitmap_path, map_location='cpu')
+
+        if not isinstance(bitmap, dict):
+            logger.warning(f"Neuron bitmap at {bitmap_path} is not a dict — skipping neuron masking")
+            return
+
+        for layer_idx in self.steering_layers:
+            o_key = f"model.layers.{layer_idx}.self_attn.o_proj.weight"
+            d_key = f"model.layers.{layer_idx}.mlp.down_proj.weight"
+            o_bitmap = bitmap.get(o_key, None)
+            d_bitmap = bitmap.get(d_key, None)
+            if o_bitmap is None and d_bitmap is None:
+                continue
+            o_arr = o_bitmap if o_bitmap is not None else np.zeros(4096, dtype=np.int32)
+            d_arr = d_bitmap if d_bitmap is not None else np.zeros(4096, dtype=np.int32)
+            combined = torch.tensor((o_arr.astype(bool) | d_arr.astype(bool)), dtype=torch.bool)
+            n_active = combined.sum().item()
+            if n_active > 0:
+                self._steering_neuron_masks[layer_idx] = combined
+                logger.info(f"Neuron mask layer {layer_idx}: {n_active}/{len(combined)} forget-dominant dims")
+            else:
+                logger.info(f"Neuron mask layer {layer_idx}: no forget-dominant dims — layer will use full steering")
 
     def _save_debug_array(self, outer_iter, name, vec):
         """Persist a 1D tensor as numpy for offline diagnostics."""
@@ -566,6 +615,25 @@ class SIBL(UnlearnTrainer):
                 self.args.device
             )
 
+    def _forward_with_hooks_on_model(self, model, batch, layer_indices):
+        """Forward pass with activation hooks on an arbitrary model (e.g. frozen anchor)."""
+        caches = {}
+        hooks = []
+        for layer_idx in layer_indices:
+            module = model.model.layers[layer_idx]
+            def make_hook(idx):
+                def hook_fn(mod, inp, out):
+                    caches[idx] = out[0] if isinstance(out, tuple) else out
+                return hook_fn
+            hooks.append(module.register_forward_hook(make_hook(layer_idx)))
+        input_ids = batch['input_ids'].to(self.args.device)
+        attention_mask = batch['attention_mask'].to(self.args.device)
+        with torch.no_grad():
+            model(input_ids=input_ids, attention_mask=attention_mask)
+        for h in hooks:
+            h.remove()
+        return caches
+
     def inner_step(self, batch):
         """Single inner optimization step on retain set."""
         self.model.train()
@@ -580,6 +648,44 @@ class SIBL(UnlearnTrainer):
             labels=labels
         )
         loss = outputs.loss
+
+        # Representation anchor: penalize drift of retain activations from reference model
+        if self.inner_repr_anchor and self._repr_anchor_model is not None:
+            # Get reference activations (no grad)
+            ref_caches = self._forward_with_hooks_on_model(
+                self._repr_anchor_model, batch, self.inner_repr_layers
+            )
+            # Get current model activations at same layers
+            cur_caches, _ = self._forward_with_hooks(
+                batch, self.inner_repr_layers
+            )
+            repr_labels = batch.get('labels', batch['input_ids']).to(self.args.device)
+            repr_token_mask = (repr_labels != -100).float()
+            repr_loss = torch.tensor(0.0, device=self.args.device)
+            for layer_idx in self.inner_repr_layers:
+                if layer_idx not in ref_caches or layer_idx not in cur_caches:
+                    continue
+                ref_act = ref_caches[layer_idx].detach()
+                cur_act = cur_caches[layer_idx]
+                min_seq = min(cur_act.shape[1], ref_act.shape[1])
+                cur_act = cur_act[:, :min_seq, :]
+                ref_act = ref_act[:, :min_seq, :]
+                lmask = repr_token_mask[:, :min_seq]
+                diff = (cur_act - ref_act) ** 2
+                lmask_exp = lmask.unsqueeze(-1).expand_as(diff)
+                # Apply neuron mask if available (only anchor forget-dominant dims)
+                if layer_idx in self._steering_neuron_masks:
+                    nm = self._steering_neuron_masks[layer_idx].to(cur_act.device)
+                    nm_exp = nm.unsqueeze(0).unsqueeze(0).expand_as(diff).float()
+                    n_active = nm.sum().clamp(min=1).float()
+                    per_sample = (diff * lmask_exp * nm_exp).sum(dim=(1, 2)) / (
+                        lmask.sum(dim=1).clamp(min=1).float() * n_active
+                    )
+                else:
+                    per_sample = (diff * lmask_exp).mean(dim=2).sum(dim=1) / lmask.sum(dim=1).clamp(min=1)
+                repr_loss = repr_loss + per_sample.mean()
+            repr_loss = repr_loss / max(len(self.inner_repr_layers), 1)
+            loss = loss + self.inner_repr_alpha * repr_loss
 
         # Add regularization using the configured type
         reg_loss = self.compute_sparsity_regularizer()
@@ -1071,12 +1177,23 @@ class SIBL(UnlearnTrainer):
                 target = self._steering_vectors[layer_idx].expand_as(activation)
                 layer_mask = mask
 
-            # MSE loss with label masking
+            # MSE loss with label masking + optional neuron mask
             diff = (activation - target) ** 2  # (batch, seq, hidden)
-            mask_exp = layer_mask.unsqueeze(-1).expand_as(diff)
-            per_sample = (diff * mask_exp).mean(dim=2).sum(dim=1)
-            n_tokens = layer_mask.sum(dim=1).clamp(min=1)
-            layer_loss = (per_sample / n_tokens).mean()
+            mask_exp = layer_mask.unsqueeze(-1).expand_as(diff)  # (batch, seq, hidden)
+            if layer_idx in self._steering_neuron_masks:
+                # Apply neuron mask: compute MSE only over forget-dominant hidden dims
+                nm = self._steering_neuron_masks[layer_idx].to(activation.device)
+                nm_exp = nm.unsqueeze(0).unsqueeze(0).expand_as(diff).float()  # (batch, seq, hidden)
+                combined = mask_exp * nm_exp
+                n_active = nm.sum().clamp(min=1).float()
+                per_sample = (diff * combined).sum(dim=2).sum(dim=1) / (
+                    (layer_mask.sum(dim=1).clamp(min=1).float() * n_active)
+                )
+                layer_loss = per_sample.mean()
+            else:
+                per_sample = (diff * mask_exp).mean(dim=2).sum(dim=1)
+                n_tokens = layer_mask.sum(dim=1).clamp(min=1)
+                layer_loss = (per_sample / n_tokens).mean()
             total_loss = total_loss + layer_loss
 
         return total_loss / max(len(forget_caches), 1)
@@ -1382,6 +1499,21 @@ class SIBL(UnlearnTrainer):
         # Initialize mask
         if self.mask_dict is None:
             self._initialize_mask()
+
+        # Initialize inner representation anchor model if needed
+        if self.inner_repr_anchor and self._repr_anchor_model is None:
+            # Reuse NPO ref_model if available (same frozen copy), else create new
+            if self.ref_model is not None:
+                self._repr_anchor_model = self.ref_model
+                logger.info("Inner repr anchor: reusing NPO reference model")
+            else:
+                logger.info("Creating frozen reference model for inner repr anchor...")
+                self._repr_anchor_model = copy.deepcopy(self.model)
+                self._repr_anchor_model.eval()
+                for p in self._repr_anchor_model.parameters():
+                    p.requires_grad = False
+                self._repr_anchor_model = self._repr_anchor_model.to(self.args.device)
+                logger.info(f"Inner repr anchor ready, layers={self.inner_repr_layers}")
 
         # Enable gradient checkpointing for memory (SIBL bypasses _inner_training_loop).
         # use_reentrant=False is required when use_implicit=True (HVPs use autograd.grad).

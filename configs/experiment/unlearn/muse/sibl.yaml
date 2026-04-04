@@ -109,6 +109,12 @@ trainer:
     steering_alpha: 1.0
     steering_only: true
     steering_retain_match: false
+    # Surgical neuron-masked steering (steer only forget-dominant hidden dims)
+    steering_neuron_mask_path: null  # Path to forget_neuron_bitmap.pt
+    # Inner representation anchor (add activation MSE to inner retain loop)
+    inner_repr_anchor: false
+    inner_repr_alpha: 1.0
+    inner_repr_layers: null  # defaults to steering_layers
 
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false
