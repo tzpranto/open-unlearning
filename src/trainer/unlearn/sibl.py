@@ -109,6 +109,7 @@ class SIBL(UnlearnTrainer):
         projection_strength: float = 1.0,  # Fraction of retain-aligned component to remove (0=none, 1=full)
         projection_schedule: str = "constant",  # "constant" or "linear_decay" (1→0 over T iters)
         projection_rescale: bool = False,  # Rescale projected gradient to maintain original norm
+        projection_layers: Optional[list] = None,  # Layer indices to apply projection to (None = all)
         # Activation steering: representation-space forget intervention
         use_steering: bool = False,  # Enable activation steering as forget loss
         steering_layers: Optional[list] = None,  # Layer indices for steering (default: [5,6,7])
@@ -199,6 +200,7 @@ class SIBL(UnlearnTrainer):
         self.projection_schedule = projection_schedule
         self._projection_strength_base = projection_strength  # Store base for scheduling
         self.projection_rescale = projection_rescale
+        self.projection_layers = set(projection_layers) if projection_layers is not None else None
 
         # Activation steering configuration
         self.use_steering = use_steering
@@ -1120,32 +1122,51 @@ class SIBL(UnlearnTrainer):
                     g_forget_dict[name] = g_alm_dict[name].float()
 
         def _project_layer(names):
-            """Project forget gradient of a group of params orthogonal to retain gradient."""
+            """Project forget gradient orthogonal to retain gradient (memory-efficient, no concat)."""
             valid_names = [n for n in names if n in g_retain_dict and n in g_forget_dict]
             if not valid_names:
                 return
-            g_f_parts = [g_forget_dict[n].flatten().float() for n in valid_names]
-            g_r_parts = [g_retain_dict[n].flatten().float() for n in valid_names]
-            g_f_flat = torch.cat(g_f_parts)
-            g_r_flat = torch.cat(g_r_parts)
-            dot = torch.dot(g_f_flat, g_r_flat)
-            g_r_norm_sq = torch.dot(g_r_flat, g_r_flat) + eps
+            # Accumulate dot products per-param without concatenating large tensors
+            dev = g_retain_dict[valid_names[0]].device
+            dot = torch.zeros(1, device=dev, dtype=torch.float32)
+            g_r_norm_sq = torch.zeros(1, device=dev, dtype=torch.float32)
+            g_f_norm_sq = torch.zeros(1, device=dev, dtype=torch.float32) if self.projection_rescale else None
+            for name in valid_names:
+                gf = g_forget_dict[name].float()
+                gr = g_retain_dict[name].float()
+                dot += (gf * gr).sum()
+                g_r_norm_sq += (gr * gr).sum()
+                if g_f_norm_sq is not None:
+                    g_f_norm_sq += (gf * gf).sum()
+            g_r_norm_sq = g_r_norm_sq + eps
             coeff = self.projection_strength * (dot / g_r_norm_sq).item()
-            # Compute norms for optional rescaling
-            g_f_norm = g_f_flat.norm().item()
-            g_f_proj_flat = g_f_flat - coeff * g_r_flat
-            g_f_proj_norm = g_f_proj_flat.norm().item()
-            rescale = (g_f_norm / (g_f_proj_norm + eps)) if (self.projection_rescale and g_f_proj_norm > eps) else 1.0
+            # Compute rescale factor without materializing projected concat
+            rescale = 1.0
+            if self.projection_rescale and g_f_norm_sq is not None:
+                g_f_proj_norm_sq = (g_f_norm_sq - 2 * coeff * dot + coeff ** 2 * (g_r_norm_sq - eps)).clamp(min=0.0)
+                g_f_proj_norm = g_f_proj_norm_sq.sqrt().item()
+                g_f_norm = g_f_norm_sq.sqrt().item()
+                rescale = (g_f_norm / (g_f_proj_norm + eps)) if g_f_proj_norm > eps else 1.0
             # Reconstruct: G_update = rescale * G_fgt_proj + al_retain_coeff * G_ret
             for name in valid_names:
-                g_fgt_proj = g_forget_dict[name].float() - coeff * g_retain_dict[name].float()
+                gf = g_forget_dict[name].float()
+                gr = g_retain_dict[name].float()
+                g_fgt_proj = gf - coeff * gr
                 g_alm_dict[name] = (
-                    rescale * g_fgt_proj + al_retain_coeff * g_retain_dict[name].float()
+                    rescale * g_fgt_proj + al_retain_coeff * gr
                 ).to(g_alm_dict[name].dtype)
+
+        def _layer_allowed(layer_id):
+            """Return True if this layer should have projection applied."""
+            if self.projection_layers is None:
+                return True
+            return layer_id in self.projection_layers
 
         if scope == "param":
             for name in list(g_alm_dict.keys()):
-                _project_layer([name])
+                lid = self._layer_id_from_param_name(name)
+                if lid is None or _layer_allowed(lid):
+                    _project_layer([name])
         elif scope == "layer":
             by_layer = {}
             for name in g_alm_dict:
@@ -1156,7 +1177,8 @@ class SIBL(UnlearnTrainer):
                     by_layer[layer_id] = []
                 by_layer[layer_id].append(name)
             for layer_id, names in by_layer.items():
-                _project_layer(names)
+                if _layer_allowed(layer_id):
+                    _project_layer(names)
         elif scope == "global":
             _project_layer(list(g_alm_dict.keys()))
         else:
