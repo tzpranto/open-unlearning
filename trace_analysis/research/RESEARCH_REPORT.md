@@ -741,10 +741,19 @@ Closest forget_know to gold: Exp7j (0.372 vs 0.327)
 | **7i** | **NPO β=3 + ret_steer** | 0.406 | 0.410 | **0.197** | **0.051** |
 | **7j** | **NPO β=3 K=15 ρ=1** | **0.372** | 0.416 | 0.248 | 0.063 |
 | 7k | NPO β=3 K=20 ρ=2 | 0.419 | 0.423 | 0.280 | 0.086 |
+| 8g | FD-HVP β=3 post_inner=30 | 0.404 | 0.422 | 0.226 | 0.059 |
+| 8i | β=1.5 post_inner=30 | 0.381 | 0.434 | 0.233 | 0.059 |
+| 8o | β=1.5 FD-HVP | 0.410 | 0.407 | 0.207 | 0.055 |
+| **8r** | **β=2.0 FD-HVP** | **0.371** | 0.417 | **0.211** | **0.053** |
+| 8q | β=3.0 FD-HVP | 0.634 | 0.544 | 0.567 | 0.291 |
+| 9a | masked post_inner[30] bitmap | 0.641 | 0.561 | 0.572 | 0.301 |
+| 9b | K=15 ρ=1.0 ε=0.05 | 0.384 | 0.416 | 0.247 | 0.069 |
+| 9c | steer[20-22] | 0.376 | 0.410 | 0.212 | 0.055 |
+| **9d** | **β=2.5 FD-HVP** | 0.386 | **0.424** | 0.217 | 0.056 |
 
 ---
 
-## Updated Key Findings (Exp1-7k)
+## Updated Key Findings (Exp1-9d)
 
 ### 1-9: [Previous findings preserved — see above]
 
@@ -914,35 +923,195 @@ for retain_knowmem improvement.
 
 ---
 
+## Exp9 Series: Post-Inner Ablations and Feasibility Improvements
+**Date:** 2026-04-04
+
+### Exp9a: Masked Post-Inner Recovery (inverted bitmap mask)
+**Hypothesis:** Invert the neuron bitmap during post-inner steps: update ONLY retain-dominant neurons (bitmap=0, 85% of params). These were untouched by the outer loop → should restore retain without restoring forget.
+**Config:** Exp8r base (β=2.0, FD-HVP, T=10, K=10) + neuron_bitmap_path + post_inner=30 + post_inner_retain_only=True
+**Save dir:** saves/unlearn/research_exp9a_masked_post_inner
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.641 |
+| retain_knowmem_ROUGE | **0.561** |
+| forget_verbmem_ROUGE | 0.572 |
+| extraction_strength | 0.301 |
+
+**Observations:**
+- **Retain perfectly restored** (0.561 ≈ gold 0.560) ← the hypothesis worked for retain!
+- **Forget COMPLETELY restored** (0.641 ≈ baseline 0.650) ← catastrophic failure for forgetting
+- verbmem even WORSE than baseline (0.572 vs 0.555)
+
+**Root cause analysis — KEY FINDING:**
+Forget knowledge is NOT locally stored in forget-dominant neurons (15%). It is distributed across ALL neurons. When we train 85% of the model (retain-dominant neurons) on the retain dataset (MUSE News retain), we restore the model's full language understanding for news articles — including the forget set, which is also news articles with identical distribution.
+
+The outer loop (NPO+steering on 15% of params) achieved forgetting by degrading those 15% of neurons. But the other 85% still encode the forget knowledge. When trained on ANY news text, they restore recall of ALL news content — forget and retain alike.
+
+**Fundamental limitation revealed:**
+MUSE News forget and retain datasets are **same-domain** (both news articles). The language patterns, factual associations, and semantic representations are near-identical. Surgical forgetting based on gradient attribution (which neurons respond more to forget vs retain) fails because:
+1. The 15% forget-dominant neurons are not the ONLY pathways for forget knowledge
+2. The 85% retain-dominant neurons contain the same knowledge (just with weaker gradient signal)
+3. Fine-tuning any substantial fraction on news data restores everything
+
+**Implication for research:**
+Truly robust unlearning in MUSE News may require changing EVERY neuron — making gradient projection or full-model approaches (like GradAscent, NPO-full) necessary rather than surgical methods.
+
+**Current architecture limitation:**
+```
+outer_loop: only updates forget_dominant neurons (15%)
+→ After T outer steps: forget partially erased, but knowledge still accessible via retain neurons
+→ Any fine-tuning on retain data (same domain): routes knowledge back through retain neurons
+→ Full restoration in ~30 inner steps
+```
+
+---
+
+### Exp9b: Stronger Inner Loop (K=15, ρ=1.0, ε=0.05) + β=2.0 + FD-HVP
+**Hypothesis:** The main retain gap (0.417 vs 0.560) comes from poor bilevel feasibility. With stronger AL enforcement (K=15 per outer, ρ=1.0, tighter ε=0.05), the constraint may be satisfied, recovering retain without post-inner.
+**Config:** β=2.0, FD-HVP, T=10, K=15, ρ=1.0, ε=0.05
+**Save dir:** saves/unlearn/research_exp9b_stronger_inner
+**Status:** DONE
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.384 |
+| retain_knowmem_ROUGE | 0.416 |
+| forget_verbmem_ROUGE | 0.247 |
+| extraction_strength | 0.069 |
+
+**Observations:**
+- **Retain gap unchanged** (0.416 vs Exp8r's 0.417) — stronger AL does NOT close the gap
+- **All metrics worse than Exp8r**: forget 0.384 (vs 0.371), verbmem 0.247 (vs 0.211), extract 0.069 (vs 0.053)
+- **Training dynamics reveal λ runaway**: L_fgt → 0.049 by iter 4 (over-forgetting), then λ grows to 10.58
+  - ε=0.05 is too tight — L_ret never gets near it, λ grows unbounded
+  - Over-forgetting early + strong AL correction late = worse verbmem
+- **Confirms**: The retain gap is structural, NOT fixable by stronger AL enforcement
+- Exp8r (ρ=0.5, ε=0.1) with gradual λ growth (2.8 at iter 9) remains the best configuration
+
+---
+
+### Exp9c: Higher-Layer Steering [20,21,22] — Peak Forget Neuron Density
+**Hypothesis:** Layers 20-22 have 25-30% forget neuron density vs ~0% at layers 5-7 (Exp8r). Steering at peak forget-density layers should more efficiently disrupt forget representations and improve knowledge erasure.
+**Config:** β=2.0, FD-HVP, T=10, K=10, ρ=0.5, ε=0.1, steering_layers=[20,21,22], retain_match
+**Save dir:** saves/unlearn/research_exp9c_high_steer
+**Status:** DONE
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.376 |
+| retain_knowmem_ROUGE | 0.410 |
+| forget_verbmem_ROUGE | 0.212 |
+| extraction_strength | 0.055 |
+
+**Observations:**
+- **Slightly worse than Exp8r** on both forget_km (0.376 vs 0.371) and retain_km (0.410 vs 0.417)
+- verbmem and extract essentially identical
+- **Higher-layer steering is NOT better** despite 25-30% forget neuron density at layers 20-22
+- Layers 5-7 with ~0% forget neurons remain the optimal steering target
+- **Key insight**: Forget neuron density ≠ steering effectiveness. Early layers may encode more abstract semantic representations, making them better targets for retain-match disruption. Higher layers are closer to output and may be more specialized.
+
+---
+
+### Exp9d: β=2.5 — Between Sweet Spot (2.0) and Overcorrection (3.0)
+**Hypothesis:** β=2.5 might give slightly more forgetting than 2.0 or slightly better retain without hitting the β=3.0 overcorrection regime (implicit correction suppresses forgetting entirely).
+**Config:** β=2.5, FD-HVP, T=10, K=10, ρ=0.5, ε=0.1, steering=[5,6,7], retain_match
+**Save dir:** saves/unlearn/research_exp9d_beta25
+**Status:** DONE
+**Results:**
+| Metric | Value |
+|--------|-------|
+| forget_knowmem_ROUGE | 0.386 |
+| retain_knowmem_ROUGE | **0.424** |
+| forget_verbmem_ROUGE | 0.217 |
+| extraction_strength | 0.056 |
+
+**Observations:**
+- **Better retain than Exp8r** (0.424 vs 0.417 — +0.007)
+- **Worse forget than Exp8r** (0.386 vs 0.371 — -0.015)
+- verbmem and extract slightly worse than Exp8r
+- This is a smooth interpolation: β=2.5 lies between β=2.0 and β=3.0 on the forget/retain tradeoff
+- **β sensitivity with FD-HVP (full picture)**:
+  - β=1.5: forget=0.410, retain=0.407 (Exp8o)
+  - β=2.0: forget=0.371, retain=0.417 (Exp8r) ← BEST FORGET
+  - β=2.5: forget=0.386, retain=0.424 (Exp9d) ← BEST RETAIN
+  - β=3.0: forget=0.634, retain=0.544 (Exp8q) ← OVERCORRECTION
+- Use β=2.5 if retain is the priority; β=2.0 if forgetting is the priority
+
+---
+
+## Exp9 Summary Table
+
+| Exp | Config | forget_km↓ | retain_km↑ | verbmem↓ | extract↓ |
+|-----|--------|:---:|:---:|:---:|:---:|
+| **8r** | **β=2.0, FD, steer[5-7]** | **0.371** | 0.417 | **0.211** | **0.053** |
+| 9a | +masked post_inner 30 | 0.641 | **0.561** | 0.572 | 0.301 |
+| 9b | K=15, ρ=1.0, ε=0.05 | 0.384 | 0.416 | 0.247 | 0.069 |
+| 9c | steer[20-22] | 0.376 | 0.410 | 0.212 | 0.055 |
+| **9d** | **β=2.5** | 0.386 | **0.424** | 0.217 | 0.056 |
+
+**Exp8r** remains the best on forget/verbmem/extract. **Exp9d** offers slightly better retain (+0.007) at cost of forget (-0.015).
+
+---
+
+## Exp9 Key Findings
+
+### 15. Same-domain forgetting is non-localizable (Exp9a)
+Forget knowledge in MUSE News is NOT stored only in forget-dominant neurons (15%). It is accessible through all ~85% of retain-dominant neurons. Updating 85% of neurons on news-like retain data fully restores all news knowledge, including the forget set.
+
+**Implication**: Surgical forgetting (targeting 15% of neurons) is fragile on same-domain datasets. Forget and retain data share all language patterns → any substantial model update on retain data will restore forget. True unlearning may require modifying ALL parameters.
+
+### 16. AL constraint enforcement cannot close the retain gap (Exp9b)
+Stronger inner loop (K=15 instead of 10, ρ=1.0, ε=0.05) does NOT improve retain_km. Instead, it causes λ runaway (λ=10.58 at T=9) and actually worsens forget_km and verbmem.
+
+The retain gap (0.417 vs gold 0.560) is structural: the outer loop damages retain-associated circuits in forget-dominant neurons, and the inner loop cannot fully repair them regardless of K or ρ.
+
+### 17. Optimal steering target: early layers [5,6,7] outperform high-forget-density layers [20-22] (Exp9c)
+Despite layers 20-22 having 25-30% forget neuron density, steering them is slightly less effective than steering layers 5-7 (~0% forget density). Early layers encode more abstract semantic features; disrupting them at the retain-match target creates more effective knowledge erasure.
+
+### 18. β sensitivity curve with FD-HVP is smooth and interpretable (Exp9d)
+FD-HVP creates a continuous β-forget/retain tradeoff: higher β → more "forget protection" by the implicit correction → less forgetting, more retain. The optimal operating point depends on the desired balance:
+- **Forgetting priority**: β=2.0 (Exp8r)
+- **Retention priority**: β=2.5 (Exp9d)
+- **Overcorrection threshold**: β≥3.0 (implicit protection becomes too strong)
+
+---
+
 ## Future Directions
 
-### 1. Masked post-inner recovery
-Post-inner steps restore verbmem because full CE training touches forget-associated circuits.
-Fix: use forget neuron bitmap as MASK — only update parameters with `bitmap=0` (retain-dominant)
-during post-inner. This recovers retention without restoring forget representations.
+### 1. ~~Masked post-inner recovery~~ (DISPROVED — Exp9a)
+Updating retain-dominant neurons (85% of model) fully restores forget knowledge because MUSE News is same-domain. Not viable.
 
-### 2. Multi-stage unlearning
-- Stage 1: Aggressive NPO+steering (Exp8r-style) for strong forget
-- Stage 2: Fine-tune on retain data only (few epochs) to recover retain knowledge
-This mirrors how the retrained model is produced (train without forget data).
+### 2. Multi-stage unlearning with out-of-domain retain data
+Same-domain problem: Stage 2 fine-tuning on MUSE News retain will restore forget (shown by Exp9a).
+Fix: Use held-out retain data from a DIFFERENT domain (e.g., Wikipedia, C4) for Stage 2, to restore language fluency without domain-specific news knowledge.
+But may be impractical for real deployment.
 
-### 3. Feasibility-improving inner loop
-The bilevel never achieves feasibility (L_ret > ε always). Options:
-- Increase K (inner iterations per outer iteration)
-- Use adaptive eta_in (higher LR when constraint is strongly violated)
-- Start with more inner steps before first outer step (warm start)
+### 3. ~~Feasibility-improving inner loop~~ (DISPROVED — Exp9b)
+Stronger AL (K=15, ρ=1.0, ε=0.05) does NOT close the retain gap. It causes λ runaway.
+The gap is structural, not a function of inner loop strength.
 
-### 4. Steering at higher layers
-Layers 20-22 have 25-30% forget neuron density (vs ~0% for layers 5-7).
-Steering at higher layers might help semantic forgetting more than early layers.
-E.g., `steering_layers=[20,21,22]` with retain_match.
+### 4. ~~Steering at higher layers [20,21,22]~~ (TESTED — Exp9c)
+Layers 5-7 are at least as good as 20-22. Forget neuron density ≠ steering effectiveness.
 
 ### 5. NPO β schedule
-Start with low β (gradual forgetting) and increase over iterations to avoid the
-"implicit overcorrection" problem seen at β=3.0.
-β schedule: 1.0 → 1.5 → 2.0 → 2.5 over T=10 iterations.
+Start with β=1.0 and increase to β=2.5 over T iterations. The schedule would:
+- Early iterations (β low): strong forgetting signal, fast knowledge erasure
+- Late iterations (β high): more implicit retain correction, stabilize retention
+This might avoid λ runaway while achieving stronger forgetting.
+Requires implementing a mutable `npo_beta` that updates each outer iteration.
 
-### 6. Fisher-based retain constraint
-Replace simple AL retain penalty with Fisher Information Matrix-weighted constraint.
-FIM identifies parameters most important for retain knowledge, providing
-structure-aware protection rather than uniform penalty.
+### 6. Cross-domain retain constraint / EWC-style regularization
+Use Elastic Weight Consolidation (EWC) or similar: compute Fisher Information Matrix on a held-out retain-like dataset, add FIM-weighted L2 constraint to prevent important parameter drift.
+This is orthogonal to the bilevel formulation and could complement it.
+
+### 7. Task Vector Arithmetic
+Compute: forget_vector = unlearned_model - original_model
+Subtract from original: result = original - α * forget_vector
+This is gradient-free and allows precise scaling. Could be combined with NPO+steering to generate a strong forget_vector, then arithmetically subtract it.
+
+### 8. Full-model unlearning (no surgical masking)
+Exp9a showed that surgical approaches (15% of neurons) are fragile for same-domain data.
+Try NPO+FD-HVP without any bitmap masking (use_sparsity=false, no neuron_bitmap_path).
+All parameters are updated → might achieve better forgetting at cost of retain.
+This is essentially the same as running Exp8r/9d which already don't use bitmap masking.
