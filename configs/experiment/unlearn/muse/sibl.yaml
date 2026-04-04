@@ -116,6 +116,7 @@ trainer:
     inner_repr_alpha: 1.0
     inner_repr_layers: null  # defaults to steering_layers
     post_unlearn_inner_steps: 0  # Pure CE inner steps after T outer iters for retention recovery
+    post_inner_retain_only: false  # If true, invert bitmap mask during post-inner (update only retain-dominant neurons)
 
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false

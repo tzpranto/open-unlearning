@@ -125,6 +125,7 @@ class SIBL(UnlearnTrainer):
         inner_repr_layers: Optional[list] = None,  # Layers for inner anchor (default: steering_layers)
         # Post-unlearning retention recovery: pure inner steps after T outer iterations
         post_unlearn_inner_steps: int = 0,  # N pure CE inner steps after main loop to recover retention
+        post_inner_retain_only: bool = False,  # If True, invert bitmap mask during post-inner (update only retain-dominant neurons)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -230,6 +231,7 @@ class SIBL(UnlearnTrainer):
         self.inner_repr_layers = inner_repr_layers if inner_repr_layers is not None else self.steering_layers
         self._repr_anchor_model = None  # Frozen reference model for inner anchor
         self.post_unlearn_inner_steps = post_unlearn_inner_steps
+        self.post_inner_retain_only = post_inner_retain_only
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -1813,6 +1815,26 @@ class SIBL(UnlearnTrainer):
             # Temporarily disable repr anchor so recovery is pure CE only
             _saved_anchor = self.inner_repr_anchor
             self.inner_repr_anchor = False
+
+            # Free NPO reference model — no longer needed, frees ~14GB for post-inner steps
+            if self.ref_model is not None:
+                logger.info("Freeing NPO reference model before post-inner recovery (saves ~14GB GPU memory)...")
+                del self.ref_model
+                self.ref_model = None
+                torch.cuda.empty_cache()
+
+            # Masked retention recovery: invert bitmap mask to update ONLY retain-dominant neurons.
+            # Forget-dominant neurons (bitmap=1, mask=1) stay frozen → verbmem stays low.
+            # Retain-dominant neurons (bitmap=0, mask=0) get updated → retain_knowmem recovers.
+            _saved_mask_dict = None
+            if self.post_inner_retain_only and self.mask_dict is not None:
+                logger.info("Post-inner: inverted mask active — updating only retain-dominant neurons (bitmap=0)")
+                _saved_mask_dict = self.mask_dict
+                self.mask_dict = {
+                    name: (1.0 - mask).clamp(min=0.0, max=1.0)
+                    for name, mask in self.mask_dict.items()
+                }
+
             retain_loader_post = self.get_train_dataloader()
             data_iter_post = iter(retain_loader_post)
             for k in range(self.post_unlearn_inner_steps):
@@ -1825,6 +1847,11 @@ class SIBL(UnlearnTrainer):
                 self.inner_step(retain_batch)
                 if (k + 1) % 5 == 0 or k == self.post_unlearn_inner_steps - 1:
                     logger.info(f"  Post-inner step {k+1}/{self.post_unlearn_inner_steps} done")
+
+            # Restore original mask
+            if _saved_mask_dict is not None:
+                self.mask_dict = _saved_mask_dict
+
             self.inner_repr_anchor = _saved_anchor
             logger.info("Post-unlearning retention recovery complete.")
 
