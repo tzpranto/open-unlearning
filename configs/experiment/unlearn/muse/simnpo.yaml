@@ -1,0 +1,54 @@
+# @package _global_
+# SimNPO for MUSE unlearning — paper-correct hyperparameters
+# Source: Unlearn-Simple (OPTML-Group), MUSE-News params
+# LR=1e-5, beta=0.7, npo_coeff=1.0, epochs=10, effective_batch=32
+
+defaults:
+  - override /model: Llama-2-7b-hf
+  - override /trainer: SimNPO
+  - override /data: unlearn
+  - override /data/datasets@data.forget: MUSE_forget
+  - override /data/datasets@data.retain: MUSE_retain
+  - override /eval: muse
+
+data_split: News
+forget_split: forget
+retain_split: retain1
+retain_logs_path: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: muse-bench/MUSE-${data_split}_target
+
+data:
+  anchor: forget
+  forget:
+    MUSE_forget:
+      args:
+        hf_args:
+          split: ${forget_split}
+          path: muse-bench/MUSE-${data_split}
+  retain:
+    MUSE_retain:
+      args:
+        hf_args:
+          path: muse-bench/MUSE-${data_split}
+          split: ${retain_split}
+
+eval:
+  muse:
+    data_split: ${data_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+trainer:
+  method_args:
+    beta: 0.7
+    gamma: 1.0    # npo_coeff
+    alpha: 1.0
+    retain_loss_type: NLL
+  args:
+    learning_rate: 1.0e-5
+    lr_scheduler_type: constant
+
+task_name: ???

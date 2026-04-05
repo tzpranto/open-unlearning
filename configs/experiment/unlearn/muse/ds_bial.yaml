@@ -72,7 +72,7 @@ trainer:
     steering_layers: [5, 6, 7]   # ψ-top-3 for MUSE News (early-mid, empirically optimal)
     steering_coeff: 20.0          # Steering magnitude
     steering_alpha: 1.0           # Blend factor
-    steering_only: true           # Apply steering independent of outer gradient
+    steering_only: false          # Combine NPO logit loss + activation steering (Exp8r validated)
     steering_retain_match: true   # Steer forget repr toward retain repr (not just away)
     steering_neuron_mask_path: null
 
