@@ -1,6 +1,6 @@
 # MUSE News (Llama-2-7b-hf)
 
-Generated: 2026-04-05 (partial — GradDiff/NPO/SimNPO/DS-BiAL/BLURNPO-v2 in queue)
+Generated: 2026-04-05 (partial — NPO/SimNPO/DS-BiAL/BLURNPO-v2/RMU-v2 in queue)
 
 ## Results
 
@@ -11,12 +11,11 @@ Generated: 2026-04-05 (partial — GradDiff/NPO/SimNPO/DS-BiAL/BLURNPO-v2 in que
 | Gold (retrain) | 0.3279 | 0.2016 | **0.5602** | 0.0244 | -4.7200 | — |
 | Target (pre-unlearn) | 0.6443 | 0.5789 | **0.5552** | 0.2954 | -99.8111 | — |
 | GradAscent | 0.0000 | 0.0000 | 0.0000 | 0.0079 | +48.85 | 38m |
-| GradDiff | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| GradDiff | 0.2715 | 0.0777 | 0.2103 | 0.0105 | +52.33 | 1h 05m |
 | NPO | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | SimNPO | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| BLURNPO (old: β=0.1) | 0.6204 | 0.4772 | **0.5269** | 0.2428 | -99.5592 | 2h 36m |
 | BLURNPO (β=0.05, LR=2.5e-5) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-| RMU | 0.5540 | 0.2786 | **0.5246** | 0.1052 | -35.2225 | 43m |
+| RMU (max_steps=80, layers 5-7) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | DS-BiAL (ours) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 | DS-BiAL Exp8r (ref) | 0.3711 | 0.2110 | 0.4172 | 0.0534 | -99.5592 | 2m 42s |
 

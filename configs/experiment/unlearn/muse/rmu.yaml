@@ -1,0 +1,61 @@
+# @package _global_
+# RMU for MUSE unlearning — paper-correct hyperparameters
+# Source: WMDP paper (centerforaisafety/wmdp), adapted for MUSE-News
+# max_steps=80, LR=5e-5, trains only layers 5-7 mlp.down_proj
+
+defaults:
+  - override /model: Llama-2-7b-hf
+  - override /trainer: RMU
+  - override /data: unlearn
+  - override /data/datasets@data.forget: MUSE_forget
+  - override /data/datasets@data.retain: MUSE_retain
+  - override /eval: muse
+
+data_split: News
+forget_split: forget
+retain_split: retain1
+retain_logs_path: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: muse-bench/MUSE-${data_split}_target
+
+data:
+  anchor: forget
+  forget:
+    MUSE_forget:
+      args:
+        hf_args:
+          split: ${forget_split}
+          path: muse-bench/MUSE-${data_split}
+  retain:
+    MUSE_retain:
+      args:
+        hf_args:
+          path: muse-bench/MUSE-${data_split}
+          split: ${retain_split}
+
+eval:
+  muse:
+    data_split: ${data_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+trainer:
+  method_args:
+    gamma: 1.0
+    steering_coeff: 2
+    retain_loss_type: EMBED_DIFF
+    alpha: 1
+    module_regex: model\.layers\.7
+    trainable_params_regex:
+      - model\.layers\.(5|6|7)\.mlp\.down_proj\.weight
+  args:
+    learning_rate: 5.0e-5
+    lr_scheduler_type: constant
+    # max_steps=80 passed via CLI (+trainer.args.max_steps=80) since not in struct
+    eval_strategy: no
+    do_eval: false
+    eval_on_start: false
+
+task_name: ???
