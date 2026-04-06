@@ -1411,64 +1411,91 @@ class SIBL(UnlearnTrainer):
 
         return g_alm_dict
 
-    def outer_step(self, forget_batch, retain_batch, outer_iter: Optional[int] = None):
-        """Outer loop: Update parameters to forget while respecting budget."""
+    def outer_step(self, forget_batch, retain_batch, outer_iter: Optional[int] = None,
+                   forget_batches: Optional[list] = None, retain_batches: Optional[list] = None):
+        """Outer loop: Update parameters to forget while respecting budget.
+
+        Supports gradient accumulation: if forget_batches/retain_batches are provided,
+        gradients are averaged across all mini-batches before the implicit correction
+        and weight update. forget_batch/retain_batch are used as the representative
+        batch for implicit correction closures (last mini-batch by convention).
+        """
         self.model.train()
 
-        # Compute forget loss: either activation steering, logit-based, or mixed
-        if self.use_steering:
-            L_steer = self._compute_steering_loss(forget_batch, retain_batch)
-            if self.steering_only:
-                L_fgt = self.steering_alpha * L_steer
-            else:
-                L_logit = self.compute_forget_loss(forget_batch)
-                L_fgt = L_logit + self.steering_alpha * L_steer
+        # Build list of (forget, retain) mini-batch pairs for gradient accumulation.
+        # Falls back to single-batch behaviour when no lists provided.
+        if forget_batches is not None and retain_batches is not None:
+            batch_pairs = list(zip(forget_batches, retain_batches))
         else:
-            L_fgt = self.compute_forget_loss(forget_batch)
+            batch_pairs = [(forget_batch, retain_batch)]
 
-        # Compute retain loss
-        retain_ids = retain_batch['input_ids'].to(self.args.device)
-        retain_mask = retain_batch['attention_mask'].to(self.args.device)
-        retain_labels = retain_batch.get('labels', retain_ids).to(self.args.device)
+        n_accum = len(batch_pairs)
 
-        retain_outputs = self.model(
-            input_ids=retain_ids,
-            attention_mask=retain_mask,
-            labels=retain_labels
-        )
-        L_ret = retain_outputs.loss
-
-        if not torch.isfinite(L_fgt) or not torch.isfinite(L_ret):
-            logger.warning(
-                "Outer step received non-finite loss: "
-                f"L_fgt={L_fgt.item() if torch.isfinite(L_fgt) else 'nan/inf'} "
-                f"L_ret={L_ret.item() if torch.isfinite(L_ret) else 'nan/inf'}. "
-                "Skipping outer update."
-            )
-            return float("nan"), float("nan"), float("nan")
-
-        # Constraint residual (keep tensor form for correct ALM gradient term)
-        r_tensor = L_ret - self.epsilon
-        r = r_tensor.item()
-
-        # Augmented Lagrangian objective
-        L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_tensor ** 2)
-
-        # Compute raw gradient.
-        # FD-HVP: no retain_graph needed (graph freed here, FD recomputes from scratch).
-        # Legacy double-backward: retain_graph=True (keeps graph for create_graph HVP).
-        L_alm.backward(retain_graph=False)  # FD-HVP is now always used
-
-        # Store raw gradients
+        # Accumulate g_alm and scalar losses across mini-batches.
         g_alm_dict = {}
-        for name, param in self.model.named_parameters():
-            if param.grad is not None:
-                g_alm_dict[name] = param.grad.clone()
-            else:
-                g_alm_dict[name] = torch.zeros_like(param.data)
+        L_fgt_accum = 0.0
+        L_ret_accum = 0.0
+        r_accum = 0.0
 
-        # Clear gradients
-        self.model.zero_grad()
+        for fb, rb in batch_pairs:
+            # Compute forget loss
+            if self.use_steering:
+                L_steer = self._compute_steering_loss(fb, rb)
+                if self.steering_only:
+                    L_fgt = self.steering_alpha * L_steer
+                else:
+                    L_logit = self.compute_forget_loss(fb)
+                    L_fgt = L_logit + self.steering_alpha * L_steer
+            else:
+                L_fgt = self.compute_forget_loss(fb)
+
+            # Compute retain loss
+            retain_ids = rb['input_ids'].to(self.args.device)
+            retain_mask = rb['attention_mask'].to(self.args.device)
+            retain_labels = rb.get('labels', retain_ids).to(self.args.device)
+            retain_outputs = self.model(
+                input_ids=retain_ids,
+                attention_mask=retain_mask,
+                labels=retain_labels
+            )
+            L_ret = retain_outputs.loss
+
+            if not torch.isfinite(L_fgt) or not torch.isfinite(L_ret):
+                logger.warning(
+                    "Outer step received non-finite loss: "
+                    f"L_fgt={L_fgt.item() if torch.isfinite(L_fgt) else 'nan/inf'} "
+                    f"L_ret={L_ret.item() if torch.isfinite(L_ret) else 'nan/inf'}. "
+                    "Skipping outer update."
+                )
+                return float("nan"), float("nan"), float("nan")
+
+            r_tensor = L_ret - self.epsilon
+            L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_tensor ** 2)
+
+            # Scale by 1/n_accum so averaged gradient matches single-batch scale
+            (L_alm / n_accum).backward(retain_graph=False)
+
+            for name, param in self.model.named_parameters():
+                g = param.grad.clone() if param.grad is not None else torch.zeros_like(param.data)
+                if name in g_alm_dict:
+                    g_alm_dict[name] = g_alm_dict[name] + g
+                else:
+                    g_alm_dict[name] = g
+
+            self.model.zero_grad()
+
+            L_fgt_accum += L_fgt.item()
+            L_ret_accum += L_ret.item()
+            r_accum += r_tensor.item()
+
+        # Average scalar losses for logging / dual update
+        L_fgt_val = L_fgt_accum / n_accum
+        L_ret_val = L_ret_accum / n_accum
+        r = r_accum / n_accum
+
+        # Representative batch for implicit correction closures (last mini-batch)
+        forget_batch = batch_pairs[-1][0]
+        retain_batch = batch_pairs[-1][1]
 
         # Implicit correction (if enabled): use outer gradient as RHS (masked g_alm)
         if self.use_implicit:
@@ -1660,7 +1687,7 @@ class SIBL(UnlearnTrainer):
         # Dual update
         self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r)
 
-        return L_fgt.item(), L_ret.item(), r
+        return L_fgt_val, L_ret_val, r
 
     def train(self):
         """Override the train method to implement custom S-BiAL training loop."""
@@ -1705,7 +1732,31 @@ class SIBL(UnlearnTrainer):
         # Get data loaders
         train_dataloader = self.get_train_dataloader()
 
-        logger.info(f"\nStarting S-BiAL unlearning for {self.T} iterations...")
+        # Gradient accumulation: number of mini-batches per outer step
+        accum_steps = max(1, self.args.gradient_accumulation_steps)
+
+        # Determine total outer steps: honour self.T if set explicitly (legacy),
+        # otherwise derive from num_train_epochs × steps_per_epoch.
+        steps_per_epoch = max(1, len(train_dataloader) // accum_steps)
+        num_epochs = int(self.args.num_train_epochs) if self.args.num_train_epochs > 0 else 1
+        total_outer_steps = num_epochs * steps_per_epoch
+        # If T was explicitly configured (non-default), honour it as an override.
+        # Default T=10 in the original code was the entire "training"; now it's per-epoch steps.
+        # We only use self.T if it differs from the dataloader-derived count, as an explicit cap.
+        if self.T != total_outer_steps:
+            logger.info(
+                f"S-BiAL: self.T={self.T} overridden by epoch-derived total "
+                f"({num_epochs} epochs × {steps_per_epoch} steps/epoch = {total_outer_steps} outer steps). "
+                f"Set trainer.method_args.T explicitly to cap."
+            )
+        effective_T = total_outer_steps
+
+        # Single data iterator that advances through ALL epochs
+        data_iter = iter(train_dataloader)
+        epoch_step = 0  # counts mini-batches consumed to track epoch boundaries
+
+        logger.info(f"\nStarting S-BiAL unlearning for {effective_T} outer steps "
+                    f"({num_epochs} epochs, {steps_per_epoch} steps/epoch, accum={accum_steps})...")
         logger.info(f"Forget loss type: {self.forget_loss_type}")
         logger.info(f"Regularization type: {self.regularization_type}")
         logger.info(f"Retain budget ε = {self.epsilon:.4f}")
@@ -1737,33 +1788,48 @@ class SIBL(UnlearnTrainer):
             mix = "steering_only" if self.steering_only else f"mixed (α={self.steering_alpha})"
             logger.info(f"Activation steering: enabled (layers={self.steering_layers}, coeff={self.steering_coeff}, mode={mode}, {mix})")
 
-        for t in range(self.T):
+        for t in range(effective_T):
             t_start = time.time()
 
-            # Get data iterators
-            data_iter = iter(train_dataloader)
+            # Collect accum_steps mini-batches for this outer step
+            forget_batches = []
+            retain_batches = []
+            for _ in range(accum_steps):
+                try:
+                    combined_batch = next(data_iter)
+                    epoch_step += 1
+                except StopIteration:
+                    # End of epoch — restart iterator
+                    data_iter = iter(train_dataloader)
+                    epoch_step = 0
+                    try:
+                        combined_batch = next(data_iter)
+                        epoch_step += 1
+                    except StopIteration:
+                        break
+                forget_batches.append(combined_batch['forget'])
+                retain_batches.append(combined_batch['retain'])
 
-            # Get forget and retain batches
-            try:
-                combined_batch = next(data_iter)
-                forget_batch = combined_batch['forget']
-                retain_batch = combined_batch['retain']
-            except (StopIteration, KeyError) as e:
-                logger.error(f"Error getting batches: {e}")
+            if not forget_batches:
+                logger.error(f"No batches available at outer step {t}, stopping.")
                 break
 
-            # Inner loop
-            # Create a simple retain loader from the current batch
-            retain_loader = [retain_batch] * self.K
-
+            # Inner loop: K steps over the accumulated retain batches (cycling)
+            retain_loader = (retain_batches * ((self.K // len(retain_batches)) + 1))[:self.K]
             self.inner_loop(retain_loader)
 
             # Update projection strength based on schedule
             if self.gradient_projection and self.projection_schedule == "linear_decay":
-                self.projection_strength = self._projection_strength_base * (1.0 - t / max(self.T - 1, 1))
+                self.projection_strength = self._projection_strength_base * (1.0 - t / max(effective_T - 1, 1))
 
-            # Outer loop
-            L_fgt, L_ret, r = self.outer_step(forget_batch, retain_batch, outer_iter=t)
+            # Outer step with gradient accumulation across all mini-batches
+            L_fgt, L_ret, r = self.outer_step(
+                forget_batch=forget_batches[-1],
+                retain_batch=retain_batches[-1],
+                outer_iter=t,
+                forget_batches=forget_batches,
+                retain_batches=retain_batches,
+            )
 
             if not np.isfinite(L_fgt) or not np.isfinite(L_ret) or not np.isfinite(r):
                 logger.warning(f"Stopping training early at iter={t} due to non-finite metrics.")
@@ -1779,10 +1845,10 @@ class SIBL(UnlearnTrainer):
             self.history['time'].append(t_elapsed)
 
             # Log progress
-            if t % 2 == 0 or t == self.T - 1:
+            if t % max(1, effective_T // 20) == 0 or t == effective_T - 1:
                 proj_str = f" | α={self.projection_strength:.2f}" if self.gradient_projection and self.projection_schedule != "constant" else ""
                 logger.info(
-                    f"[{t:3d}/{self.T}] L_fgt={L_fgt:.4f} | L_ret={L_ret:.4f} | "
+                    f"[{t:3d}/{effective_T}] L_fgt={L_fgt:.4f} | L_ret={L_ret:.4f} | "
                     f"r={r:+.4f} | λ={self.lambda_dual:.3f}{proj_str} | t={t_elapsed:.2f}s"
                 )
 
@@ -1865,7 +1931,7 @@ class SIBL(UnlearnTrainer):
         logger.info("Unlearning complete!")
 
         # Return training output
-        return type('TrainOutput', (), {'global_step': self.T, 'training_loss': L_ret})()
+        return type('TrainOutput', (), {'global_step': effective_T, 'training_loss': L_ret})()
 
     def compute_loss(self, model, inputs, return_outputs=False):
         """
