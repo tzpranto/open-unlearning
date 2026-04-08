@@ -13,7 +13,9 @@ MODEL="Llama-2-7b-hf"
 DATA_SPLIT="News"
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"
 ATTN_ARGS=(model.model_args.attn_implementation=sdpa)
-PROGRESS="/tmp/ablation_G_progress.log"
+LOG_DIR="/datadrive/forked/open-unlearning/logs/ablation"
+mkdir -p "$LOG_DIR"
+PROGRESS="${LOG_DIR}/G_progress.log"
 
 cd /datadrive/forked/open-unlearning
 echo "[$(date '+%H:%M:%S')] Starting G series (build on F3 anchor)" | tee "$PROGRESS"
@@ -46,7 +48,7 @@ run_eval() {
         "${ATTN_ARGS[@]}" \
         paths.output_dir=saves/unlearn/${TASK}/evals \
         retain_logs_path=${RETAIN_LOGS} \
-        2>&1 | tee /tmp/eval_${TASK}.log
+        2>&1 | tee "${LOG_DIR}/eval_${TASK}.log"
     local EVAL_FILE="saves/unlearn/${TASK}/evals/MUSE_EVAL.json"
     [ -f "$EVAL_FILE" ] && print_metrics "$EVAL_FILE" | tee -a "$PROGRESS"
 }
@@ -71,7 +73,7 @@ run_sibl() {
         trainer.args.num_train_epochs=1 \
         trainer.args.eval_strategy=no trainer.args.do_eval=false trainer.args.eval_on_start=false \
         "${ATTN_ARGS[@]}" \
-        2>&1 | tee /tmp/train_${TASK}.log
+        2>&1 | tee "${LOG_DIR}/train_${TASK}.log"
     local STATUS=$?
     [ $STATUS -ne 0 ] && echo "[WARN] ${TASK} failed (exit $STATUS)" | tee -a "$PROGRESS" && return $STATUS
     run_eval ${TASK}
@@ -101,3 +103,23 @@ for task in ablation_F3_npo_tight_eps ablation_G0_npo_postinner ablation_G1_npo_
     echo -n "  $task: " | tee -a "$PROGRESS"
     [ -f "$ef" ] && print_metrics "$ef" | tee -a "$PROGRESS" || echo "no eval" | tee -a "$PROGRESS"
 done
+
+# ── Auto-chain: memorization scoring ─────────────────────────────────────────
+echo "" | tee -a "$PROGRESS"
+echo "[G->mem] Running memorization scorer on forget set..." | tee -a "$PROGRESS"
+"${PYTHON_BIN}" scripts/score_forget_memorization.py \
+    --top_k 50 \
+    --hard_forget_path data/hard_forget_news.jsonl \
+    2>&1 | tee "${LOG_DIR}/memorization_scoring.log" \
+    && echo "[G->mem] Scoring done. Top-50 saved to data/hard_forget_news.jsonl" | tee -a "$PROGRESS" \
+    || echo "[WARN] Memorization scoring failed — check ${LOG_DIR}/memorization_scoring.log" | tee -a "$PROGRESS"
+
+# ── Auto-chain: H series (created after G results become available) ───────────
+H_SCRIPT="/datadrive/forked/open-unlearning/scripts/run_H_series.sh"
+if [ -f "$H_SCRIPT" ]; then
+    echo "[G->H] Launching H series..." | tee -a "$PROGRESS"
+    bash "$H_SCRIPT"
+else
+    echo "[G->H] H series script not yet created — stopping here." | tee -a "$PROGRESS"
+    echo "       Create run_H_series.sh once G results are reviewed." | tee -a "$PROGRESS"
+fi
