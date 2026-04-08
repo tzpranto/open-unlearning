@@ -60,9 +60,10 @@ Layer 4 (if needed): Neuron masking during post_inner (bitmap from traces)
 | F2 +implicit | 0.335 | 0.312 | F0+Neumann | marginal gains only |
 | **F3 +ε=0.70** | **0.325** | **0.316** | tighter constraint | ✅ NEW ANCHOR — free rk +0.026, fk unchanged |
 | F4 T=25 explicit | 0.359 | 0.311 | epoch override already = 25 steps | worse, T config doesn't override epoch |
-| G0 +post_inner=100 | ⏳ | ⏳ | F3+CE retain after NPO | running |
-| G1 +steering coeff=5 | ⏳ | ⏳ | F3+gentle steering | queued |
+| G0 +post_inner=100 | 0.409 HURT | 0.352 | F3+CE retain after NPO | rk+0.036 but fk blows up — CE re-learns forget |
+| G1 +steering coeff=5 | ⏳ | ⏳ | F3+gentle steering | running |
 | G2 +K=5 inner | ⏳ | ⏳ | F3+more inner steps | queued |
+| G3 +masked post_inner | ⏳ | ⏳ | F3+post_inner+bitmap mask | queued — fix for G0 |
 
 ---
 
@@ -147,17 +148,12 @@ bash scripts/run_H_series.sh  # (to be created after G results)
 
 ---
 
-## IF G0 WORKS (post_inner improves rk without hurting fk)
-- G3: F3 + post_inner=100 + weak steering coeff=5 (stack two keepers)
-- G4: F3 + post_inner=200 (more recovery steps)
-- H0: best_G config on memorization-scored top-50 forget subset
-
-## IF G0 FAILS (post_inner reverses forgetting again)
-- NPO forgetting at fk=0.325 may still be fragile — CE on retain re-learns some forget patterns
-- Fix: use neuron bitmap mask during post_inner (only update retain-dominant neurons)
-  → bitmap is already at: trace_analysis/figures/traces/analysis/forget_neuron_bitmap.png
-- Or: freeze top layers (factual recall) during post_inner, only update bottom layers
-- Or: RMU-style anchor during post_inner instead of plain CE
+## G0 FAILED (2026-04-08 ~23:00) — post_inner re-learns forget
+G0: fk=0.409 (HURT), rk=0.352 (+0.036). CE steps update forget-dominant neurons too.
+→ G3 created: same as G0 but post_inner_retain_only=True + neuron bitmap mask
+  Only retain-dominant neurons (bitmap=0) get updated during CE recovery.
+  Forget-dominant neurons (bitmap=1) stay frozen.
+  bitmap: trace_analysis/figures/traces/analysis/forget_neuron_bitmap.pt
 
 ## LONGER TERM
 - Once fk + rk both hit targets: run on MUSE Books + WMDP

@@ -97,8 +97,15 @@ run_sibl ablation_G2_npo_more_inner unlearn/muse/ablation_G2_npo_more_inner \
 echo "" | tee -a "$PROGRESS"
 echo "=== [$(date '+%H:%M:%S')] G0/G1/G2 DONE ===" | tee -a "$PROGRESS"
 echo "" | tee -a "$PROGRESS"
-echo "=== SUMMARY (compare to F3 anchor: fk=0.325, rk=0.316, eps=0.70) ===" | tee -a "$PROGRESS"
-for task in ablation_F3_npo_tight_eps ablation_G0_npo_postinner ablation_G1_npo_weak_steering ablation_G2_npo_more_inner; do
+
+# ── G3: F3 + post_inner=100 + neuron bitmap mask (post_inner_retain_only) ────
+echo "=== [G3] F3 + masked post_inner=100 (freeze forget neurons during CE recovery) ===" | tee -a "$PROGRESS"
+run_sibl ablation_G3_npo_masked_postinner unlearn/muse/ablation_G3_npo_masked_postinner \
+    || echo "[WARN] G3 failed" | tee -a "$PROGRESS"
+
+echo "" | tee -a "$PROGRESS"
+echo "=== FULL SUMMARY (F3 anchor: fk=0.325, rk=0.316) ===" | tee -a "$PROGRESS"
+for task in ablation_F3_npo_tight_eps ablation_G0_npo_postinner ablation_G1_npo_weak_steering ablation_G2_npo_more_inner ablation_G3_npo_masked_postinner; do
     ef="saves/unlearn/${task}/evals/MUSE_EVAL.json"
     echo -n "  $task: " | tee -a "$PROGRESS"
     [ -f "$ef" ] && print_metrics "$ef" | tee -a "$PROGRESS" || echo "no eval" | tee -a "$PROGRESS"
