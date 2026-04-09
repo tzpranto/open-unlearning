@@ -126,6 +126,8 @@ class SIBL(UnlearnTrainer):
         # Post-unlearning retention recovery: pure inner steps after T outer iterations
         post_unlearn_inner_steps: int = 0,  # N pure CE inner steps after main loop to recover retention
         post_inner_retain_only: bool = False,  # If True, invert bitmap mask during post-inner (update only retain-dominant neurons)
+        post_inner_soft_mask_path: Optional[str] = None,  # DGA selectivity .pt for soft-masked recovery (overrides binary inversion)
+        post_inner_soft_mask_beta: float = 5.0,  # Sharpness β: α = σ(-β*s); contested neurons get partial updates
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -232,6 +234,8 @@ class SIBL(UnlearnTrainer):
         self._repr_anchor_model = None  # Frozen reference model for inner anchor
         self.post_unlearn_inner_steps = post_unlearn_inner_steps
         self.post_inner_retain_only = post_inner_retain_only
+        self.post_inner_soft_mask_path = post_inner_soft_mask_path
+        self.post_inner_soft_mask_beta = post_inner_soft_mask_beta
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -425,6 +429,38 @@ class SIBL(UnlearnTrainer):
             lpct = 100.0 * s["active"] / max(s["total"], 1)
             logger.info(f"  Layer {lid:2d}: {s['active']:>10,}/{s['total']:>12,} active ({lpct:.2f}%)")
 
+        return mask_dict
+
+    def _build_dga_soft_mask(self, selectivity_dict: dict, beta: float) -> dict:
+        """Build a continuous post-inner recovery mask from DGA selectivity scores.
+
+        α_n = σ(-β * s_n):
+          s_n > 0  (forget-dominant) → α ≈ 0  (frozen during recovery)
+          s_n < 0  (retain-dominant) → α ≈ 1  (fully updated)
+          s_n ≈ 0  (contested)       → α ≈ 0.5 (partial update, damped)
+
+        selectivity_dict: {param_name: tensor(out_features,)}  per-neuron scores
+        beta: sharpness of sigmoid; higher = closer to binary G3 behavior.
+        """
+        mask_dict = {}
+        for name, param in self.model.named_parameters():
+            if name in selectivity_dict:
+                s = selectivity_dict[name].float().to(self.args.device)
+                # Expand per-neuron (out_features,) to full weight shape
+                if s.dim() == 1 and param.dim() == 2:
+                    s = s.unsqueeze(1).expand_as(param.data)
+                elif s.dim() == 1 and param.dim() > 2:
+                    s = s.view(-1, *([1] * (param.dim() - 1))).expand_as(param.data)
+                alpha = torch.sigmoid(-beta * s)
+                mask_dict[name] = alpha.contiguous()
+            else:
+                # Not in selectivity dict (embeddings, layernorm, lm_head) → frozen
+                mask_dict[name] = torch.zeros_like(param.data)
+
+        n_active = sum((m > 0.01).sum().item() for m in mask_dict.values())
+        n_total = sum(m.numel() for m in mask_dict.values())
+        logger.info(f"DGA soft mask built: β={beta}, effective active (>0.01): "
+                    f"{n_active:,}/{n_total:,} ({100*n_active/max(n_total,1):.1f}%)")
         return mask_dict
 
     def _load_neuron_traces_mask(self):
@@ -1902,11 +1938,27 @@ class SIBL(UnlearnTrainer):
                 self.ref_model = None
                 torch.cuda.empty_cache()
 
-            # Masked retention recovery: invert bitmap mask to update ONLY retain-dominant neurons.
-            # Forget-dominant neurons (bitmap=1, mask=1) stay frozen → verbmem stays low.
-            # Retain-dominant neurons (bitmap=0, mask=0) get updated → retain_knowmem recovers.
+            # Determine recovery mask mode:
+            #   1. DGA soft mask (post_inner_soft_mask_path): continuous α = σ(-β*s)
+            #      — contested neurons get partial updates, no binary cliff edge.
+            #   2. Binary bitmap inversion (post_inner_retain_only): exact G3 behavior.
+            #   3. No mask change: standard inner_step with existing mask.
             _saved_mask_dict = None
-            if self.post_inner_retain_only and self.mask_dict is not None:
+            _use_soft_mask = False
+
+            if self.post_inner_soft_mask_path is not None:
+                # DGA soft mask: overrides binary inversion even if post_inner_retain_only=True
+                logger.info(f"Post-inner: DGA soft mask (β={self.post_inner_soft_mask_beta}) "
+                            f"from {self.post_inner_soft_mask_path}")
+                selectivity = torch.load(
+                    self.post_inner_soft_mask_path, map_location="cpu", weights_only=False
+                )
+                _soft_mask = self._build_dga_soft_mask(selectivity, self.post_inner_soft_mask_beta)
+                _use_soft_mask = True
+                # NOTE: we do NOT replace self.mask_dict here — we apply soft_mask inline below
+                # so that inner_step's binary binarization is bypassed.
+
+            elif self.post_inner_retain_only and self.mask_dict is not None:
                 logger.info("Post-inner: inverted mask active — updating only retain-dominant neurons (bitmap=0)")
                 _saved_mask_dict = self.mask_dict
                 _bitmap_params = getattr(self, '_bitmap_params', set())
@@ -1927,7 +1979,28 @@ class SIBL(UnlearnTrainer):
                     data_iter_post = iter(retain_loader_post)
                     combined = next(data_iter_post)
                 retain_batch = combined['retain']
-                self.inner_step(retain_batch)
+
+                if _use_soft_mask:
+                    # Soft-masked update: apply α continuously (NOT binarized).
+                    # inner_step binarizes mask → bypassed here.
+                    self.model.train()
+                    input_ids = retain_batch['input_ids'].to(self.args.device)
+                    attention_mask = retain_batch['attention_mask'].to(self.args.device)
+                    labels = retain_batch.get('labels', input_ids).to(self.args.device)
+                    outputs = self.model(
+                        input_ids=input_ids, attention_mask=attention_mask, labels=labels
+                    )
+                    outputs.loss.backward()
+                    with torch.no_grad():
+                        for name, param in self.model.named_parameters():
+                            if param.grad is not None:
+                                alpha = _soft_mask.get(name)
+                                if alpha is not None:
+                                    param.data.sub_(self.eta_in * param.grad * alpha)
+                            param.grad = None
+                else:
+                    self.inner_step(retain_batch)
+
                 if (k + 1) % 5 == 0 or k == self.post_unlearn_inner_steps - 1:
                     logger.info(f"  Post-inner step {k+1}/{self.post_unlearn_inner_steps} done")
 
