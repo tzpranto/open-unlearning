@@ -1,43 +1,15 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-08 ~19:45
+## For agent continuity. Last updated: 2026-04-09 ~04:35
 
 ---
 
-## BREAKTHROUGH (2026-04-08 18:30)
-F0 (bare NPO, T=25, ε=0.95, K=1, no implicit, no steering): **fk=0.325 — BEATS GOLD (0.328)**
-Retain is 0.290 (bad). All remaining work = recover retain without hurting fk.
-
-## F SERIES COMPLETE (2026-04-08 ~19:30)
-**New anchor: F3** (fk=0.325, rk=0.316, ε=0.70) — strictly better than F0 (same fk, rk +0.026).
-Tighter epsilon gives free retain improvement. G series now builds on F3, not F0.
+## GOLD TARGETS
+- fk ≤ 0.328 (forget knowmem ROUGE)
+- rk ≥ 0.560 (retain knowmem ROUGE)
 
 ---
 
-## ACTIVE STRATEGY: Strip-and-build on F3 (updated anchor)
-
-1. F3 = anchor (fk=0.325, rk=0.316, ε=0.70). Never cross fk > 0.340.
-2. Add one retain-recovery component at a time.
-3. Keep it if rk↑ without fk crossing 0.340.
-4. Combine keepers into G3/G4, then H series with memorization-scored data.
-
-### Full stacking roadmap
-```
-Layer 0: F3 — ε=0.70, bare NPO, fk=0.325 rk=0.316
-Layer 1: G series — one component at a time on F3
-  G0: +post_inner=100   (CE retain after NPO)
-  G1: +steering coeff=5 (gentle activation anchor)
-  G2: +K=5              (more inner retain enforcement)
-Layer 2: Stack keepers → G3 = F3 + best1 + best2
-Layer 3: H series — best_G config + top-50 memorized sequences only
-  H0 = best_G + memorization-filtered data
-Layer 4 (if needed): Neuron masking during post_inner (bitmap from traces)
-         Freeze forget-dominant layers during retain recovery
-         Implicit correction stacked with keepers
-```
-
----
-
-## ALL RESULTS
+## COMPLETE RESULTS TABLE
 
 ### Baselines
 | Method | fk↓ | rk↑ | notes |
@@ -50,112 +22,93 @@ Layer 4 (if needed): Neuron masking during post_inner (bitmap from traces)
 | SimNPO standalone | 0.584 | 0.470 | — |
 
 ### SIBL experiments
-| Exp | fk↓ | rk↑ | config | conclusion |
-|-----|-----|-----|--------|------------|
-| A1a–C4 logit_margin | 0.52–0.54 | 0.46–0.50 | various | DEAD END — hard ceiling at 0.52 |
-| D1 NPO T=75 | 0.490 | 0.461 | ε=0.8, full dataset | too many steps, dilutes signal |
-| D2 NPO+steering T=75 | 0.513 | 0.486 | ε=0.8, full dataset | steering hurts forget at T=75 |
-| **F0 bare NPO T=25** | **0.325** | 0.290 | ε=0.95, K=1, 1 epoch | ✅ BEATS GOLD on forget |
-| F1 +steering coeff=20 | 0.358 | 0.349 | F0+steering | fk too high (+0.033), rk +0.059 |
-| F2 +implicit | 0.335 | 0.312 | F0+Neumann | marginal gains only |
-| **F3 +ε=0.70** | **0.325** | **0.316** | tighter constraint | ✅ NEW ANCHOR — free rk +0.026, fk unchanged |
-| F4 T=25 explicit | 0.359 | 0.311 | epoch override already = 25 steps | worse, T config doesn't override epoch |
-| G0 +post_inner=100 | 0.409 HURT | 0.352 | F3+CE retain after NPO | rk+0.036 but fk blows up — CE re-learns forget |
-| **G1 +steering coeff=5** | **0.274** | **0.327** | F3+gentle steering | ✅ KEEPER — fk improved below F3! |
-| G2 +K=5 inner | 0.314 | 0.310 | F3+more inner steps | marginal, skip |
-| G3 +masked post_inner=100 | ⏳ | ⏳ | F3+post_inner+bitmap mask | running |
-| G3b +masked post_inner=25 | ⏳ | ⏳ | F3+25 steps+bitmap mask | queued |
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| A1a–C4 logit_margin | 0.52–0.54 | 0.46–0.50 | DEAD END — hard ceiling |
+| D1 NPO T=75 | 0.490 | 0.461 | too many steps |
+| D2 NPO+steering T=75 | 0.513 | 0.486 | steering hurts at T=75 |
+| **F0 bare NPO** | **0.325** | 0.290 | ✅ beats gold on fk |
+| F1 +steering coeff=20 | 0.358 | 0.349 | fk too high |
+| F2 +implicit | 0.335 | 0.312 | marginal |
+| **F3 +ε=0.70** | **0.325** | **0.316** | ✅ anchor — free rk +0.026 |
+| F4 T=25 explicit | 0.359 | 0.311 | worse |
+| G0 +post_inner=100 | 0.409 | 0.352 | fk hurt — CE re-learns forget |
+| **G1 +steering coeff=5** | **0.274** | **0.327** | ✅ BEST — fk beats gold, rk +0.011 |
+| G2 +K=5 inner | 0.314 | 0.310 | marginal, skip |
+| G3 masked post_inner=25 | 0.657 | 0.572 | rk near gold but fk destroyed |
+| H0 G1+top50 seqs | 0.005 | 0.020 | COLLAPSED — T=1 step, grad too strong |
 
 ---
 
-## TRACE-GUIDED DATA SAMPLING (NEXT MAJOR IDEA)
+## CURRENT STATE (2026-04-09)
 
-### The "Hogwarts vs boarding school" insight
-Not all forget sequences are equal:
-- **High-memorization** ("Hogwarts"): specific facts, names, dates memorized during fine-tuning.
-  Fine-tuned model assigns much lower perplexity than base model on these.
-  → GOOD forget targets: forgetting these reduces fk without hurting generic language quality.
-- **Low-memorization** ("British boarding school"): generic writing patterns shared with retain.
-  Fine-tuned model ≈ base model perplexity.
-  → BAD forget targets: training on these damages retain without helping fk.
+**Best result: G1** — fk=0.274 ✅ (beats gold 0.328), rk=0.327 ❌ (need 0.560)
+**Gap:** rk needs +0.233 more. fk has 0.054 headroom before hitting gold.
 
-### Memorization score (proxy mechanism)
-```
-memorization_score(seq) = loss_base(seq) / loss_finetuned(seq)
-npo_log_ratio(seq)      = loss_base(seq) - loss_finetuned(seq)
-```
-- `npo_log_ratio > 0` → fine-tuned model is MORE confident than base = memorized
-- `npo_log_ratio ≈ 0` → generic content, shared with base model knowledge
-- High npo_log_ratio = exactly what NPO targets during training
+### What each experiment taught us
+- **G1 (steering coeff=5)**: Light activation steering simultaneously improves BOTH fk and rk vs F3. This is the only component that gives free gains on both axes. Use as anchor going forward.
+- **G3 (masked post_inner)**: Retain-dominant neurons (bitmap=0) also encode some forget content → updating them restores rk=0.572 (near gold!) but destroys fk=0.657. The bitmap separation is not clean enough for post_inner.
+- **H0 (top-50 seqs)**: With 50 samples + accum=32, SIBL derives steps_per_epoch=1 → T=1 outer step. But the top-50 seqs have NPO gradient magnitude up to 140× — one step nukes the model. Need much lower LR or fewer accum steps.
 
-**This is essentially pre-computing the per-sample NPO importance weight before training.**
-
-### Why this should help retain
-Current F0 trains on ALL 25 batches = 800 sequences, many generic.
-Generic sequences = shared representations with retain → training on them corrupts retain.
-If we restrict to top-50 most memorized sequences:
-- Forget signal is concentrated on truly memorized content → fk stays low or better
-- Generic sequences are skipped → less retain collateral damage → rk improves
-
-### Implementation (ready at scripts/score_forget_memorization.py)
-```bash
-# Run AFTER GPU is free (needs both models loaded):
-python scripts/score_forget_memorization.py \
-    --finetuned_model muse-bench/MUSE-News_target \
-    --base_model /datadrive/... (local Llama-2-7b-hf) \
-    --top_k 50 \
-    --hard_forget_path data/hard_forget_news.jsonl
-```
-Outputs:
-- `trace_analysis/figures/traces/analysis/forget_memorization_scores.json` — full ranking
-- `data/hard_forget_news.jsonl` — top-50 sequences for targeted training
-
-### Next experiment after scoring
-- H0: F0 config but forget dataset = top-50 memorized sequences only
-  - T=10 steps over 50 sequences (2 full passes) vs T=25 over 800
-  - Expect: fk similar or better, rk better (less generic damage)
-- H1: H0 + best G retain component
-
-### Literature backing
-- Carlini et al. 2022 "Quantifying Memorization Across Neural LMs" — same metric
-- NPO loss is implicitly per-sample importance weighting via log ratio
-- ROME/MEMIT: target interventions to most causally relevant facts
-- MUSE paper: forget set contains varying memorization levels by design
+### Key insight from G3 vs H0
+G3 tells us: rk CAN reach 0.572 — that's the ceiling we know is achievable. The problem is fk.
+H0 tells us: targeted forgetting on the 50 most memorized seqs is too nuclear per-step.
 
 ---
 
-## KEY INSIGHTS (confirmed)
+## ACTIVE HYPOTHESES (what to try next)
 
-1. **logit_margin = dead end** — hard ceiling at fk≈0.52, never beats gold
-2. **T=75 full dataset = too diluted** — NPO with T=25 (1 epoch) gets fk=0.325, T=75 gets 0.490
-3. **Steering coeff=20 hurts forget** — too strong, dominates NPO signal. Try coeff=5.
-4. **post_inner FAILED before because forgetting was insufficient** — now NPO forgets (fk=0.325), CE retain recovery should work (G0 tests this)
-5. **ε=0.95 ≈ unconstrained** — ALM constraint almost never fires, NPO runs free → good forget
-6. **K=1** — almost no retain enforcement during training. Retain gap comes from this.
+### Priority 1: Fix H series — calibrate step count for 50-seq dataset
+H0 collapsed because T=1 step on ultra-high-memorization sequences.
+Fix options:
+- **H1**: Reduce `gradient_accumulation_steps` from 32 to 4 → steps_per_epoch=50//4=12, T=12. Softer per-step signal. Keep G1 config (steering coeff=5).
+- **H2**: Same as H1 but also lower npo_beta from 2.0 to 0.5 (less aggressive NPO per step).
+- **H3**: Don't use top-50 alone. Instead use top-50 as a weighted subset within the full 800 (sample with replacement, overweight hard seqs). More diverse gradient signal.
+
+### Priority 2: G1 + rk recovery without destroying fk
+G1 is our anchor (fk=0.274). How to push rk from 0.327 → 0.560 without fk regression:
+- **G4**: G1 + lower ε (tighter retain constraint). F3 showed ε=0.70 gave free +0.026 rk. Try ε=0.50.
+- **G5**: G1 + implicit correction (F2 gave +0.022 rk at F3 level). Stack with G1.
+- **G6**: G1 + more epochs (2-3 epochs instead of 1). More NPO steps → more forget → might drift fk up but rk may follow.
+
+### Priority 3: Combine G3's rk power with G1's fk power
+G3 got rk=0.572 but fk=0.657. G1 got fk=0.274 but rk=0.327.
+- **G7**: G1 + G3 stacked: first run G1 (steering, full 800 seqs) → then run G3 (masked post_inner=25) ON TOP of G1 output. Two-stage approach.
+- Risk: G3's post_inner may undo G1's fk gains. Need to check if the bitmap mask is good enough.
+
+---
+
+## MEMORIZATION SCORING RESULTS
+- Scorer completed: `data/hard_forget_news.jsonl` (top-50 by npo_log_ratio)
+- Stats: mean=7.201, min=0.902, max=140.089
+- ALL 802 sequences are memorized (score > 1.5) — no generic samples found
+- Top-50 are extreme outliers (score ~20-140). Very strong NPO signal.
 
 ---
 
 ## RUNNER STATE
 ```bash
-# F series DONE. G series launching now (2026-04-08 ~19:45).
-# G configs updated to use F3 anchor (ε=0.70 instead of 0.95).
-# Progress: /tmp/ablation_G_progress.log
-bash scripts/run_G_series.sh
+# All logs: logs/ablation/
+# H series: logs/ablation/H_progress.log
+# G series: logs/ablation/G_progress.log
+# Cron monitor: every 5 min (durable, job id: e1509b8c)
 
-# After G series, score memorization and run H series:
-python scripts/score_forget_memorization.py --top_k 50 --hard_forget_path data/hard_forget_news.jsonl
-bash scripts/run_H_series.sh  # (to be created after G results)
+# Next to run (decide based on priorities above):
+bash scripts/run_H_series.sh   # after updating configs for H1/H2
 ```
 
 ---
 
-## G0 FAILED (2026-04-08 ~23:00) — post_inner re-learns forget
-G0: fk=0.409 (HURT), rk=0.352 (+0.036). CE steps update forget-dominant neurons too.
-→ G3 created: same as G0 but post_inner_retain_only=True + neuron bitmap mask
-  Only retain-dominant neurons (bitmap=0) get updated during CE recovery.
-  Forget-dominant neurons (bitmap=1) stay frozen.
-  bitmap: trace_analysis/figures/traces/analysis/forget_neuron_bitmap.pt
+## BUGS FIXED THIS SESSION
+1. G series runner logged to /tmp → moved to logs/ablation/ (persists restart)
+2. Memorization scorer: wrong dataset config (needed 'raw' config name)
+3. Memorization scorer: tokenizer loaded from muse-bench model (no tokenizer files) → now uses base_model path
+4. post_inner_retain_only mask inversion: non-bitmap params got mask=ones after inversion → now stay frozen
+5. H0 dataset config: PretrainingDataset needs `path="json"`, `data_files=...`, `split="train"` for local jsonl
+
+---
 
 ## LONGER TERM
 - Once fk + rk both hit targets: run on MUSE Books + WMDP
-- Publish as DS-BiAL: bilevel NPO with trace-guided sample selection + staged retain recovery
+- Baselines still needed: BLURNPO (checkpoint at saves/), RMU (needs fresh run)
+- Publish as DS-BiAL: bilevel NPO + trace-guided sample selection + staged retain recovery
