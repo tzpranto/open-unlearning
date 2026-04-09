@@ -38,12 +38,23 @@
 | G3 masked post_inner=25 | 0.657 | 0.572 | rk near gold but fk destroyed |
 | H0 G1+top50 seqs | 0.005 | 0.020 | COLLAPSED — T=1 step, grad too strong |
 
+### I series (DGA soft-masked recovery) — 2026-04-09
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| I1 G1+soft β=5.0 | 0.342 | 0.341 | fk regressed +0.068 vs G1, rk only +0.014 |
+| I2a β=1.0 | 0.357 | 0.338 | worse — low β = near-uniform CE, more re-learning |
+| I2b β=3.0 | pending | — | running |
+| I2c β=10.0 | pending | — | running |
+| I2d β=20.0 | pending | — | queued |
+
 ---
 
-## CURRENT STATE (2026-04-09)
+## CURRENT STATE (2026-04-09, updated ~13:05)
 
 **Best result: G1** — fk=0.274 ✅ (beats gold 0.328), rk=0.327 ❌ (need 0.560)
 **Gap:** rk needs +0.233 more. fk has 0.054 headroom before hitting gold.
+
+**I series early verdict:** DGA soft mask is not working as hoped. Both I1 (β=5) and I2a (β=1) show fk *regression* with only marginal rk gain. The soft mask during CE recovery is still letting forget content re-learn regardless of sharpness. β sweep (β=3,10,20) in progress — unlikely to reverse the trend.
 
 ### What each experiment taught us
 - **G1 (steering coeff=5)**: Light activation steering simultaneously improves BOTH fk and rk vs F3. This is the only component that gives free gains on both axes. Use as anchor going forward.
@@ -56,7 +67,27 @@ H0 tells us: targeted forgetting on the 50 most memorized seqs is too nuclear pe
 
 ---
 
+## I SERIES POST-MORTEM (2026-04-09)
+
+**Why DGA soft mask failed:**
+The CE recovery steps (post_inner) update params using the retain dataloader. Even with α=0.5 on contested neurons, 25 steps of CE is enough to partially restore forget-content representations. The problem isn't just WHICH neurons get updated — it's that ANY update to shared/contested neurons re-activates the forget pathway. The gradient-based selectivity score identifies which neurons NPO pushes through, but it doesn't capture cross-neuron interference: updating retain-dominant neurons at higher layers can restore outputs that forget-dominant neurons at lower layers had degraded.
+
+**Key insight from β sweep trend:**
+- β=1 (near-uniform α≈0.5): fk=0.357 (worst) — most re-learning
+- β=5 (I1): fk=0.342 — better
+- β→∞ (approaches binary G3): fk will approach G3's 0.657 — still bad
+- There is no β where fk is protected AND rk recovers — the CE recovery is fundamentally at odds with the NPO forgetting regardless of mask sharpness.
+
+**Conclusion:** Post-inner CE recovery as a rk-recovery strategy is broken for this dataset. The entire post_inner approach (G3, I series) fails because forget and retain knowledge are too entangled in the same weight subspace.
+
 ## ACTIVE HYPOTHESES (what to try next)
+
+### Priority 0: Abandon post_inner recovery — try rk improvement within the outer loop
+Post-inner CE recovery (G3, I series) is a dead end. rk must be improved during training:
+- **G4**: G1 + lower ε=0.50 (tighter retain constraint, forces λ to drive retain harder)
+- **G5**: G1 + implicit correction (F2 gave +0.022 rk at F3 level — stack with G1)
+- **G6**: G1 + more epochs (2-3 instead of 1, more NPO+retain bilevel iterations)
+- **I3**: DGA scored on pretrained model (not G1) — may give cleaner neuron separation
 
 ### Priority 1: Fix H series — calibrate step count for 50-seq dataset
 H0 collapsed because T=1 step on ultra-high-memorization sequences.
