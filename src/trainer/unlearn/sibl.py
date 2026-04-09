@@ -12,6 +12,7 @@ Supports multiple forget loss functions and regularization methods:
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import time
 import copy
 import logging
@@ -128,6 +129,14 @@ class SIBL(UnlearnTrainer):
         post_inner_retain_only: bool = False,  # If True, invert bitmap mask during post-inner (update only retain-dominant neurons)
         post_inner_soft_mask_path: Optional[str] = None,  # DGA selectivity .pt for soft-masked recovery (overrides binary inversion)
         post_inner_soft_mask_beta: float = 5.0,  # Sharpness β: α = σ(-β*s); contested neurons get partial updates
+        # KL-anchored inner loop: replace CE with KL(pretrained || model) to prevent forget re-learning
+        inner_loss_type: str = "ce",  # "ce" (default) or "kl_pretrained" — inner loop retain loss
+        inner_kl_temperature: float = 2.0,  # Temperature for KL distillation (higher = softer)
+        post_inner_loss_type: str = "ce",  # "ce" or "kl_pretrained" — post-inner recovery loss
+        # Trace-guided implicit: only correct retain-dominant neuron gradients (prevents overcorrection)
+        implicit_trace_guided: bool = False,  # Blend implicit correction using mask (retain-only correction)
+        implicit_trace_threshold: float = 0.5,  # Mask values above this → skip implicit (keep original forget gradient)
+        checkpoint_every_steps: int = 0,  # Save checkpoint every N outer steps (0 = disabled); for trajectory analysis
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -236,6 +245,12 @@ class SIBL(UnlearnTrainer):
         self.post_inner_retain_only = post_inner_retain_only
         self.post_inner_soft_mask_path = post_inner_soft_mask_path
         self.post_inner_soft_mask_beta = post_inner_soft_mask_beta
+        self.inner_loss_type = inner_loss_type
+        self.inner_kl_temperature = inner_kl_temperature
+        self.post_inner_loss_type = post_inner_loss_type
+        self.implicit_trace_guided = implicit_trace_guided
+        self.implicit_trace_threshold = implicit_trace_threshold
+        self.checkpoint_every_steps = checkpoint_every_steps
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -277,6 +292,12 @@ class SIBL(UnlearnTrainer):
         # Log configuration
         logger.info(f"SIBL configured with forget_loss_type={forget_loss_type}, "
                    f"regularization_type={regularization_type}")
+        if self.inner_loss_type != "ce":
+            logger.info(f"Inner loop loss: {self.inner_loss_type} (T={self.inner_kl_temperature})")
+        if self.post_inner_loss_type != "ce":
+            logger.info(f"Post-inner recovery loss: {self.post_inner_loss_type}")
+        if self.implicit_trace_guided:
+            logger.info(f"Trace-guided implicit: threshold={self.implicit_trace_threshold}")
         if self.use_implicit:
             logger.info(f"Neumann variant: {self.neumann_variant}")
         if self.debug_implicit:
@@ -638,6 +659,33 @@ class SIBL(UnlearnTrainer):
         )
         return outputs.loss
 
+    def _kl_loss_from_ref(self, student_logits, input_ids, attention_mask, labels):
+        """Compute KL(p_ref || p_model) for distillation from frozen reference model.
+
+        Used in inner loop and post-inner recovery when loss_type='kl_pretrained'.
+        The reference model (pretrained) serves as teacher — its retain-data distribution
+        anchors the student without re-learning forget content through shared weights.
+        """
+        T = self.inner_kl_temperature
+        with torch.no_grad():
+            ref_out = self.ref_model(input_ids=input_ids, attention_mask=attention_mask)
+            ref_logits = ref_out.logits
+
+        # Shift for autoregressive alignment (predict next token)
+        s_logits = student_logits[..., :-1, :].contiguous() / T
+        r_logits = ref_logits[..., :-1, :].contiguous() / T
+        valid = (labels[..., 1:] != -100).float()
+
+        # KL(teacher || student) per token, summed over vocab
+        kl = F.kl_div(
+            F.log_softmax(s_logits, dim=-1),
+            F.softmax(r_logits, dim=-1),
+            reduction='none'
+        ).sum(dim=-1)  # (batch, seq-1)
+
+        # Masked average, scaled by T^2 (standard distillation scaling)
+        return (kl * valid).sum() / valid.sum().clamp(min=1) * (T ** 2)
+
     def compute_sparsity_regularizer(self):
         """
         Compute sparsity regularizer using the configured regularization type.
@@ -692,7 +740,12 @@ class SIBL(UnlearnTrainer):
             attention_mask=attention_mask,
             labels=labels
         )
-        loss = outputs.loss
+
+        # KL distillation from pretrained model instead of CE for inner retain loss
+        if self.inner_loss_type == "kl_pretrained" and self.ref_model is not None:
+            loss = self._kl_loss_from_ref(outputs.logits, input_ids, attention_mask, labels)
+        else:
+            loss = outputs.loss
 
         # Representation anchor: penalize drift of retain activations from reference model
         if self.inner_repr_anchor and self._repr_anchor_model is not None:
@@ -895,7 +948,13 @@ class SIBL(UnlearnTrainer):
                 )
                 corr_parts = self.unflatten_params(g_corr_flat, [g_alm_dict[name] for name in names])
                 for name, corr in zip(names, corr_parts):
-                    g_alm_dict[name] = corr
+                    if self.implicit_trace_guided and name in self.mask_dict:
+                        # Blend: forget-dominant neurons keep original gradient,
+                        # retain/contested neurons get implicit-corrected gradient
+                        keep_orig = (self.mask_dict[name] > self.implicit_trace_threshold).float()
+                        g_alm_dict[name] = keep_orig * g_alm_dict[name] + (1.0 - keep_orig) * corr
+                    else:
+                        g_alm_dict[name] = corr
 
                 if self.debug_implicit:
                     self._log_implicit_debug_record({
@@ -1542,8 +1601,15 @@ class SIBL(UnlearnTrainer):
             # FD-HVP loss functions: recompute from current model state (no create_graph needed)
             # These are closures over retain_batch / forget_batch captured here.
             def _inner_loss_fn():
-                """Recompute inner loss: retain CE + regularization."""
-                l = self.compute_retain_loss(retain_batch)
+                """Recompute inner loss (CE or KL) + regularization."""
+                if self.inner_loss_type == "kl_pretrained" and self.ref_model is not None:
+                    _ids = retain_batch['input_ids'].to(self.args.device)
+                    _mask = retain_batch['attention_mask'].to(self.args.device)
+                    _labels = retain_batch.get('labels', _ids).to(self.args.device)
+                    _out = self.model(input_ids=_ids, attention_mask=_mask, labels=_labels)
+                    l = self._kl_loss_from_ref(_out.logits, _ids, _mask, _labels)
+                else:
+                    l = self.compute_retain_loss(retain_batch)
                 l = l + self.compute_sparsity_regularizer()
                 return l
 
@@ -1641,7 +1707,11 @@ class SIBL(UnlearnTrainer):
                         self.model.named_parameters(), correction_unflattened
                     ):
                         if name in g_alm_dict:
-                            g_alm_dict[name] = g_update
+                            if self.implicit_trace_guided and name in self.mask_dict:
+                                keep_orig = (self.mask_dict[name] > self.implicit_trace_threshold).float()
+                                g_alm_dict[name] = keep_orig * g_alm_dict[name] + (1.0 - keep_orig) * g_update
+                            else:
+                                g_alm_dict[name] = g_update
                 else:
                     # CG path: solve (H_inner + damping)*h = v with v = masked g_alm (outer gradient)
                     v = g_alm_flat * mask_flat
@@ -1737,7 +1807,11 @@ class SIBL(UnlearnTrainer):
 
         # Eagerly initialize NPO reference model so it snapshots the ORIGINAL model
         # (before any inner/outer steps). Lazy init risks snapshotting a post-inner model.
-        if self.forget_loss_type == "npo" and self.ref_model is None:
+        # Also needed when inner_loss_type or post_inner_loss_type is kl_pretrained.
+        needs_ref = (self.forget_loss_type == "npo"
+                     or self.inner_loss_type == "kl_pretrained"
+                     or self.post_inner_loss_type == "kl_pretrained")
+        if needs_ref and self.ref_model is None:
             self._prepare_ref_model()
 
         # Initialize inner representation anchor model if needed
@@ -1829,6 +1903,11 @@ class SIBL(UnlearnTrainer):
             mix = "steering_only" if self.steering_only else f"mixed (α={self.steering_alpha})"
             logger.info(f"Activation steering: enabled (layers={self.steering_layers}, coeff={self.steering_coeff}, mode={mode}, {mix})")
 
+        if self.inner_loss_type != "ce":
+            logger.info(f"Inner loop loss: {self.inner_loss_type} (T_kl={self.inner_kl_temperature})")
+        if self.implicit_trace_guided:
+            logger.info(f"Trace-guided implicit: blending threshold={self.implicit_trace_threshold}")
+
         for t in range(effective_T):
             t_start = time.time()
 
@@ -1896,6 +1975,12 @@ class SIBL(UnlearnTrainer):
             # Update training state
             self.state.global_step = t + 1
 
+            # Per-step checkpoint saving (for trajectory analysis)
+            if self.checkpoint_every_steps > 0 and (t + 1) % self.checkpoint_every_steps == 0:
+                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-step-{t+1}")
+                logger.info(f"Saving step checkpoint to {ckpt_dir}")
+                self.model.save_pretrained(ckpt_dir)
+
             if (
                 self.debug_stop_after_outer is not None
                 and t >= self.debug_stop_after_outer
@@ -1931,12 +2016,14 @@ class SIBL(UnlearnTrainer):
             _saved_anchor = self.inner_repr_anchor
             self.inner_repr_anchor = False
 
-            # Free NPO reference model — no longer needed, frees ~14GB for post-inner steps
-            if self.ref_model is not None:
+            # Free NPO reference model — no longer needed (unless KL post-inner needs it)
+            if self.ref_model is not None and self.post_inner_loss_type != "kl_pretrained":
                 logger.info("Freeing NPO reference model before post-inner recovery (saves ~14GB GPU memory)...")
                 del self.ref_model
                 self.ref_model = None
                 torch.cuda.empty_cache()
+            elif self.post_inner_loss_type == "kl_pretrained" and self.ref_model is not None:
+                logger.info("Keeping NPO reference model for KL post-inner recovery")
 
             # Determine recovery mask mode:
             #   1. DGA soft mask (post_inner_soft_mask_path): continuous α = σ(-β*s)
@@ -1970,6 +2057,12 @@ class SIBL(UnlearnTrainer):
                     for name, mask in self.mask_dict.items()
                 }
 
+            # Temporarily swap inner_loss_type if post_inner_loss_type differs
+            _saved_inner_loss_type = self.inner_loss_type
+            if self.post_inner_loss_type != "ce" and self.post_inner_loss_type != self.inner_loss_type:
+                logger.info(f"Post-inner: overriding inner_loss_type {self.inner_loss_type} → {self.post_inner_loss_type}")
+                self.inner_loss_type = self.post_inner_loss_type
+
             retain_loader_post = self.get_train_dataloader()
             data_iter_post = iter(retain_loader_post)
             for k in range(self.post_unlearn_inner_steps):
@@ -1990,7 +2083,12 @@ class SIBL(UnlearnTrainer):
                     outputs = self.model(
                         input_ids=input_ids, attention_mask=attention_mask, labels=labels
                     )
-                    outputs.loss.backward()
+                    # KL or CE loss for recovery
+                    if self.inner_loss_type == "kl_pretrained" and self.ref_model is not None:
+                        recovery_loss = self._kl_loss_from_ref(outputs.logits, input_ids, attention_mask, labels)
+                    else:
+                        recovery_loss = outputs.loss
+                    recovery_loss.backward()
                     with torch.no_grad():
                         for name, param in self.model.named_parameters():
                             if param.grad is not None:
@@ -2004,11 +2102,19 @@ class SIBL(UnlearnTrainer):
                 if (k + 1) % 5 == 0 or k == self.post_unlearn_inner_steps - 1:
                     logger.info(f"  Post-inner step {k+1}/{self.post_unlearn_inner_steps} done")
 
+            # Restore inner_loss_type
+            self.inner_loss_type = _saved_inner_loss_type
+
             # Restore original mask
             if _saved_mask_dict is not None:
                 self.mask_dict = _saved_mask_dict
 
             self.inner_repr_anchor = _saved_anchor
+            # Free ref_model now if it was kept for KL post-inner
+            if self.ref_model is not None and self.post_inner_loss_type == "kl_pretrained":
+                del self.ref_model
+                self.ref_model = None
+                torch.cuda.empty_cache()
             logger.info("Post-unlearning retention recovery complete.")
 
         self.save_model()
