@@ -223,6 +223,8 @@ def main():
     parser.add_argument("--forget_config", default="raw")
     parser.add_argument("--forget_split", default="forget")
     parser.add_argument("--retain_dataset", default="muse-bench/MUSE-News")
+    parser.add_argument("--retain_config", default="raw",
+                        help="Dataset config name for retain (e.g. 'raw')")
     parser.add_argument("--retain_split", default="retain1")
     parser.add_argument("--output_path",
                         default="trace_analysis/figures/traces/analysis/dga_selectivity_G1.pt")
@@ -277,8 +279,8 @@ def main():
     print(f"  Forget sequences: {len(forget_texts)}")
 
     # ── Load retain data ───────────────────────────────────────────────────────
-    print(f"Loading retain data: {args.retain_dataset} split={args.retain_split}")
-    retain_ds = load_dataset(args.retain_dataset, split=args.retain_split)
+    print(f"Loading retain data: {args.retain_dataset} config={args.retain_config} split={args.retain_split}")
+    retain_ds = load_dataset(args.retain_dataset, args.retain_config, split=args.retain_split)
     text_col_r = "text" if "text" in retain_ds.column_names else retain_ds.column_names[0]
     retain_texts = [row[text_col_r] for row in retain_ds]
     if args.max_retain > 0:

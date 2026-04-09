@@ -98,7 +98,7 @@ else
         --ref_model muse-bench/MUSE-News_target \
         --tokenizer_path meta-llama/Llama-2-7b-hf \
         --forget_dataset muse-bench/MUSE-News --forget_config raw --forget_split forget \
-        --retain_dataset muse-bench/MUSE-News --retain_split retain1 \
+        --retain_dataset muse-bench/MUSE-News --retain_config raw --retain_split retain1 \
         --output_path "${DGA_SCORES}" \
         --max_forget 0 --max_retain 200 --max_length 512 --npo_beta 2.0 --attn_impl sdpa \
         2>&1 | tee "${LOG_DIR}/I0_dga_scoring.log"
