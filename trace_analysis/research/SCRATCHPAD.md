@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-09 ~22:15 (M series designed + launched)
+## For agent continuity. Last updated: 2026-04-09 ~23:25 (M series results + N series designed)
 
 ---
 
@@ -69,6 +69,15 @@
 | K2 step 25 | 0.309 | 0.326 | G1 final (same as full run) |
 | G5 (G1+implicit) | 0.429 | 0.399 | implicit +0.072 rk but +0.155 fk — overcorrects |
 | K1a (G1+projection) | 0.356 | 0.351 | projection +0.024 rk but +0.082 fk — same pattern |
+
+### M series (KL-anchored bilevel) — 2026-04-09 ✅ COMPLETE
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| M4 KL post-inner | 0.650 | 0.549 | fk DESTROYED — same as G3 CE (0.657). **KL doesn't protect fk** |
+| M0 KL inner only | 0.398 | 0.362 | fk HURT +0.124, rk only +0.034 — mild benefit |
+| M1 KL inner+post | 0.662 | **0.563** | rk GOLD but fk destroyed. Confirms: post-inner kills fk regardless of loss |
+| M2 KL+implicit | 0.658 | 0.556 | Bitmap restricts NPO too much → near-pretrained fk |
+| M3 full pipeline | 0.655 | 0.553 | Same pattern: bitmap kills forget, retain preserved |
 
 **K2 diagnosis:** rk plateaus at ~0.326 at EVERY step — not a step-count problem. The damage is baked into the NPO gradient direction from step 1.
 **G5/K1a pattern:** Both implicit and projection improve rk marginally (+0.024 to +0.072) but always at the cost of fk regression. The gradient corrections are not selective enough — they protect retain but at the expense of forgetting.
@@ -264,11 +273,60 @@ This is fundamentally different from CE: KL matches distributions (smooth signal
 - Ref model reused from NPO (no extra memory cost)
 - Ref model kept alive during KL post-inner (not deleted as with CE recovery)
 
+### M Series Results (2026-04-09 23:20)
+
+**M4** (KL post-inner): fk=0.650, rk=0.549 — KL does NOT protect fk vs CE (G3=0.657). Post-inner recovery is loss-function-agnostic dead end.
+
+**M0** (KL inner only, no bitmap): fk=0.398, rk=0.362 — The only M experiment that didn't wreck fk. L_fgt collapsed to 0.05 by step 3 (NPO working hard), but KL inner loop changes bilevel dynamics significantly. rk marginal gain (+0.034).
+
+**M1** (KL inner + KL post-inner): fk=0.662, rk=0.563 (GOLD!) — rk achieves gold, confirming G3's finding. But fk is destroyed by post-inner recovery. The bitmap + post-inner combination consistently reaches rk~0.56 but always at fk~0.66.
+
+**M2** (KL inner + trace-guided implicit, NO post-inner): fk=0.658, rk=0.556 — Surprising: rk~0.556 WITHOUT post-inner recovery! The bitmap protection alone (freezing retain neurons in outer, modifying them only in inner) preserves retain. But the bitmap restricts NPO to 15-25% of neurons, crippling forget (fk~0.65 ≈ pretrained=0.644).
+
+### M Series Post-Mortem — CRITICAL DISCOVERY
+
+**The bitmap inner mask bug:** All bitmap experiments (M1, M2, M4, G3) share a bug: the inner step uses `binary_mask = (mask > 0)`, which with bitmap means inner loop updates the SAME neurons as outer (forget-dominant). Retain-dominant neurons are NEVER updated during the bilevel loop. Only post-inner recovery touches them.
+
+**Why bitmap experiments get fk~0.65:** NPO restricted to 15-25% forget-dominant neurons is not enough to break the forget pathway. The pretrained model uses ALL neurons for forget; modifying only forget-dominant neurons barely moves fk from pretrained (0.644).
+
+**The fix (N series):** Invert the inner mask → inner updates RETAIN neurons, outer updates FORGET neurons. Two variants:
+1. **N0**: Bitmap outer (forget-only NPO) + inverted inner (retain-only CE) — disjoint parameter subsets
+2. **N4** (MOST PROMISING): Full outer (all params NPO, like G1) + inverted inner (retain-only CE) — G1-level forget + targeted inner retain
+
+N4 is key because:
+- Outer NPO on all params = G1-level fk (0.274)
+- Inner CE on retain neurons only = focused retain recovery
+- Inner loop doesn't touch forget neurons → NPO's forget is uncontested between steps
+- G1's inner loop wastes gradient on forget neurons (which doesn't help retain); N4 concentrates inner gradient on retain neurons
+
+---
+
+## N SERIES — Complementary Bilevel with Inverted Inner Mask (2026-04-09)
+
+### Root Cause Fix
+The bitmap mask creates natural forget/retain neuron separation from trace analysis. But previous experiments applied the SAME mask to both inner and outer loops → both operated on forget-dominant neurons → retain neurons never updated → needed post-inner recovery (which kills fk).
+
+**Fix: inner mask = 1 - outer mask.** Inner updates retain neurons, outer updates forget neurons.
+
+### N Series Experiments
+| Exp | Config | What it tests |
+|-----|--------|---------------|
+| N4 | Full outer + inverted inner (CE) | **MOST PROMISING**: G1-level NPO + targeted inner retain |
+| N0 | Bitmap outer + inverted inner (CE) | Clean disjoint separation (may have weak forget) |
+| N1 | N0 + KL inner | Bounded inner optimization on retain neurons |
+| N2 | N0 + K=3 inner | More inner steps (safe with disjoint params) |
+| N3 | N0 + trace-guided implicit | 2nd-order correction on correct subspace |
+
+### Implementation (sibl.py changes)
+- `invert_inner_mask: bool = False` — inner step uses (1 - bitmap) instead of bitmap
+- `outer_full_model: bool = False` — when True + inverted inner: outer mask = ones (full model)
+- `inner_mask_dict: dict` — built at train() start from inverted bitmap
+- Inner step checks `inner_mask_dict` first, falls back to `mask_dict`
+
 ### Expected Outcomes
-- **M4 (most informative)**: If fk stays near G1's 0.274 while rk approaches G3's 0.572, KL recovery is the breakthrough. G3 proved rk=0.572 achievable; KL should protect fk.
-- **M0**: If rk improves vs G1 without fk regression, KL inner loop is beneficial for bilevel training. The pretrained anchor prevents the inner loop from drifting in ways that damage forget.
-- **M2**: If rk improves AND fk stays controlled (unlike G5's 0.429/0.399), trace-guided implicit is the right way to use 2nd-order correction in unlearning.
-- **M3**: Full pipeline should give best combined result.
+- **N4**: fk near G1's 0.274 (full NPO), rk improved (inner focused on retain). This is the bilevel architecture that SHOULD work.
+- **N0**: fk ~0.65 (bitmap restricts NPO, like M2). rk improved (inner on retain, not forget).
+- **N2**: If K=3 is safe with disjoint params, rk should improve further.
 
 ---
 

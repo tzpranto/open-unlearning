@@ -133,6 +133,12 @@ class SIBL(UnlearnTrainer):
         inner_loss_type: str = "ce",  # "ce" (default) or "kl_pretrained" — inner loop retain loss
         inner_kl_temperature: float = 2.0,  # Temperature for KL distillation (higher = softer)
         post_inner_loss_type: str = "ce",  # "ce" or "kl_pretrained" — post-inner recovery loss
+        # Inverted inner mask: when bitmap loaded, inner loop updates RETAIN-dominant neurons (1-mask)
+        # instead of forget-dominant neurons. Creates complementary inner/outer parameter subsets.
+        invert_inner_mask: bool = False,
+        # When True + bitmap + invert_inner_mask: outer uses full model (mask=ones) while inner uses
+        # inverted bitmap. Gets G1-level forget (full NPO) + targeted inner retain recovery.
+        outer_full_model: bool = False,
         # Trace-guided implicit: only correct retain-dominant neuron gradients (prevents overcorrection)
         implicit_trace_guided: bool = False,  # Blend implicit correction using mask (retain-only correction)
         implicit_trace_threshold: float = 0.5,  # Mask values above this → skip implicit (keep original forget gradient)
@@ -248,6 +254,8 @@ class SIBL(UnlearnTrainer):
         self.inner_loss_type = inner_loss_type
         self.inner_kl_temperature = inner_kl_temperature
         self.post_inner_loss_type = post_inner_loss_type
+        self.invert_inner_mask = invert_inner_mask
+        self.outer_full_model = outer_full_model
         self.implicit_trace_guided = implicit_trace_guided
         self.implicit_trace_threshold = implicit_trace_threshold
         self.checkpoint_every_steps = checkpoint_every_steps
@@ -288,6 +296,7 @@ class SIBL(UnlearnTrainer):
 
         # Initialize sparsity mask (will be created when training starts)
         self.mask_dict = None
+        self.inner_mask_dict = None  # Built after bitmap loading when invert_inner_mask=True
 
         # Log configuration
         logger.info(f"SIBL configured with forget_loss_type={forget_loss_type}, "
@@ -792,7 +801,8 @@ class SIBL(UnlearnTrainer):
         loss_total.backward()
 
         # Masked gradient update with layer-wise LR scaling
-        # Inner step uses binary gating (mask > 0) so retain LR is uniform
+        # When inner_mask_dict is set (inverted bitmap), inner updates RETAIN-dominant neurons.
+        # Otherwise falls back to default (mask > 0 = forget-dominant neurons).
         with torch.no_grad():
             for name, param in self.model.named_parameters():
                 if param.grad is not None and name in self.mask_dict:
@@ -801,7 +811,10 @@ class SIBL(UnlearnTrainer):
                         layer_id = self._layer_id_from_param_name(name)
                         if layer_id is not None and layer_id in self.retain_protection_layers:
                             lr = self.eta_in * self.retain_lr_multiplier
-                    binary_mask = (self.mask_dict[name] > 0).float()
+                    if self.inner_mask_dict is not None and name in self.inner_mask_dict:
+                        binary_mask = (self.inner_mask_dict[name] > 0).float()
+                    else:
+                        binary_mask = (self.mask_dict[name] > 0).float()
                     param.data.sub_(lr * param.grad * binary_mask)
                 param.grad = None
 
@@ -1805,6 +1818,32 @@ class SIBL(UnlearnTrainer):
         if self.mask_dict is None:
             self._initialize_mask()
 
+        # Build inverted inner mask when bitmap is loaded and invert_inner_mask is enabled.
+        # Inner loop updates RETAIN-dominant neurons (1 - bitmap), outer keeps bitmap as-is.
+        if self.invert_inner_mask and self.neuron_bitmap_path and self.inner_mask_dict is None:
+            self.inner_mask_dict = {}
+            bitmap_params = getattr(self, '_bitmap_params', set())
+            for name, mask in self.mask_dict.items():
+                if name in bitmap_params:
+                    self.inner_mask_dict[name] = (1.0 - mask)
+                else:
+                    # Non-bitmap params (embeddings, layernorm, lm_head) stay frozen
+                    self.inner_mask_dict[name] = mask.clone()
+            n_inner = sum((m > 0).sum().item() for m in self.inner_mask_dict.values())
+            n_total = sum(m.numel() for m in self.inner_mask_dict.values())
+            logger.info(f"Inverted inner mask: {n_inner:,}/{n_total:,} active ({100*n_inner/max(n_total,1):.2f}%) "
+                        f"— inner loop updates RETAIN-dominant neurons only")
+
+        # After building inner_mask_dict, optionally reset outer mask to full model.
+        # This gives G1-level forget (NPO on all params) + targeted inner retain (inverted bitmap).
+        if self.outer_full_model and self.invert_inner_mask and self.inner_mask_dict is not None:
+            bitmap_params = getattr(self, '_bitmap_params', set())
+            for name, param in self.model.named_parameters():
+                if name in bitmap_params:
+                    self.mask_dict[name] = torch.ones_like(param.data).to(self.args.device)
+                # Non-bitmap params stay frozen (zeros) — consistent with bitmap behavior
+            logger.info("Outer full model: outer mask reset to ones for bitmap params (full NPO like G1)")
+
         # Eagerly initialize NPO reference model so it snapshots the ORIGINAL model
         # (before any inner/outer steps). Lazy init risks snapshotting a post-inner model.
         # Also needed when inner_loss_type or post_inner_loss_type is kl_pretrained.
@@ -1905,6 +1944,8 @@ class SIBL(UnlearnTrainer):
 
         if self.inner_loss_type != "ce":
             logger.info(f"Inner loop loss: {self.inner_loss_type} (T_kl={self.inner_kl_temperature})")
+        if self.invert_inner_mask:
+            logger.info("Inverted inner mask: inner loop updates RETAIN neurons, outer updates FORGET neurons")
         if self.implicit_trace_guided:
             logger.info(f"Trace-guided implicit: blending threshold={self.implicit_trace_threshold}")
 
