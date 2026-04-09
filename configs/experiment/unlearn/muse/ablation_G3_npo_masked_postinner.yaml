@@ -1,13 +1,12 @@
 # @package _global_
-# Ablation G3: F3 + post_inner=100 WITH neuron bitmap mask (post_inner_retain_only=true)
-# G0 showed post_inner=100 boosted rk (+0.036) but hurt fk (0.325→0.409).
-# Diagnosis: plain CE updates forget-dominant neurons too, re-learning memorized content.
-# Fix: post_inner_retain_only=true inverts the bitmap mask during post_inner.
-#   → forget-dominant neurons (bitmap=1) are FROZEN during CE recovery
-#   → retain-dominant neurons (bitmap=0) get updated → rk recovers
-# Hypothesis: rk improves like G0 but fk stays near F3 (0.325).
-# Bitmap: trace_analysis/figures/traces/analysis/forget_neuron_bitmap.pt
-# Date: 2026-04-08
+# Ablation G3: F3 + post_inner=25 WITH neuron bitmap mask (post_inner_retain_only=true)
+# G0 (100 plain CE steps) boosted rk +0.036 but fk blew up 0.325→0.409.
+# Two fixes vs G0: (1) only 25 steps, (2) bitmap mask freezes forget-dominant neurons.
+# post_inner_retain_only=true inverts the bitmap during post_inner:
+#   → forget-dominant neurons (bitmap=1) FROZEN during CE recovery
+#   → retain-dominant neurons (bitmap=0) get updated → rk recovers without fk regression
+# Hypothesis: rk improves vs F3 (0.316), fk stays near 0.325.
+# Date: 2026-04-09
 
 defaults:
   - override /model: Llama-2-7b-hf
@@ -119,7 +118,7 @@ trainer:
     inner_repr_anchor: false
     inner_repr_alpha: 1.0
     inner_repr_layers: null
-    post_unlearn_inner_steps: 100
+    post_unlearn_inner_steps: 25
     post_inner_retain_only: true
 
     debug_implicit: false
