@@ -383,6 +383,7 @@ class SIBL(UnlearnTrainer):
         bitmap = torch.load(bitmap_path, map_location="cpu", weights_only=False)
 
         mask_dict = {}
+        self._bitmap_params = set()  # track which params are actually in the bitmap
         total_active = 0
         total_params = 0
 
@@ -398,8 +399,9 @@ class SIBL(UnlearnTrainer):
                 else:
                     weight_mask = row_mask.view(-1, *([1] * (param.dim() - 1))).expand_as(param.data)
                 mask_dict[name] = weight_mask.to(self.args.device)
+                self._bitmap_params.add(name)
             else:
-                # Not in bitmap (layernorm, embeddings, etc.) -> frozen
+                # Not in bitmap (layernorm, embeddings, etc.) -> frozen in both outer and post_inner
                 mask_dict[name] = torch.zeros_like(param.data).to(self.args.device)
 
             n_active = (mask_dict[name] > 0).sum().item()
@@ -459,8 +461,10 @@ class SIBL(UnlearnTrainer):
                 continue
 
             # Compute per-neuron ratio
-            f_act = torch.from_numpy(forget_traces[name]).float()
-            r_act = torch.from_numpy(retain_traces[name]).float()
+            f_raw = forget_traces[name]
+            r_raw = retain_traces[name]
+            f_act = f_raw.float() if isinstance(f_raw, torch.Tensor) else torch.from_numpy(f_raw).float()
+            r_act = r_raw.float() if isinstance(r_raw, torch.Tensor) else torch.from_numpy(r_raw).float()
             ratio = f_act / (r_act + 1e-8)
 
             # Build tiered mask encoding outer LR scale
@@ -1754,6 +1758,7 @@ class SIBL(UnlearnTrainer):
         # Single data iterator that advances through ALL epochs
         data_iter = iter(train_dataloader)
         epoch_step = 0  # counts mini-batches consumed to track epoch boundaries
+        current_epoch = 0
 
         logger.info(f"\nStarting S-BiAL unlearning for {effective_T} outer steps "
                     f"({num_epochs} epochs, {steps_per_epoch} steps/epoch, accum={accum_steps})...")
@@ -1856,8 +1861,7 @@ class SIBL(UnlearnTrainer):
             self.state.global_step = t + 1
 
             if (
-                self.debug_implicit
-                and self.debug_stop_after_outer is not None
+                self.debug_stop_after_outer is not None
                 and t >= self.debug_stop_after_outer
             ):
                 logger.info(
@@ -1866,12 +1870,21 @@ class SIBL(UnlearnTrainer):
                 )
                 break
 
-            # Evaluation and checkpointing
-            # if self.args.evaluation_strategy != "no" and (t + 1) % self.args.eval_steps == 0:
-            #     self.evaluate()
-
-            # if self.args.save_strategy != "no" and (t + 1) % self.args.save_steps == 0:
-            #     self.save_model()
+            # Epoch-boundary evaluation
+            if steps_per_epoch > 0 and (t + 1) % steps_per_epoch == 0:
+                current_epoch += 1
+                if current_epoch < num_epochs:  # skip final epoch — full eval runs after post-inner
+                    logger.info(f"=== Epoch {current_epoch}/{num_epochs} complete — running mid-training eval ===")
+                    _orig_output_dir = self.args.output_dir
+                    epoch_eval_dir = os.path.join(_orig_output_dir, f"evals", f"epoch_{current_epoch}")
+                    os.makedirs(epoch_eval_dir, exist_ok=True)
+                    self.args.output_dir = epoch_eval_dir
+                    try:
+                        self.evaluate()
+                    except Exception as e:
+                        logger.warning(f"Mid-training eval failed at epoch {current_epoch}: {e}")
+                    finally:
+                        self.args.output_dir = _orig_output_dir
 
         # Post-unlearning retention recovery: pure CE inner steps to close the retain gap
         # The last outer step often leaves L_ret elevated with no recovery pass.
@@ -1896,8 +1909,12 @@ class SIBL(UnlearnTrainer):
             if self.post_inner_retain_only and self.mask_dict is not None:
                 logger.info("Post-inner: inverted mask active — updating only retain-dominant neurons (bitmap=0)")
                 _saved_mask_dict = self.mask_dict
+                _bitmap_params = getattr(self, '_bitmap_params', set())
                 self.mask_dict = {
-                    name: (1.0 - mask).clamp(min=0.0, max=1.0)
+                    # Only invert params that are actually in the bitmap.
+                    # bitmap=1 (forget-dominant) → 0 (frozen); bitmap=0 (retain-dominant) → 1 (update).
+                    # Params not in bitmap (embeddings, layernorm, lm_head) stay frozen (zeros).
+                    name: (1.0 - mask).clamp(min=0.0, max=1.0) if name in _bitmap_params else torch.zeros_like(mask)
                     for name, mask in self.mask_dict.items()
                 }
 
