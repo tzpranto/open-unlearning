@@ -108,6 +108,22 @@ bash scripts/run_H_series.sh   # after updating configs for H1/H2
 
 ---
 
+## CONCLUSION (2026-04-09)
+
+**Best architecture: G1** — NPO outer loop + light activation steering (coeff=5, layers 5-7) on full 800 forget seqs. ε=0.70, K=1, T=25 steps. Result: fk=0.274 ✅ rk=0.327 ❌.
+
+**The core tension:** G1 controls fk well but rk lags. G3 (masked post_inner) reaches rk=0.572 (near gold) but destroys fk=0.657. The neuron bitmap separating forget/retain neurons from causal trace analysis is our best surgical tool, but the separation is not clean enough — retain-dominant neurons (bitmap=0) still encode some forget content, so updating them during CE recovery re-learns what NPO forgot.
+
+**What each promising config proved:**
+- G3: rk=0.572 IS achievable — retain recovery via masked CE works directionally
+- G1: fk=0.274 IS achievable — light steering simultaneously helps both axes
+- F3: free rk gains from tighter ALM constraint (ε=0.70)
+- H0: targeted forgetting on top-50 memorized seqs collapses model — all 802 seqs are memorized, no generic noise to filter, top-50 are extreme outliers (score up to 140×)
+
+**Open problem:** combining G1's fk control with G3's rk recovery. Options: (1) two-stage G1→G3, (2) score-weighted NPO loss on full dataset, (3) cleaner neuron separation via finer-grained trace analysis.
+
+---
+
 ## LONGER TERM
 - Once fk + rk both hit targets: run on MUSE Books + WMDP
 - Baselines still needed: BLURNPO (checkpoint at saves/), RMU (needs fresh run)
