@@ -61,9 +61,10 @@ Layer 4 (if needed): Neuron masking during post_inner (bitmap from traces)
 | **F3 +ε=0.70** | **0.325** | **0.316** | tighter constraint | ✅ NEW ANCHOR — free rk +0.026, fk unchanged |
 | F4 T=25 explicit | 0.359 | 0.311 | epoch override already = 25 steps | worse, T config doesn't override epoch |
 | G0 +post_inner=100 | 0.409 HURT | 0.352 | F3+CE retain after NPO | rk+0.036 but fk blows up — CE re-learns forget |
-| G1 +steering coeff=5 | ⏳ | ⏳ | F3+gentle steering | running |
-| G2 +K=5 inner | ⏳ | ⏳ | F3+more inner steps | queued |
-| G3 +masked post_inner | ⏳ | ⏳ | F3+post_inner+bitmap mask | queued — fix for G0 |
+| **G1 +steering coeff=5** | **0.274** | **0.327** | F3+gentle steering | ✅ KEEPER — fk improved below F3! |
+| G2 +K=5 inner | 0.314 | 0.310 | F3+more inner steps | marginal, skip |
+| G3 +masked post_inner=100 | ⏳ | ⏳ | F3+post_inner+bitmap mask | running |
+| G3b +masked post_inner=25 | ⏳ | ⏳ | F3+25 steps+bitmap mask | queued |
 
 ---
 

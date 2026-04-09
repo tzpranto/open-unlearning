@@ -121,6 +121,8 @@ echo "[G->mem] Running memorization scorer on forget set..." | tee -a "$PROGRESS
 LOCAL_LLAMA="/datadrive/caches/huggingface/models--meta-llama--Llama-2-7b-hf/snapshots/01c7f73d771dfac7d292323805ebc428287df4f9"
 "${PYTHON_BIN}" scripts/score_forget_memorization.py \
     --base_model "${LOCAL_LLAMA}" \
+    --config raw \
+    --split forget \
     --top_k 50 \
     --hard_forget_path data/hard_forget_news.jsonl \
     2>&1 | tee "${LOG_DIR}/memorization_scoring.log" \

@@ -49,8 +49,10 @@ def main():
     parser.add_argument("--tokenizer_path", default=None,
                         help="Override tokenizer path (use when finetuned_model has no tokenizer files)")
     parser.add_argument("--dataset", default="muse-bench/MUSE-News")
-    parser.add_argument("--split", default="raw/forget",
-                        help="Forget split name")
+    parser.add_argument("--config", default="raw",
+                        help="Dataset config name (e.g. 'raw')")
+    parser.add_argument("--split", default="forget",
+                        help="Forget split name within config")
     parser.add_argument("--top_k", type=int, default=50,
                         help="Number of top memorized sequences to save as hard_forget")
     parser.add_argument("--max_length", type=int, default=1024)
@@ -82,8 +84,8 @@ def main():
     ).to(device)
     base_model.eval()
 
-    print(f"Loading forget dataset: {args.dataset} / {args.split}")
-    dataset = load_dataset(args.dataset, split=args.split)
+    print(f"Loading forget dataset: {args.dataset} config={args.config} split={args.split}")
+    dataset = load_dataset(args.dataset, args.config, split=args.split)
     text_col = "text" if "text" in dataset.column_names else dataset.column_names[0]
     sequences = [row[text_col] for row in dataset]
     print(f"Total forget sequences: {len(sequences)}")
