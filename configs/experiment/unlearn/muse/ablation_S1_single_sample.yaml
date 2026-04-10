@@ -1,9 +1,9 @@
 # @package _global_
-# Ablation R2: Fixed-weight KL outer retain (λ=1.0, ρ=0 → strong KL regularization)
-# R0 showed ALM + KL diverges due to KL scale mismatch with ε.
-# Fix: use fixed λ=1.0 as NPO + strong KL regularizer (ρ=0 freezes λ, no quadratic penalty).
-# λ=1.0 gives strong retain anchoring: KL from pretrained heavily penalized.
-# + inverted inner mask for targeted retain recovery
+# Ablation S1: Single-sample NPO (accum=1, K=3 inner)
+# Closest to 8r's accidental success (1 sample/step, K=10 inner).
+# Each outer step: NPO on 1 forget sample → 3 inner steps on retain.
+# 800 steps/epoch. ρ=0.01 (scaled down 10x to compensate for 32x more steps).
+# K=3 inner steps: stronger inner correction per perturbation (8r used K=10).
 # Date: 2026-04-10
 
 defaults:
@@ -53,11 +53,11 @@ trainer:
     use_sparsity: false
     epsilon: 0.70
     T: 10
-    K: 1
+    K: 3
     eta_theta: 2e-4
     eta_in: 1e-4
-    rho: 0.0
-    lambda_init: 1.0
+    rho: 0.01
+    lambda_init: 0.0
     lambda_boost_step: 0
     lambda_boost_value: 5.0
     rho_boost_value: 1.0
@@ -71,7 +71,7 @@ trainer:
     elastic_net_l1_ratio: 0.5
 
     neuron_traces_path: null
-    neuron_bitmap_path: trace_analysis/figures/traces/analysis/forget_neuron_bitmap.pt
+    neuron_bitmap_path: null
     mask_th_low: 0.5
     mask_th_high: 1.0
     outer_lr_smooth: 0.0
@@ -82,8 +82,8 @@ trainer:
     retain_lr_multiplier: 1.0
     implicit_block_skip_layers: null
 
-    invert_inner_mask: true
-    outer_full_model: true
+    invert_inner_mask: false
+    outer_full_model: false
 
     gradient_projection: false
     gradient_projection_scope: layer
@@ -126,7 +126,7 @@ trainer:
 
     inner_loss_type: ce
     inner_kl_temperature: 2.0
-    outer_retain_loss_type: kl_pretrained
+    outer_retain_loss_type: ce
     post_inner_loss_type: ce
     post_unlearn_inner_steps: 0
     post_inner_retain_only: false

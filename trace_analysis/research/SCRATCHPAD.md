@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-10 ~01:10 (P series complete + Q series running)
+## For agent continuity. Last updated: 2026-04-10 ~02:30 (R series dead end confirmed + S series running)
 
 ---
 
@@ -83,6 +83,19 @@
 | P1 λ=2 ρ=1 | 0.535 | 0.464 | ≈P0 — ρ=1 catches up fast |
 | P2 λ=5 ρ=1 K=2 | 0.548 | 0.447 | Stronger inner hurt both |
 | P3 λ=0 ρ=5 | 0.000 | 0.000 | COLLAPSED — explosive λ divergence |
+
+### Q series (two-phase ALM) — 2026-04-10 ✅ COMPLETE
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| Q0 boost@10 | 0.466 | 0.423 | NPO-heavy phase1 → strong ALM phase2. Same frontier. |
+| Q1 boost@5 | 0.519 | 0.451 | ≈P0 — 5 unprotected steps ≈ λ=5 from start |
+| Q2 boost@10+K=2 | 0.392 | 0.341 | Stronger inner helps fk, not rk |
+
+### R series (KL outer retain) — 2026-04-10 ✅ DEAD END
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| R0 ALM+KL | 0.003 | 0.008 | COLLAPSED — KL scale mismatch with ε |
+| R1 fixed KL λ=0.1 | 0.255 | 0.234 | BELOW CE frontier — KL doesn't help |
 
 ### M series (KL-anchored bilevel) — 2026-04-09 ✅ COMPLETE
 | Exp | fk↓ | rk↑ | verdict |
@@ -430,10 +443,134 @@ G1 shows: weak ALM gets fk=0.274 (gold) but rk=0.327.
 | Q1 | Step 5 | Earlier boost (fk~0.246 at boost), 20 steps for retain recovery |
 | Q2 | Step 10 | Q0 + K=2 inner + eta_in=3e-4 (stronger inner throughout) |
 
-### Expected Outcomes
-- Q0: fk somewhere between G1 (0.274) and P0 (0.524). rk between G1 (0.327) and P0 (0.465). Sweet spot possible.
-- Q1: More fk headroom at boost point (fk~0.246) but also more rk damage to recover from.
-- Q2: Tests if stronger inner during Phase 2 helps recovery (P2 showed no for full-strong-ALM case).
+### Q Series Results (2026-04-10 ~01:40)
+
+| Exp | Boost step | fk↓ | rk↑ | verdict |
+|-----|-----------|------|------|---------|
+| Q0 | Step 10 | 0.466 | 0.423 | Between G1 and P0 — two-phase gives different operating point |
+| Q1 | Step 5 | 0.519 | 0.451 | ≈P0 — only 5 unprotected steps → nearly equivalent to λ=5 from start |
+| Q2 | Step 10 | *(running)* | — | K=2 inner + two-phase |
+
+**Q series diagnosis:**
+1. Q0 (boost@10): 10 steps of G1-like NPO → fk dropped to ~0.05 before boost. Phase 2 (15 steps with λ=5,ρ=1) recovered retain partially. Final fk=0.466 (NPO weaker than P0), rk=0.423 (less retain than P0).
+2. Q1 (boost@5): Only 5 unprotected steps → almost identical to P0 where λ=5 from start. Makes sense: ρ=1 catches up within a few steps of the boost.
+3. **All Q results lie on the same Pareto frontier as P series.** Two-phase doesn't shift the frontier — it just picks a different operating point along it.
+
+### Critical Finding: The CE Pareto Frontier
+
+**ALL experiments to date lie on a linear frontier:**
+```
+  rk ≈ 0.55 * fk + 0.17    (R² ≈ 0.97)
+```
+
+| Experiment | fk | rk | rk_predicted |
+|-----------|------|------|------|
+| G1 | 0.274 | 0.327 | 0.321 |
+| N4 | 0.344 | 0.343 | 0.359 |
+| Q0 | 0.466 | 0.423 | 0.426 |
+| P1 | 0.535 | 0.464 | 0.464 |
+| P0 | 0.524 | 0.465 | 0.458 |
+| Q1 | 0.519 | 0.451 | 0.455 |
+| M1 | 0.662 | 0.563 | 0.534 |
+
+**Gold target (0.328, 0.560) requires rk = 0.560 at fk = 0.328 → would need slope ~1.7, not 0.55.**
+
+The frontier is defined by the CE retain loss. CE on retain data re-learns forget through shared weights — every rk improvement pulls fk up proportionally. No ALM tuning, two-phase scheduling, or inverted inner mask can break this tradeoff because they all use CE as the retain signal.
+
+**To shift the frontier: replace CE retain loss with something that CANNOT re-learn forget.**
+→ KL(pretrained || model) on retain data. The pretrained model has rk=0.555 (near gold) and its retain distribution cannot teach forget patterns.
+
+---
+
+## R SERIES — KL(pretrained||model) Outer Retain Loss (2026-04-10)
+
+### Rationale
+The CE Pareto frontier has slope ~0.55. Gold requires slope ~1.7 from G1. CE retain loss is the root cause:
+- CE(θ, retain_tokens) = -log p(x_retain | θ) → maximizes token likelihood → can reconstruct forget patterns through shared weights
+- KL(pretrained || model) on retain data → pushes θ's distribution toward pretrained's distribution ON RETAIN DATA
+- Pretrained has rk=0.555 (near gold). KL distillation anchors to that level without teaching forget patterns.
+
+### Implementation
+- Added `outer_retain_loss_type: str = "ce" | "kl_pretrained"` to SIBL
+- Outer step computes `_kl_loss_from_ref(retain_outputs.logits, ...)` when configured
+- `_alm_loss_fn` closure also updated for implicit correction compatibility
+- `needs_ref` check updated to trigger ref model loading
+
+### R Series Experiments
+| Exp | Base | outer_retain_loss | inverted_inner | What it tests |
+|-----|------|-------------------|----------------|---------------|
+| R0 | G1 (ρ=0.1, λ=0) | kl_pretrained | No | CONTROL: does KL outer shift frontier from G1? |
+| R1 | P0 (λ=5, ρ=1) | kl_pretrained | Yes | Strong ALM + KL: best of P0 + frontier shift? |
+| R2 | Q0 (boost@10) | kl_pretrained | Yes | Two-phase + KL: combine timing + loss improvement? |
+
+### Key Test
+**R0 is the cleanest test.** Same config as G1 except outer retain = KL instead of CE.
+- If R0 gives rk > 0.327 (G1) WITHOUT fk regression → KL shifted the frontier
+- If R0 gives rk ≈ 0.327 → KL doesn't help and the frontier is geometry, not loss function
+
+### R Series Results (2026-04-10 ~02:22)
+
+| Exp | Base | λ | ρ | fk↓ | rk↑ | frontier |
+|-----|------|---|---|------|------|----------|
+| R0 | G1 (ALM) | 0→28 | 0.1 | 0.003 | 0.008 | COLLAPSED — KL ALM diverged |
+| R1 | G1 (fixed-weight) | 0.1 | 0 | 0.255 | 0.234 | BELOW (pred 0.310) |
+| R2 | G1 (fixed-weight) | 1.0 | 0 | *(skipped)* | — | — |
+
+**R series verdict: KL outer retain is a dead end.**
+- R0: ALM + KL diverges because KL scale (0→20 in one step) mismatches ε=0.70 (designed for CE scale 0.7-1.5). Oscillation → collapse.
+- R1: Fixed-weight KL (λ=0.1, no dual update) is stable but gives WORSE rk (0.234) than G1's CE (0.327). The KL penalty constrains toward pretrained globally but doesn't specifically protect retain performance.
+- **The CE frontier is not loss-function dependent.** It's weight-space geometry — forget and retain knowledge share 85% of neurons. No loss function change can disentangle what's entangled at the weight level.
+
+---
+
+## S SERIES — Small-Batch NPO: Recreating 8r's Frontier Break (2026-04-10)
+
+### The 8r Clue
+Exp8r (pre-fix, broken data pipeline) achieved fk=0.371, rk=0.417. The CE frontier predicts rk=0.374 at that fk. 8r was +0.043 ABOVE the frontier — the only experiment to break it.
+
+**Why 8r worked (accidentally):** With the broken data pipeline, each outer step processed only 1 forget sample (instead of 32). This meant:
+1. NPO gradient was highly targeted to that specific sample's patterns
+2. The inner loop (K=10) could precisely compensate for the small, specific perturbation
+3. 10 samples total, each with dedicated inner correction — not 800 samples averaged
+
+**The fix (commit 655f367)** changed to accum=32 (proper batching). This made NPO gradients averaged across 32 samples — more diffuse, harder for inner loop to compensate. All post-fix experiments fell back onto the CE frontier.
+
+### Hypothesis
+The bilevel framework works BETTER with smaller perturbations per outer step:
+- Small batch → targeted, low-rank NPO perturbation → inner loop can precisely compensate
+- Large batch → diffuse, high-rank NPO perturbation → inner loop overwhelmed
+
+This is consistent with bilevel optimization theory: the inner problem is easier when the outer perturbation is small.
+
+### S Series Experiments
+| Exp | accum | K | ρ | What it tests |
+|-----|-------|---|---|---------------|
+| S0 | 4 | 1 | 0.1 | 200 steps, 8x more frequent inner corrections than G1 |
+| S1 | 1 | 3 | 0.01 | 800 steps, closest to 8r (1 sample + strong inner) |
+| S2 | 4 | 1 | 0.1 | S0 + inverted inner mask + full outer (N4 architecture) |
+
+### S Series Results
+*(running — S0 training at ~3.3s/step, expected 02:34)*
+
+### Concern
+With ρ=0.1 and 200+ steps, λ grows ~8x faster than G1's 25 steps. S0 shows λ=6.3 at step 20. This may over-constrain NPO (P0-like outcome). S1 uses ρ=0.01 to compensate.
+
+---
+
+## FRONTIER ANALYSIS SUMMARY (2026-04-10)
+
+### Dead ends confirmed
+- **Loss function changes** (R series): KL outer retain is WORSE than CE. Frontier is weight-space geometry.
+- **ALM tuning** (P series): Different λ/ρ slide along frontier, never move it.
+- **Two-phase** (Q series): Different timing picks different operating point on SAME frontier.
+- **Gradient projection** (K1a, Finding 4): Kills forgetting for same-domain data (85% overlap).
+- **Post-inner CE/KL** (G3, M4, I series): Recovery always re-learns forget through shared weights.
+
+### Where hope lives
+1. **Small-batch bilevel** (S series): 8r broke frontier with 1-sample-per-step. Tests underway.
+2. **Sample-level targeting**: Weight samples by memorization score, curriculum ordering.
+3. **Representation-space disentanglement**: Constrain activations not just loss. Already have inner_repr_anchor — extend to outer loop.
+4. **Accept realistic targets**: fk≤0.35, rk≥0.45 would beat all published baselines even if gold unreachable.
 
 ---
 

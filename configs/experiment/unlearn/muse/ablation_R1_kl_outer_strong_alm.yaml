@@ -1,7 +1,8 @@
 # @package _global_
-# Ablation R1: KL outer retain + strong ALM (λ_init=5, ρ=1)
-# R0 tests KL outer with weak ALM (like G1). R1 tests with strong ALM (like P0).
-# If KL shifts the frontier, R1 should give BOTH better fk and better rk than P0.
+# Ablation R1: Fixed-weight KL outer retain (λ=0.1, ρ=0 → no dual update)
+# R0 showed ALM + KL diverges due to KL scale mismatch with ε.
+# Fix: use fixed λ as NPO + KL regularizer (ρ=0 freezes λ, no quadratic penalty).
+# λ=0.1 is weak regularization: NPO dominates early, KL gradually pulls back.
 # + inverted inner mask for targeted retain recovery on retain neurons.
 # Date: 2026-04-10
 
@@ -55,8 +56,8 @@ trainer:
     K: 1
     eta_theta: 2e-4
     eta_in: 1e-4
-    rho: 1.0
-    lambda_init: 5.0
+    rho: 0.0
+    lambda_init: 0.1
     lambda_boost_step: 0
     lambda_boost_value: 5.0
     rho_boost_value: 1.0
