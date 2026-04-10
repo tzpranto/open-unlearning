@@ -56,6 +56,11 @@ class SIBL(UnlearnTrainer):
         eta_theta: float = 1e-4,  # Outer learning rate
         eta_in: float = 1e-4,  # Inner learning rate
         rho: float = 1.0,  # Penalty parameter for AL
+        lambda_init: float = 0.0,  # Initial dual variable (0 = standard ALM; >0 = early retain protection)
+        # Two-phase ALM: run NPO-heavy first, then boost λ/ρ for retain recovery
+        lambda_boost_step: int = 0,  # Outer step at which to boost (0 = disabled)
+        lambda_boost_value: float = 5.0,  # λ target after boost
+        rho_boost_value: float = 1.0,  # ρ target after boost
         gamma: float = 1e-4,  # Regularization coefficient
         use_implicit: bool = False,  # Use implicit differentiation
         implicit_solver: str = "neumann",  # "neumann" (Truncated Neumann) or "cg"
@@ -157,6 +162,11 @@ class SIBL(UnlearnTrainer):
         self.eta_theta = eta_theta
         self.eta_in = eta_in
         self.rho = rho
+        self.lambda_init = lambda_init
+        self.lambda_boost_step = lambda_boost_step
+        self.lambda_boost_value = lambda_boost_value
+        self.rho_boost_value = rho_boost_value
+        self._lambda_boosted = False
         self.gamma = gamma
         self.use_implicit = use_implicit
         self.implicit_solver = implicit_solver.lower()
@@ -282,7 +292,9 @@ class SIBL(UnlearnTrainer):
             logger.info("NPO loss requires reference model - will be initialized on first use")
 
         # Initialize dual variable
-        self.lambda_dual = 0.0
+        self.lambda_dual = float(lambda_init)
+        if lambda_init > 0:
+            logger.info(f"ALM dual variable initialized to λ={lambda_init:.2f} (early retain protection)")
 
         # History tracking
         self.history = {
@@ -1806,6 +1818,15 @@ class SIBL(UnlearnTrainer):
                     mask = self.mask_dict[name]
                     param.data.sub_(self.eta_theta * g_alm_dict[name] * mask)
                 param.grad = None
+
+        # Two-phase ALM: boost λ and ρ at specified step
+        if (self.lambda_boost_step > 0 and not self._lambda_boosted
+                and outer_iter is not None and outer_iter >= self.lambda_boost_step):
+            self.lambda_dual = max(self.lambda_dual, self.lambda_boost_value)
+            self.rho = self.rho_boost_value
+            self._lambda_boosted = True
+            logger.info(f"[Step {outer_iter}] ALM boost: λ→{self.lambda_dual:.2f}, ρ→{self.rho:.2f} "
+                       f"(two-phase transition to retain recovery)")
 
         # Dual update
         self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r)

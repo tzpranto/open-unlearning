@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-09 ~23:25 (M series results + N series designed)
+## For agent continuity. Last updated: 2026-04-10 ~01:10 (P series complete + Q series running)
 
 ---
 
@@ -69,6 +69,20 @@
 | K2 step 25 | 0.309 | 0.326 | G1 final (same as full run) |
 | G5 (G1+implicit) | 0.429 | 0.399 | implicit +0.072 rk but +0.155 fk — overcorrects |
 | K1a (G1+projection) | 0.356 | 0.351 | projection +0.024 rk but +0.082 fk — same pattern |
+
+### N series (inverted inner mask) — 2026-04-09 ✅ PARTIAL (OOM on N0-N3)
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| N4 full outer+inv inner | 0.344 | 0.343 | inner too weak — ALM penalty is a no-op |
+| N0-N3 | OOM | — | bitmap outer + inverted inner hits 96GB limit |
+
+### P series (ALM penalty fix) — 2026-04-10 ✅ COMPLETE
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| P0 λ=5 ρ=1 | 0.524 | **0.465** | Best rk without post-inner. ALM works. |
+| P1 λ=2 ρ=1 | 0.535 | 0.464 | ≈P0 — ρ=1 catches up fast |
+| P2 λ=5 ρ=1 K=2 | 0.548 | 0.447 | Stronger inner hurt both |
+| P3 λ=0 ρ=5 | 0.000 | 0.000 | COLLAPSED — explosive λ divergence |
 
 ### M series (KL-anchored bilevel) — 2026-04-09 ✅ COMPLETE
 | Exp | fk↓ | rk↑ | verdict |
@@ -323,10 +337,103 @@ The bitmap mask creates natural forget/retain neuron separation from trace analy
 - `inner_mask_dict: dict` — built at train() start from inverted bitmap
 - Inner step checks `inner_mask_dict` first, falls back to `mask_dict`
 
+### N Series Results (2026-04-09 ~23:50)
+
+| Exp | fk↓ | rk↑ | verdict |
+|-----|-----|-----|---------|
+| **N4** | **0.344** | **0.343** | fk +0.070 vs G1 (HURT), rk +0.016 (marginal). Inner loop too weak. |
+| N0 | OOM | — | CUDA OOM in outer_step grad.clone() |
+| N1 | OOM | — | Same OOM |
+| N2 | OOM | — | Same OOM |
+| N3 | OOM | — | Same OOM (implicit adds to peak memory) |
+
+**N4 analysis:** The inverted inner mask architecture IS correct — inner updates retain neurons, outer updates all. But with K=1 inner step at eta_in=1e-4, the inner loop contributes +0.016 rk vs G1. That's because the outer NPO gradient overwhelms the inner retain gradient. The ALM retain penalty (λ=0 initially, ρ=0.1) provides almost no retain protection in the outer gradient.
+
+**OOM on N0-N3:** All use bitmap-restricted outer mask (not full model). The bitmap mask + inverted inner mask together hit the 96GB GPU memory limit during gradient accumulation (32 steps). N4 works because `outer_full_model=true` avoids the memory pattern that triggers fragmentation.
+
+### Critical Discovery: ALM Penalty Is a No-Op
+
+The dual variable λ starts at 0 and grows by ρ*r per step:
+- Step 1: λ=0, ρ=0.1, r=(L_ret - 0.7) ≈ 0.8 → retain_coeff = 0.08
+- NPO loss ≈ 3-5. Retain contribution: 0.08 × 1.5 = 0.12. That's ~3% of total gradient.
+- After 25 steps: λ ≈ 1.25. Retain reaches ~30% of gradient. Too late — retain is already destroyed.
+
+**The ALM retain constraint is essentially decorative with current hyperparameters.** This explains why G1's rk=0.327 barely exceeds F0's rk=0.290 despite 25 steps of dual accumulation. And why L4 (ε=0.50) only gained +0.016 rk despite λ reaching 4.0 — by then the damage was baked in.
+
+**Fix: P series** — initialize λ > 0 and increase ρ so retain protection kicks in from step 1.
+
+---
+
+## P SERIES — Fix ALM Retain Penalty (2026-04-10)
+
+### Root Cause
+The ALM formulation L_alm = L_fgt + λ*L_ret + 0.5*ρ*(L_ret - ε)² has λ_init=0 and ρ=0.1.
+The gradient of L_alm w.r.t. θ is: ∇L_fgt + (λ + ρ*max(0,r)) * ∇L_ret.
+At step 1: retain coefficient = 0 + 0.1*0.8 = 0.08. NPO dominates at >90%.
+Standard ALM theory says: "start with small ρ, increase over time." But with only 25 steps, there's no time for λ to build up. The model trains 25 steps with inadequate retain protection.
+
+### Fix: Warm-Start the Dual Variable
+- **lambda_init**: New parameter to initialize λ > 0. Immediate retain protection.
+- **Higher ρ**: Faster λ growth + stronger quadratic penalty.
+- Combined with N4 architecture (full outer NPO + inverted inner on retain neurons).
+
+### P Series Experiments
+| Exp | λ_init | ρ | K | eta_θ | eta_in | What it tests |
+|-----|--------|---|---|-------|--------|---------------|
+| P0 | 5.0 | 1.0 | 1 | 2e-4 | 1e-4 | Strongest ALM — retain ≈83% of gradient from step 1 |
+| P1 | 2.0 | 1.0 | 1 | 2e-4 | 1e-4 | Moderate ALM — retain ≈50% initially |
+| P2 | 5.0 | 1.0 | 2 | 1e-4 | 3e-4 | Strong ALM + 2x inner + 3x inner LR + half outer LR |
+| P3 | 0.0 | 5.0 | 1 | 2e-4 | 1e-4 | Control: high ρ only, no warm-start. Tests if fast growth alone works |
+
+### Implementation
+- Added `lambda_init: float = 0.0` param to SIBL __init__
+- `self.lambda_dual = float(lambda_init)` instead of hardcoded 0.0
+- All P configs based on N4 (full outer + inverted inner + steering)
+
+### P Series Results (2026-04-10 ~01:05)
+
+| Exp | λ_init | ρ | fk↓ | rk↑ | verdict |
+|-----|--------|---|------|------|---------|
+| **P0** | 5.0 | 1.0 | 0.524 | **0.465** | **Best rk** (+0.138 vs G1). ALM works but fk hurt +0.250 |
+| P1 | 2.0 | 1.0 | 0.535 | 0.464 | Nearly identical to P0 — ρ=1 catches up fast |
+| P2 | 5.0 | 1.0 | 0.548 | 0.447 | K=2+eta_in=3e-4+eta_θ=1e-4 WORSE on both axes |
+| P3 | 0.0 | 5.0 | 0.000 | 0.000 | COLLAPSED — λ=1200+, explosive divergence |
+
+**P series diagnosis:**
+1. Strong ALM gives rk=0.465 (+0.138 over G1) but costs fk=+0.250. The Pareto frontier didn't move — we're just sliding along it with a different control knob.
+2. P0 ≈ P1: λ_init=5 vs 2 barely matters when ρ=1.0, because ρ catches up within a few steps. The FIRST unprotected step is what determines the trajectory.
+3. P2 worse on both axes: stronger inner loop (CE on retain) partially undoes NPO during both phases. The inner loop doesn't independently improve rk.
+4. P3 collapsed: ρ=5 without λ_init → the first pure NPO step destroys retain, then explosive dual growth tries to compensate but diverges (λ>1000).
+
+**Key insight from P3:** The first step matters enormously. Unprotected NPO step 1 creates irreversible retain damage. P0/P1 work because λ_init>0 provides protection from step 1. P3 fails because step 1 is unprotected.
+
+**Implication for Q series:** Phase 1 (G1-like, ρ=0.1) provides MINIMAL retain protection — enough to survive 10 steps (G1 proves this). Then the boost at step 10 amplifies protection. Unlike P3 (ρ=5, no initial λ), Q series never has a fully unprotected step.
+
+---
+
+## Q SERIES — Two-Phase ALM (2026-04-10)
+
+### Rationale
+P series showed: strong ALM slides the operating point (fk=0.53, rk=0.46) but doesn't move the frontier.
+G1 shows: weak ALM gets fk=0.274 (gold) but rk=0.327.
+**Idea: NPO-heavy first (get fk to gold), then boost λ for retain recovery.**
+
+### Implementation
+- Added `lambda_boost_step`, `lambda_boost_value`, `rho_boost_value` params to SIBL
+- At the specified outer step, λ is set to max(current, boost_value) and ρ is updated
+- All Q configs use full outer + inverted inner + steering (N4 base)
+
+### Q Series Experiments
+| Exp | Boost step | What it tests |
+|-----|-----------|---------------|
+| Q0 | Step 10 | G1-like NPO for 10 steps (fk~0.275), then λ=5 ρ=1 for 15 steps |
+| Q1 | Step 5 | Earlier boost (fk~0.246 at boost), 20 steps for retain recovery |
+| Q2 | Step 10 | Q0 + K=2 inner + eta_in=3e-4 (stronger inner throughout) |
+
 ### Expected Outcomes
-- **N4**: fk near G1's 0.274 (full NPO), rk improved (inner focused on retain). This is the bilevel architecture that SHOULD work.
-- **N0**: fk ~0.65 (bitmap restricts NPO, like M2). rk improved (inner on retain, not forget).
-- **N2**: If K=3 is safe with disjoint params, rk should improve further.
+- Q0: fk somewhere between G1 (0.274) and P0 (0.524). rk between G1 (0.327) and P0 (0.465). Sweet spot possible.
+- Q1: More fk headroom at boost point (fk~0.246) but also more rk damage to recover from.
+- Q2: Tests if stronger inner during Phase 2 helps recovery (P2 showed no for full-strong-ALM case).
 
 ---
 
