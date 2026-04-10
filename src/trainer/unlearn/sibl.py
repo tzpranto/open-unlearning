@@ -161,6 +161,9 @@ class SIBL(UnlearnTrainer):
         inner_contrastive_beta: float = 1.0,  # Weight for retain representation pull
         inner_contrastive_gamma: float = 0.5,  # Weight for forget representation push (negative term)
         inner_contrastive_layers: Optional[list] = None,  # Layers for contrastive loss (default: steering_layers)
+        # Score-weighted forget sampling: preferentially draw high-memorization samples
+        forget_sample_weights_path: Optional[str] = None,  # Path to memorization scores JSON
+        forget_weight_scheme: str = "log",  # "log", "sqrt", "linear", "uniform"
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -291,6 +294,9 @@ class SIBL(UnlearnTrainer):
         self.inner_contrastive_beta = inner_contrastive_beta
         self.inner_contrastive_gamma = inner_contrastive_gamma
         self.inner_contrastive_layers = inner_contrastive_layers or steering_layers or [5, 6, 7]
+        self.forget_sample_weights_path = forget_sample_weights_path
+        self.forget_weight_scheme = forget_weight_scheme
+        self._forget_sample_weights = None  # Populated in get_train_dataloader if path given
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -2006,6 +2012,81 @@ class SIBL(UnlearnTrainer):
 
         return L_fgt_val, L_ret_val, r
 
+    def _load_forget_sample_weights(self):
+        """Load and transform memorization scores into sampling weights.
+
+        Supports multiple weighting schemes:
+        - "log": w_i = log(1 + score_i). Compresses 0-140x range to 0-5x. Recommended.
+        - "sqrt": w_i = sqrt(score_i). Moderate compression (0-11.8x range).
+        - "linear": w_i = score_i. Raw scores — very concentrated on outliers.
+        - "uniform": w_i = 1. No weighting (baseline).
+        """
+        import json as _json
+
+        with open(self.forget_sample_weights_path) as f:
+            data = _json.load(f)
+
+        scores_list = data['scores']
+        # Build idx → score mapping
+        n_samples = max(s['idx'] for s in scores_list) + 1
+        raw_weights = torch.ones(n_samples)
+        for s in scores_list:
+            raw_weights[s['idx']] = s['memorization_score']
+
+        # Apply weighting scheme
+        if self.forget_weight_scheme == "log":
+            weights = torch.log1p(raw_weights)
+        elif self.forget_weight_scheme == "sqrt":
+            weights = torch.sqrt(raw_weights)
+        elif self.forget_weight_scheme == "linear":
+            weights = raw_weights
+        elif self.forget_weight_scheme == "uniform":
+            weights = torch.ones_like(raw_weights)
+        else:
+            raise ValueError(f"Unknown forget_weight_scheme: {self.forget_weight_scheme}")
+
+        # Normalize to probabilities
+        weights = weights / weights.sum() * len(weights)
+
+        # Log statistics
+        logger.info(f"Forget sample weights loaded: {len(weights)} samples, "
+                     f"scheme={self.forget_weight_scheme}")
+        logger.info(f"  Raw score range: [{raw_weights.min():.2f}, {raw_weights.max():.2f}], "
+                     f"mean={raw_weights.mean():.2f}")
+        logger.info(f"  Weight range: [{weights.min():.3f}, {weights.max():.3f}], "
+                     f"mean={weights.mean():.3f}")
+        top5 = torch.topk(weights, 5)
+        logger.info(f"  Top-5 weights: {[f'{w:.2f}' for w in top5.values.tolist()]} "
+                     f"at indices {top5.indices.tolist()}")
+
+        return weights
+
+    def get_train_dataloader(self):
+        """Override to inject WeightedRandomSampler for score-weighted forget sampling."""
+        if self.forget_sample_weights_path is None:
+            return super().get_train_dataloader()
+
+        if self._forget_sample_weights is None:
+            self._forget_sample_weights = self._load_forget_sample_weights()
+
+        from torch.utils.data import DataLoader, WeightedRandomSampler
+
+        weights = self._forget_sample_weights
+        sampler = WeightedRandomSampler(
+            weights=weights.tolist(),
+            num_samples=len(weights),
+            replacement=True,
+        )
+
+        return DataLoader(
+            self.train_dataset,
+            batch_size=self.args.per_device_train_batch_size,
+            sampler=sampler,
+            collate_fn=self.data_collator,
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
+
     def train(self):
         """Override the train method to implement custom S-BiAL training loop."""
         # Initialize mask
@@ -2156,6 +2237,9 @@ class SIBL(UnlearnTrainer):
         if self.inner_contrastive:
             logger.info(f"Contrastive inner loop: β={self.inner_contrastive_beta} (pull retain), "
                         f"γ={self.inner_contrastive_gamma} (push forget), layers={self.inner_contrastive_layers}")
+        if self.forget_sample_weights_path:
+            logger.info(f"Score-weighted forget sampling: scheme={self.forget_weight_scheme}, "
+                        f"path={self.forget_sample_weights_path}")
 
         for t in range(effective_T):
             t_start = time.time()
