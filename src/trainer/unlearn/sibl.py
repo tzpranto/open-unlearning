@@ -149,6 +149,18 @@ class SIBL(UnlearnTrainer):
         implicit_trace_guided: bool = False,  # Blend implicit correction using mask (retain-only correction)
         implicit_trace_threshold: float = 0.5,  # Mask values above this → skip implicit (keep original forget gradient)
         checkpoint_every_steps: int = 0,  # Save checkpoint every N outer steps (0 = disabled); for trajectory analysis
+        # Fisher-weighted outer gradient: scale NPO gradient by 1/(1+α*F_retain)
+        # F_retain is diagonal Fisher on retain data — dampens updates on retain-important params
+        use_fisher_weighting: bool = False,
+        fisher_alpha: float = 1.0,  # Scaling factor for Fisher dampening
+        fisher_n_samples: int = 64,  # Number of retain samples for Fisher estimation
+        # Contrastive inner loop: push-pull disentanglement
+        # Inner loss += β*MSE(h_retain, h_pretrained) - γ*MSE(h_forget, h_pretrained)
+        # The negative γ term pushes forget activations AWAY during inner correction
+        inner_contrastive: bool = False,
+        inner_contrastive_beta: float = 1.0,  # Weight for retain representation pull
+        inner_contrastive_gamma: float = 0.5,  # Weight for forget representation push (negative term)
+        inner_contrastive_layers: Optional[list] = None,  # Layers for contrastive loss (default: steering_layers)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -271,6 +283,14 @@ class SIBL(UnlearnTrainer):
         self.implicit_trace_guided = implicit_trace_guided
         self.implicit_trace_threshold = implicit_trace_threshold
         self.checkpoint_every_steps = checkpoint_every_steps
+        self.use_fisher_weighting = use_fisher_weighting
+        self.fisher_alpha = fisher_alpha
+        self.fisher_n_samples = fisher_n_samples
+        self.fisher_dict = None  # Populated before training if use_fisher_weighting=True
+        self.inner_contrastive = inner_contrastive
+        self.inner_contrastive_beta = inner_contrastive_beta
+        self.inner_contrastive_gamma = inner_contrastive_gamma
+        self.inner_contrastive_layers = inner_contrastive_layers or steering_layers or [5, 6, 7]
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -709,6 +729,124 @@ class SIBL(UnlearnTrainer):
         # Masked average, scaled by T^2 (standard distillation scaling)
         return (kl * valid).sum() / valid.sum().clamp(min=1) * (T ** 2)
 
+    def _compute_contrastive_repr_loss(self, retain_batch, forget_batch, layers):
+        """Contrastive representation disentanglement for inner loop.
+
+        Pull: MSE(h_retain_current, h_retain_pretrained) — anchor retain activations
+        Push: -MSE(h_forget_current, h_forget_pretrained) — push forget activations away
+
+        The push term creates active representational separation: the inner loop
+        not only recovers retain representations but REINFORCES the forget signal
+        by moving forget activations further from pretrained.
+        """
+        total_loss = torch.tensor(0.0, device=self.args.device)
+        n_terms = 0
+
+        # PULL: retain activations toward pretrained (β term)
+        if self.inner_contrastive_beta > 0:
+            retain_ref = self._forward_with_hooks_on_model(
+                self.ref_model, retain_batch, layers
+            )
+            retain_cur, _ = self._forward_with_hooks(retain_batch, layers)
+            retain_labels = retain_batch.get('labels', retain_batch['input_ids']).to(self.args.device)
+            retain_mask = (retain_labels != -100).float()
+
+            pull_loss = torch.tensor(0.0, device=self.args.device)
+            for layer_idx in layers:
+                if layer_idx not in retain_ref or layer_idx not in retain_cur:
+                    continue
+                ref_act = retain_ref[layer_idx].detach()
+                cur_act = retain_cur[layer_idx]
+                min_seq = min(cur_act.shape[1], ref_act.shape[1])
+                diff = (cur_act[:, :min_seq] - ref_act[:, :min_seq]) ** 2
+                lmask = retain_mask[:, :min_seq].unsqueeze(-1).expand_as(diff)
+                pull_loss = pull_loss + (diff * lmask).mean()
+            pull_loss = pull_loss / max(len(layers), 1)
+            total_loss = total_loss + self.inner_contrastive_beta * pull_loss
+            n_terms += 1
+
+        # PUSH: forget activations away from pretrained (γ term, negative)
+        if self.inner_contrastive_gamma > 0 and forget_batch is not None:
+            forget_ref = self._forward_with_hooks_on_model(
+                self.ref_model, forget_batch, layers
+            )
+            forget_cur, _ = self._forward_with_hooks(forget_batch, layers)
+            forget_labels = forget_batch.get('labels', forget_batch['input_ids']).to(self.args.device)
+            forget_mask = (forget_labels != -100).float()
+
+            push_loss = torch.tensor(0.0, device=self.args.device)
+            for layer_idx in layers:
+                if layer_idx not in forget_ref or layer_idx not in forget_cur:
+                    continue
+                ref_act = forget_ref[layer_idx].detach()
+                cur_act = forget_cur[layer_idx]
+                min_seq = min(cur_act.shape[1], ref_act.shape[1])
+                diff = (cur_act[:, :min_seq] - ref_act[:, :min_seq]) ** 2
+                lmask = forget_mask[:, :min_seq].unsqueeze(-1).expand_as(diff)
+                push_loss = push_loss + (diff * lmask).mean()
+            push_loss = push_loss / max(len(layers), 1)
+            # NEGATIVE: minimize -MSE = maximize MSE = push apart
+            total_loss = total_loss - self.inner_contrastive_gamma * push_loss
+            n_terms += 1
+
+        return total_loss
+
+    def _precompute_fisher_diagonal(self, retain_loader):
+        """Precompute diagonal Fisher information matrix on retain data.
+
+        Estimates F_i = E[g_i²] where g_i is the gradient of CE loss w.r.t. param i
+        over retain data. Used to weight outer gradient: g_i / (1 + α*F_i).
+        This dampens NPO updates on parameters important for retain performance.
+        """
+        logger.info(f"Precomputing diagonal Fisher on {self.fisher_n_samples} retain samples...")
+        self.model.eval()
+        fisher_dict = {name: torch.zeros_like(param.data)
+                       for name, param in self.model.named_parameters()
+                       if param.requires_grad}
+
+        n_processed = 0
+        data_iter = iter(retain_loader)
+        while n_processed < self.fisher_n_samples:
+            try:
+                batch = next(data_iter)
+            except StopIteration:
+                data_iter = iter(retain_loader)
+                batch = next(data_iter)
+
+            # Get retain batch from combined batch format
+            if isinstance(batch, dict) and 'retain' in batch:
+                batch = batch['retain']
+
+            input_ids = batch['input_ids'].to(self.args.device)
+            attention_mask = batch['attention_mask'].to(self.args.device)
+            labels = batch.get('labels', input_ids).to(self.args.device)
+
+            outputs = self.model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
+            loss = outputs.loss
+            loss.backward()
+
+            with torch.no_grad():
+                for name, param in self.model.named_parameters():
+                    if param.grad is not None and name in fisher_dict:
+                        fisher_dict[name] += param.grad.data ** 2
+                    if param.grad is not None:
+                        param.grad = None
+
+            n_processed += 1
+
+        # Average and normalize
+        for name in fisher_dict:
+            fisher_dict[name] /= max(n_processed, 1)
+
+        # Log statistics
+        total_fisher = sum(f.sum().item() for f in fisher_dict.values())
+        n_params = sum(f.numel() for f in fisher_dict.values())
+        logger.info(f"Fisher diagonal computed: mean={total_fisher/max(n_params,1):.6f}, "
+                    f"processed {n_processed} samples")
+
+        self.model.train()
+        return fisher_dict
+
     def compute_sparsity_regularizer(self):
         """
         Compute sparsity regularizer using the configured regularization type.
@@ -750,8 +888,8 @@ class SIBL(UnlearnTrainer):
             h.remove()
         return caches
 
-    def inner_step(self, batch):
-        """Single inner optimization step on retain set."""
+    def inner_step(self, batch, forget_batch=None):
+        """Single inner optimization step on retain set (+ optional contrastive forget push)."""
         self.model.train()
 
         input_ids = batch['input_ids'].to(self.args.device)
@@ -769,6 +907,14 @@ class SIBL(UnlearnTrainer):
             loss = self._kl_loss_from_ref(outputs.logits, input_ids, attention_mask, labels)
         else:
             loss = outputs.loss
+
+        # Contrastive inner loop: pull retain activations toward pretrained,
+        # push forget activations away from pretrained
+        if self.inner_contrastive and self.ref_model is not None:
+            contrastive_loss = self._compute_contrastive_repr_loss(
+                batch, forget_batch, self.inner_contrastive_layers
+            )
+            loss = loss + contrastive_loss
 
         # Representation anchor: penalize drift of retain activations from reference model
         if self.inner_repr_anchor and self._repr_anchor_model is not None:
@@ -834,9 +980,10 @@ class SIBL(UnlearnTrainer):
 
         return loss.item()
 
-    def inner_loop(self, retain_loader):
-        """Inner loop: Optimize on retain set."""
+    def inner_loop(self, retain_loader, forget_batches=None):
+        """Inner loop: Optimize on retain set (+ optional contrastive forget push)."""
         retain_iter = iter(retain_loader)
+        forget_iter = iter(forget_batches) if forget_batches else None
 
         for k in range(self.K):
             try:
@@ -845,7 +992,16 @@ class SIBL(UnlearnTrainer):
                 retain_iter = iter(retain_loader)
                 batch = next(retain_iter)
 
-            self.inner_step(batch)
+            # Get forget batch for contrastive loss (cycle if needed)
+            forget_batch = None
+            if self.inner_contrastive and forget_iter is not None:
+                try:
+                    forget_batch = next(forget_iter)
+                except StopIteration:
+                    forget_iter = iter(forget_batches)
+                    forget_batch = next(forget_iter)
+
+            self.inner_step(batch, forget_batch=forget_batch)
 
     def flatten_params(self, params_list):
         """Flatten list of parameters to single vector."""
@@ -1828,7 +1984,12 @@ class SIBL(UnlearnTrainer):
                             param.grad = None
                             continue
                     mask = self.mask_dict[name]
-                    param.data.sub_(self.eta_theta * g_alm_dict[name] * mask)
+                    g = g_alm_dict[name]
+                    # Fisher weighting: dampen updates on retain-important parameters
+                    if self.use_fisher_weighting and self.fisher_dict is not None and name in self.fisher_dict:
+                        fisher_scale = 1.0 / (1.0 + self.fisher_alpha * self.fisher_dict[name])
+                        g = g * fisher_scale
+                    param.data.sub_(self.eta_theta * g * mask)
                 param.grad = None
 
         # Two-phase ALM: boost λ and ρ at specified step
@@ -1883,7 +2044,8 @@ class SIBL(UnlearnTrainer):
         needs_ref = (self.forget_loss_type == "npo"
                      or self.inner_loss_type == "kl_pretrained"
                      or self.post_inner_loss_type == "kl_pretrained"
-                     or self.outer_retain_loss_type == "kl_pretrained")
+                     or self.outer_retain_loss_type == "kl_pretrained"
+                     or self.inner_contrastive)
         if needs_ref and self.ref_model is None:
             self._prepare_ref_model()
 
@@ -1918,6 +2080,11 @@ class SIBL(UnlearnTrainer):
 
         # Get data loaders
         train_dataloader = self.get_train_dataloader()
+
+        # Precompute Fisher diagonal for retain-weighted outer gradient
+        if self.use_fisher_weighting and self.fisher_dict is None:
+            self.fisher_dict = self._precompute_fisher_diagonal(train_dataloader)
+            logger.info(f"Fisher weighting enabled: α={self.fisher_alpha}")
 
         # Gradient accumulation: number of mini-batches per outer step
         accum_steps = max(1, self.args.gradient_accumulation_steps)
@@ -1984,6 +2151,11 @@ class SIBL(UnlearnTrainer):
             logger.info("Inverted inner mask: inner loop updates RETAIN neurons, outer updates FORGET neurons")
         if self.implicit_trace_guided:
             logger.info(f"Trace-guided implicit: blending threshold={self.implicit_trace_threshold}")
+        if self.use_fisher_weighting:
+            logger.info(f"Fisher-weighted outer gradient: α={self.fisher_alpha}, n_samples={self.fisher_n_samples}")
+        if self.inner_contrastive:
+            logger.info(f"Contrastive inner loop: β={self.inner_contrastive_beta} (pull retain), "
+                        f"γ={self.inner_contrastive_gamma} (push forget), layers={self.inner_contrastive_layers}")
 
         for t in range(effective_T):
             t_start = time.time()
@@ -2013,7 +2185,7 @@ class SIBL(UnlearnTrainer):
 
             # Inner loop: K steps over the accumulated retain batches (cycling)
             retain_loader = (retain_batches * ((self.K // len(retain_batches)) + 1))[:self.K]
-            self.inner_loop(retain_loader)
+            self.inner_loop(retain_loader, forget_batches=forget_batches if self.inner_contrastive else None)
 
             # Update projection strength based on schedule
             if self.gradient_projection and self.projection_schedule == "linear_decay":

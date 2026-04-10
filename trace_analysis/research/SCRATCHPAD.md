@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-10 ~02:30 (R series dead end confirmed + S series running)
+## For agent continuity. Last updated: 2026-04-10 ~03:35 (S5 BROKE FRONTIER! T series designed, launching after S6/S7)
 
 ---
 
@@ -49,11 +49,13 @@
 
 ---
 
-## CURRENT STATE (2026-04-09, updated ~20:45)
+## CURRENT STATE (2026-04-10, updated ~03:35)
 
-**Best result: G1** — fk=0.274 ✅ (beats gold 0.328), rk=0.327 ❌ (need 0.560)
-**Gap:** rk needs +0.233 more. fk has 0.054 headroom before hitting gold.
-**Note:** Gold targets are the benchmark but good forgetting + reasonable retain is also useful.
+**FRONTIER BROKEN: S5** — fk=0.346, rk=0.382 — ABOVE CE frontier by +0.022
+**Best fk: G1** — fk=0.274 ✅ (beats gold 0.328), rk=0.327 ❌
+**Best above-frontier: S5** — fk=0.346 (slightly above gold), rk=0.382 — first controlled frontier break
+**Gap to gold:** rk needs +0.178 more from S5 (vs +0.233 from G1). fk needs 0.018 improvement from S5.
+**Note:** S5 proves the frontier CAN be broken with small-batch + sufficient ALM buildup.
 
 **I series final verdict:** DGA soft mask is a dead end. Full β sweep (1,3,5,10,20) confirms: every β shows fk regression (+0.068 to +0.090 vs G1) with negligible rk gain (+0.003 to +0.028). Best rk was β=3 (rk=0.355) but fk=0.359 — still far from gold on both axes. No sweet spot exists.
 
@@ -549,11 +551,79 @@ This is consistent with bilevel optimization theory: the inner problem is easier
 | S1 | 1 | 3 | 0.01 | 800 steps, closest to 8r (1 sample + strong inner) |
 | S2 | 4 | 1 | 0.1 | S0 + inverted inner mask + full outer (N4 architecture) |
 
-### S Series Results
-*(running — S0 training at ~3.3s/step, expected 02:34)*
+### S Series Results (S0/S1: first run)
+| Exp | accum | K | ρ | steps | fk↓ | rk↑ | verdict |
+|-----|-------|---|---|-------|------|------|---------|
+| S0 | 4 | 1 | 0.1 | 200 | collapsed | — | λ exploded at step ~160 (1 bad sample in 4 = 25% influence) |
+| S1 | 1 | 3 | 0.01 | 813 | collapsed | — | L_ret stable until step ~500, then L_ret=7.0 forever |
+| S2 | 4 | 1 | 0.1 | 200 | collapsed | — | Same as S0 (inverted inner didn't help) |
 
-### Concern
-With ρ=0.1 and 200+ steps, λ grows ~8x faster than G1's 25 steps. S0 shows λ=6.3 at step 20. This may over-constrain NPO (P0-like outcome). S1 uses ρ=0.01 to compensate.
+### S2 Series Results (early stopping, all accum=1 K=3 ρ=0.01 unless noted)
+| Exp | accum | K | ρ | steps | fk↓ | rk↑ | frontier | verdict |
+|-----|-------|---|---|-------|------|------|----------|---------|
+| S3 | 1 | 3 | 0.01 | 25 | 0.008 | 0.022 | BELOW (-0.153) | **COLLAPSED** — 25 steps destroyed model |
+| S4 | 1 | 3 | 0.01 | 50 | 0.000 | 0.000 | BELOW (-0.170) | **COLLAPSED** — total knowledge destruction |
+| **S5** | **1** | **3** | **0.01** | **100** | **0.346** | **0.382** | **ABOVE (+0.022)** | **🔥 FRONTIER BROKEN!** |
+| S6 | 1 | 3 | 0.01 | 200 | *(running)* | — | — | will λ accumulation improve further? |
+| S7 | 4 | 1 | 0.1 | 25 | *(queued)* | — | — | G1-like small batch |
+
+### S Series Post-Mortem: Why S3 Collapsed But 8r Didn't
+
+**The 8r vs S3 comparison:**
+| | 8r (worked) | S3 (collapsed) |
+|---|-----------|----------------|
+| samples/step | 1 | 1 |
+| K (inner steps) | 10 | 3 |
+| ρ | 0.1 | 0.01 |
+| Total outer steps | 10 | 25 |
+| Inner/outer ratio | 10:1 | 3:1 |
+| Total inner steps | 100 | 75 |
+
+**Root cause: insufficient inner correction per outer perturbation.**
+- 8r: K=10 inner steps per 1 NPO step → massive inner repair capacity. Ratio 10:1.
+- S3: K=3 inner steps per 1 NPO step → inner can't keep up with NPO damage. Ratio 3:1.
+- S3 also used ρ=0.01 (10x weaker ALM constraint), compounding the problem.
+- With λ=0 and ρ=0.01, the outer gradient is ~99.97% NPO, ~0.03% retain penalty. The ALM constraint is essentially absent.
+- Each unprotected NPO step on a single sample applies full gradient magnitude — not averaged over 32 samples like G1.
+- Over 25 steps, cumulative unprotected NPO destroys all shared representations.
+
+**Why not just use K=10?** With accum=1, 25 outer × 10 inner = 250 inner steps on 25 retain samples (cycling the same 25). This overfits the inner loop to those 25 samples. Need to validate if that helps.
+
+### S5 BREAKTHROUGH: Why 100 Steps Works But 25/50 Collapse
+
+**S3 (25 steps) = collapsed. S4 (50 steps) = collapsed. S5 (100 steps) = ABOVE FRONTIER.**
+
+This seems paradoxical — more steps should mean more damage. But the explanation is ALM dual variable dynamics:
+
+**Phase 1 (steps 0-50): Destructive NPO with weak protection**
+- λ starts at 0, ρ=0.01 → retain contribution in gradient is ~0%
+- After 25 steps: λ ≈ 0.25 → retain ~5% of gradient (far too little)
+- After 50 steps: λ ≈ 0.5 → retain ~10% of gradient (still too little)
+- **This is why S3 (stop at 25) and S4 (stop at 50) collapse** — the ALM constraint hasn't kicked in
+
+**Phase 2 (steps 50-100): Recovery with growing ALM constraint**
+- After 75 steps: λ ≈ 1.5 → retain ~50% of gradient (significant!)
+- After 100 steps: λ ≈ 2.5 → retain ~70%+ of gradient (dominant!)
+- With strong retain constraint, the inner loop (K=3) can actually recover representations
+- NPO still pushes forget, but proportionally less as λ grows
+- **The model RECOVERS from the early damage**
+
+**Key insight: ALM needs TIME to build dual pressure.** With ρ=0.01, the dual variable grows slowly (~0.01-0.05 per step depending on residual). It takes ~50-75 steps for λ to reach values where retain protection is meaningful. Experiments stopped before that point (S3, S4) catch the model at its WORST — maximum NPO damage, minimum ALM protection.
+
+**Comparison with G1 (K=1, accum=32, 25 steps, ρ=0.1):**
+- G1: λ grows 10x faster (ρ=0.1), reaches ~2.7 at step 25
+- S5: λ grows 10x slower (ρ=0.01), but has 4x more steps → reaches ~2.5 at step 100
+- Both end with similar λ! But S5's small-batch dynamics give different gradient geometry
+- S5's single-sample gradients are more targeted → inner loop compensates more precisely
+
+**This validates the 8r hypothesis but with a twist: it's not just K that matters, it's K + enough time for ALM to protect.**
+
+**Frontier comparison:**
+- G1 (accum=32, K=1, 25 steps): fk=0.274, rk=0.327 (ON frontier, δ=+0.006)
+- 8r (accum=1, K=10, 10 steps): fk=0.371, rk=0.417 (ABOVE, δ=+0.043)
+- **S5 (accum=1, K=3, 100 steps): fk=0.346, rk=0.382 (ABOVE, δ=+0.022)**
+
+S5 trades more fk (0.346 vs 0.274 in G1) for being ABOVE the frontier. The rk=0.382 is not gold (0.560) but significantly better than G1's 0.327.
 
 ---
 
@@ -566,11 +636,64 @@ With ρ=0.1 and 200+ steps, λ grows ~8x faster than G1's 25 steps. S0 shows λ=
 - **Gradient projection** (K1a, Finding 4): Kills forgetting for same-domain data (85% overlap).
 - **Post-inner CE/KL** (G3, M4, I series): Recovery always re-learns forget through shared weights.
 
+### S series: PARTIALLY SUCCESSFUL
+- S3 (25 steps), S4 (50 steps): COLLAPSED — ALM dual variable hasn't built enough protection
+- **S5 (100 steps): ABOVE FRONTIER** (fk=0.346, rk=0.382, δ=+0.022) — ALM needs ~50+ steps at ρ=0.01 to build sufficient retain constraint
+- S6 (200 steps), S7 (accum=4, K=1): running, results pending
+
 ### Where hope lives
-1. **Small-batch bilevel** (S series): 8r broke frontier with 1-sample-per-step. Tests underway.
-2. **Sample-level targeting**: Weight samples by memorization score, curriculum ordering.
-3. **Representation-space disentanglement**: Constrain activations not just loss. Already have inner_repr_anchor — extend to outer loop.
-4. **Accept realistic targets**: fk≤0.35, rk≥0.45 would beat all published baselines even if gold unreachable.
+1. **High K/step ratio** (T series): G1 with K=10 and 5-10 outer steps. Directly replicates 8r's success factor (strong inner correction) with proper batching.
+2. **Fisher-weighted outer gradient**: Scale NPO gradient by 1/(1+αF_retain) where F_retain is diagonal Fisher on retain data. Continuously dampens updates to retain-important parameters — more principled than binary bitmap.
+3. **Contrastive inner loop**: Inner loop does CE on retain + actively pushes forget representations away from pretrained. Creates representational separation during inner correction.
+4. **Subspace NPO**: SVD of forget gradient matrix → only update in top-k directions. Most targeted possible NPO.
+5. **Accept realistic targets**: fk≤0.35, rk≥0.45 would beat all published baselines even if gold unreachable.
+
+---
+
+## T SERIES — Targeted Disentanglement (2026-04-10)
+
+### Core Insight
+The CE frontier (rk ≈ 0.55*fk + 0.17) holds for ALL loss function and ALM variations. The only experiment that broke it was 8r, which had K/step ratio of 10:1 (10 inner corrections per 1 outer perturbation). All other experiments had ratio 1:1 or 3:1.
+
+**Hypothesis:** The frontier is set by the inner loop's ability to compensate for outer perturbations. With K=1, the inner loop can't fully recover retain → collateral damage accumulates → rk degrades proportionally with fk. With K≥10, inner loop FULLY recovers retain before the next perturbation → retain damage doesn't accumulate → frontier shifts.
+
+This is bilevel optimization 101: the inner problem must converge for the bilevel solution to be meaningful. K=1 never converges.
+
+### T Series Experiments
+
+**T0: High-K with proper batching** (simplest, most 8r-like)
+- G1 base, accum=32, K=10, 5 outer steps (8r-like ratio)
+- If frontier breaks: confirms K/step ratio hypothesis
+- If stays on frontier: K alone isn't enough
+
+**T1: High-K with moderate steps**
+- G1 base, accum=32, K=5, 10 outer steps
+- Tests intermediate ratio
+
+**T2: Fisher-weighted outer gradient** (novel disentanglement)
+- Precompute diagonal Fisher F_retain from ~100 retain samples
+- Outer gradient scaled: g_i → g_i / (1 + α*F_i) where F_i is retain Fisher for param i
+- α is a hyperparameter controlling protection strength
+- This is EWC-inspired but applied to outer gradient, not as a regularization term
+- Novel: no prior work uses Fisher weighting in bilevel unlearning outer loops
+
+**T3: Contrastive inner loop** (push-pull disentanglement)
+- Inner loss = CE(retain) + β*MSE(h_retain, h_pretrained) - γ*MSE(h_forget, h_pretrained)
+- The negative term PUSHES forget representations away during inner correction
+- Creates active representational separation, not just passive retain recovery
+- Novel: combines representational anchoring with active forget reinforcement in inner loop
+
+**T4: Subspace NPO** (most targeted possible)
+- Collect forget gradients across ~50 samples, compute top-k SVD directions
+- Constrain NPO gradient to live in this subspace via projection
+- Most surgically targeted NPO possible — only touches forget-specific weight directions
+- Different from gradient projection (Finding 4): projects onto forget subspace, not away from retain subspace
+
+### Implementation Plan
+1. T0/T1: config-only (override K and debug_stop_after_outer)
+2. T2: ~50 LOC — precompute Fisher, apply scaling in outer_step
+3. T3: ~30 LOC — extend inner_step loss computation
+4. T4: ~80 LOC — Fisher/SVD precomputation + projection in outer_step
 
 ---
 
