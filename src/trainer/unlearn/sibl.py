@@ -136,6 +136,7 @@ class SIBL(UnlearnTrainer):
         post_inner_soft_mask_beta: float = 5.0,  # Sharpness β: α = σ(-β*s); contested neurons get partial updates
         # KL-anchored inner loop: replace CE with KL(pretrained || model) to prevent forget re-learning
         inner_loss_type: str = "ce",  # "ce" (default) or "kl_pretrained" — inner loop retain loss
+        outer_retain_loss_type: str = "ce",  # "ce" (default) or "kl_pretrained" — outer ALM retain constraint
         inner_kl_temperature: float = 2.0,  # Temperature for KL distillation (higher = softer)
         post_inner_loss_type: str = "ce",  # "ce" or "kl_pretrained" — post-inner recovery loss
         # Inverted inner mask: when bitmap loaded, inner loop updates RETAIN-dominant neurons (1-mask)
@@ -264,6 +265,7 @@ class SIBL(UnlearnTrainer):
         self.inner_loss_type = inner_loss_type
         self.inner_kl_temperature = inner_kl_temperature
         self.post_inner_loss_type = post_inner_loss_type
+        self.outer_retain_loss_type = outer_retain_loss_type
         self.invert_inner_mask = invert_inner_mask
         self.outer_full_model = outer_full_model
         self.implicit_trace_guided = implicit_trace_guided
@@ -1573,7 +1575,7 @@ class SIBL(UnlearnTrainer):
             else:
                 L_fgt = self.compute_forget_loss(fb)
 
-            # Compute retain loss
+            # Compute retain loss (CE or KL(pretrained || model))
             retain_ids = rb['input_ids'].to(self.args.device)
             retain_mask = rb['attention_mask'].to(self.args.device)
             retain_labels = rb.get('labels', retain_ids).to(self.args.device)
@@ -1582,7 +1584,10 @@ class SIBL(UnlearnTrainer):
                 attention_mask=retain_mask,
                 labels=retain_labels
             )
-            L_ret = retain_outputs.loss
+            if self.outer_retain_loss_type == "kl_pretrained" and self.ref_model is not None:
+                L_ret = self._kl_loss_from_ref(retain_outputs.logits, retain_ids, retain_mask, retain_labels)
+            else:
+                L_ret = retain_outputs.loss
 
             if not torch.isfinite(L_fgt) or not torch.isfinite(L_ret):
                 logger.warning(
@@ -1648,7 +1653,14 @@ class SIBL(UnlearnTrainer):
                         l_f = self.compute_forget_loss(forget_batch) + self.steering_alpha * l_steer
                 else:
                     l_f = self.compute_forget_loss(forget_batch)
-                l_r = self.compute_retain_loss(retain_batch)
+                if self.outer_retain_loss_type == "kl_pretrained" and self.ref_model is not None:
+                    _ids = retain_batch['input_ids'].to(self.args.device)
+                    _mask = retain_batch['attention_mask'].to(self.args.device)
+                    _labels = retain_batch.get('labels', _ids).to(self.args.device)
+                    _out = self.model(input_ids=_ids, attention_mask=_mask, labels=_labels)
+                    l_r = self._kl_loss_from_ref(_out.logits, _ids, _mask, _labels)
+                else:
+                    l_r = self.compute_retain_loss(retain_batch)
                 r_t = l_r - self.epsilon
                 return l_f + self.lambda_dual * l_r + 0.5 * self.rho * (r_t ** 2)
 
@@ -1870,7 +1882,8 @@ class SIBL(UnlearnTrainer):
         # Also needed when inner_loss_type or post_inner_loss_type is kl_pretrained.
         needs_ref = (self.forget_loss_type == "npo"
                      or self.inner_loss_type == "kl_pretrained"
-                     or self.post_inner_loss_type == "kl_pretrained")
+                     or self.post_inner_loss_type == "kl_pretrained"
+                     or self.outer_retain_loss_type == "kl_pretrained")
         if needs_ref and self.ref_model is None:
             self._prepare_ref_model()
 
@@ -1965,6 +1978,8 @@ class SIBL(UnlearnTrainer):
 
         if self.inner_loss_type != "ce":
             logger.info(f"Inner loop loss: {self.inner_loss_type} (T_kl={self.inner_kl_temperature})")
+        if self.outer_retain_loss_type != "ce":
+            logger.info(f"Outer retain loss: {self.outer_retain_loss_type} (T_kl={self.inner_kl_temperature})")
         if self.invert_inner_mask:
             logger.info("Inverted inner mask: inner loop updates RETAIN neurons, outer updates FORGET neurons")
         if self.implicit_trace_guided:
