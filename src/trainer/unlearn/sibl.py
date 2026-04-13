@@ -2072,9 +2072,27 @@ class SIBL(UnlearnTrainer):
         from torch.utils.data import DataLoader, WeightedRandomSampler
 
         weights = self._forget_sample_weights
+        dataset_len = len(self.train_dataset)
+
+        # Adapt weights to match actual dataset length (PretrainingDataset chunks
+        # text into fixed-length pieces, so dataset size may differ from score count)
+        if len(weights) != dataset_len:
+            logger.info(f"Adapting weights from {len(weights)} scores to {dataset_len} dataset items "
+                        f"(dataset uses chunked tokenization)")
+            # Map each dataset chunk to the closest original sample by proportional position
+            import torch as _torch
+            adapted = _torch.zeros(dataset_len)
+            for i in range(dataset_len):
+                src_idx = int(i * len(weights) / dataset_len)
+                src_idx = min(src_idx, len(weights) - 1)
+                adapted[i] = weights[src_idx]
+            weights = adapted
+            logger.info(f"  Adapted weight range: [{weights.min():.3f}, {weights.max():.3f}], "
+                        f"mean={weights.mean():.3f}")
+
         sampler = WeightedRandomSampler(
             weights=weights.tolist(),
-            num_samples=len(weights),
+            num_samples=dataset_len,
             replacement=True,
         )
 

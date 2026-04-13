@@ -73,18 +73,18 @@ PRESETS = {
         model_name="muse-bench/MUSE-News_target",
         tokenizer="meta-llama/Llama-2-7b-hf",
         dataset="muse-bench/MUSE-News",
-        dataset_config="train",
+        dataset_config="raw",
         forget_split="forget",
         retain_split="retain1",
         text_field="text",
-        n_samples=3554,
+        n_samples=None,   # use all 889 forget samples
         output_dir="trace_analysis/figures/traces/muse_news",
     ),
     "muse-books": dict(
         model_name="muse-bench/MUSE-Books_target",
         tokenizer="meta-llama/Llama-2-7b-hf",
         dataset="muse-bench/MUSE-Books",
-        dataset_config="train",
+        dataset_config="raw",
         forget_split="forget",
         retain_split="retain1",
         text_field="text",
@@ -267,7 +267,12 @@ def collect_causal_traces(model, layers, dataloader, noise_std, device):
 # ===================================================================
 
 def collect_gradient_traces(model, dataloader, device):
-    """Compute mean |gradient| per parameter over all batches."""
+    """Compute mean |gradient| per output-neuron (row) per parameter over all batches.
+
+    For 2-D weight matrices: accumulates abs(grad).mean(dim=1) → shape (out_features,)
+    For 1-D params (bias, layernorm): accumulates abs(grad) → shape (out_features,)
+    This per-row format is required by SIBL's neuron-level mask construction.
+    """
     logger.info("=== Gradient Traces ===")
     accum = {}
     n_batches = 0
@@ -283,7 +288,17 @@ def collect_gradient_traces(model, dataloader, device):
 
         for name, param in model.named_parameters():
             if param.grad is not None:
-                accum[name] = accum.get(name, 0.0) + param.grad.abs().mean().item()
+                g = param.grad.abs()
+                # Reduce to per-row (output neuron) vector
+                if g.dim() >= 2:
+                    row_mean = g.mean(dim=tuple(range(1, g.dim())))  # (out_features,)
+                else:
+                    row_mean = g  # already 1-D
+                row_mean = row_mean.detach().cpu()
+                if name in accum:
+                    accum[name] += row_mean
+                else:
+                    accum[name] = row_mean.clone()
 
         model.zero_grad()
         n_batches += 1
@@ -292,7 +307,7 @@ def collect_gradient_traces(model, dataloader, device):
             logger.info(f"  Gradient traces batch {bi+1}/{len(dataloader)}")
 
     for name in accum:
-        accum[name] /= n_batches
+        accum[name] = accum[name] / n_batches
     return accum
 
 
@@ -380,7 +395,8 @@ def _aggregate_grads_by_layer(grads, n_layers):
         m = re.search(r"(?:layers|h|blocks)\.(\d+)\.", name)
         if m:
             li = int(m.group(1))
-            layer_sum[li] += val
+            scalar = float(val.mean()) if isinstance(val, torch.Tensor) else float(val)
+            layer_sum[li] += scalar
             layer_cnt[li] += 1
     return {l: layer_sum[l] / max(layer_cnt[l], 1) for l in range(n_layers)}
 
@@ -487,9 +503,11 @@ def plot_gradient_differential(forget_grads, retain_grads, diff_scores, n_layers
     axes[1].grid(axis="y", alpha=0.3)
 
     top_n = 30
-    sorted_p = sorted(diff_scores.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    def _to_scalar(v):
+        return float(v.mean()) if isinstance(v, torch.Tensor) else float(v)
+    sorted_p = sorted(diff_scores.items(), key=lambda x: _to_scalar(x[1]), reverse=True)[:top_n]
     names = [p.replace("model.layers.", "L").replace(".weight", "")[:40] for p, _ in sorted_p]
-    vals = [v for _, v in sorted_p]
+    vals = [_to_scalar(v) for _, v in sorted_p]
     axes[2].barh(range(len(names)), vals, color="#e74c3c", alpha=0.85)
     axes[2].set_yticks(range(len(names)))
     axes[2].set_yticklabels(names, fontsize=7)
@@ -577,11 +595,12 @@ def print_summary(causal_f, causal_r, forget_grads, retain_grads, diff_scores, n
         print(f"{layer:>6d} {fg_l[layer]:>14.6f} {rg_l[layer]:>14.6f} {ratio:>10.2f}")
 
     print("\n--- Top 20 Least Retain-Biased Parameters ---")
-    sp = sorted(diff_scores.items(), key=lambda x: x[1], reverse=True)
+    def _sc(v): return float(v.mean()) if isinstance(v, torch.Tensor) else float(v)
+    sp = sorted(diff_scores.items(), key=lambda x: _sc(x[1]), reverse=True)
     print(f"{'Parameter':>55} {'Score':>10}")
     print("-" * 67)
     for name, score in sp[:20]:
-        print(f"{name[-55:]:>55} {score:>10.4f}")
+        print(f"{name[-55:]:>55} {_sc(score):>10.4f}")
 
     forget_layers = sorted([l for l in causal_f if causal_f[l] > causal_r.get(l, 0)])
     print(f"\nForget-dominant layers (causal): {forget_layers}")
@@ -803,6 +822,17 @@ def main():
     torch.save(results, pt_path)
     logger.info(f"Saved {pt_path}")
 
+    # Save neuron_traces.pt in format expected by SIBL trainer
+    if "gradient_traces" in results:
+        neuron_traces = {
+            "forget": results["gradient_traces"]["forget"],
+            "retain": results["gradient_traces"]["retain"],
+            "elapsed_seconds": results["metadata"].get("total_time_seconds", 0),
+        }
+        neuron_traces_path = os.path.join(args.output_dir, "neuron_traces.pt")
+        torch.save(neuron_traces, neuron_traces_path)
+        logger.info(f"Saved {neuron_traces_path} (SIBL-compatible neuron traces)")
+
     json_out = {"metadata": results["metadata"]}
     if "causal_traces" in results:
         json_out["causal_traces"] = {
@@ -810,8 +840,14 @@ def main():
             "retain": {str(k): v for k, v in results["causal_traces"]["retain"].items()},
         }
     if "differential_scores" in results:
-        json_out["top_50_differential_params"] = dict(
-            sorted(results["differential_scores"].items(), key=lambda x: x[1], reverse=True)[:50])
+        def _score_val(v):
+            import torch
+            return float(v.mean()) if isinstance(v, torch.Tensor) else float(v)
+        json_out["top_50_differential_params"] = {
+            k: _score_val(v)
+            for k, v in sorted(results["differential_scores"].items(),
+                               key=lambda x: _score_val(x[1]), reverse=True)[:50]
+        }
     if "layer_differential" in results:
         json_out["layer_differential"] = results["layer_differential"]
     if "activation_traces" in results:

@@ -1,0 +1,102 @@
+MUSE News Baseline Report — Handover Notes
+==========================================
+Date: 2026-04-06
+Repo: /datadrive/forked/open-unlearning
+Report file: reports/muse_news.md
+
+## Environment
+
+ALWAYS use this python binary directly — do NOT use `conda run` (it buffers stdout, logs appear empty):
+
+    /datadrive/conda/envs/unlearning/bin/python
+
+Or activate first:
+
+    source /datadrive/conda/etc/profile.d/conda.sh && conda activate unlearning
+
+Flash Attention note: the `unlearning` env does NOT have flash_attn installed.
+Always pass `model.model_args.attn_implementation=sdpa` to all train and eval commands.
+Using `flash_attention_2` will fail silently or OOM.
+
+Also always set:
+
+    export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+
+## What Was Done
+
+Results are collected by:
+1. Running training via scripts/run_muse_news_baselines.sh (or manually)
+2. Running eval via src/eval.py pointing to the saved model
+3. Reading results from saves/eval/<task_name>/MUSE_EVAL.json
+4. Updating reports/muse_news.md by hand
+
+The eval command template used for all baselines:
+
+    python src/eval.py \
+        experiment=eval/muse/default.yaml \
+        data_split=News \
+        task_name=<TASK_NAME> \
+        model=Llama-2-7b-hf \
+        model.model_args.pretrained_model_name_or_path=saves/unlearn/<SAVE_DIR> \
+        model.model_args.attn_implementation=sdpa \
+        retain_logs_path=saves/eval/muse_Llama-2-7b-hf_News_retrain/MUSE_EVAL.json
+
+Results are in: saves/eval/<task_name>/MUSE_EVAL.json
+Key metrics: forget_knowmem_ROUGE, forget_verbmem_ROUGE, retain_knowmem_ROUGE,
+             extraction_strength, privleak
+
+Train time: read from saves/unlearn/<SAVE_DIR>/trainer_state.json -> train_runtime (seconds)
+
+## Completed Methods
+
+| Method      | Save dir                                      | Eval done |
+|-------------|-----------------------------------------------|-----------|
+| GradAscent  | saves/unlearn/muse_Llama-2-7b-hf_News_GradAscent | YES   |
+| GradDiff    | saves/unlearn/muse_Llama-2-7b-hf_News_GradDiff   | YES   |
+| NPO         | saves/unlearn/muse_Llama-2-7b-hf_News_NPO         | YES   |
+| SimNPO      | saves/unlearn/muse_Llama-2-7b-hf_News_SimNPO      | YES   |
+
+## Remaining / Incomplete
+
+### BLURNPO
+- Status: Training interrupted at step 100 (checkpoint saved)
+- Checkpoint: saves/unlearn/muse_Llama-2-7b-hf_News_BLURNPO/checkpoint-100/
+- Total steps should be ~130 (10 epochs x 13 steps)
+- Resume command:
+    python src/train.py --config-name=unlearn.yaml \
+        experiment=unlearn/muse/blurnpo \
+        model=Llama-2-7b-hf data_split=News \
+        retain_logs_path=saves/eval/muse_Llama-2-7b-hf_News_retrain/MUSE_EVAL.json \
+        trainer.args.resume_from_checkpoint=saves/unlearn/muse_Llama-2-7b-hf_News_BLURNPO/checkpoint-100
+- Config: beta=0.05, LR=2.5e-5, eff_bs=32
+
+### RMU
+- Status: Training was interrupted, NO model weights saved
+- Must run from scratch:
+    python src/train.py --config-name=unlearn.yaml \
+        experiment=unlearn/muse/rmu \
+        model=Llama-2-7b-hf data_split=News \
+        retain_logs_path=saves/eval/muse_Llama-2-7b-hf_News_retrain/MUSE_EVAL.json
+- Config: max_steps=80, layers 5-7, eff_bs=32
+
+## After Each Method Completes
+
+1. Run eval (command above, replace task_name and pretrained_model_name_or_path)
+2. Read MUSE_EVAL.json for the 5 metrics
+3. Read trainer_state.json for train_runtime
+4. Update reports/muse_news.md table row for that method
+
+## Report Column Mapping (from MUSE_EVAL.json)
+
+| Report column     | MUSE_EVAL.json key         |
+|-------------------|---------------------------|
+| forget_knowmem↓   | forget_knowmem_ROUGE       |
+| verbmem↓          | forget_verbmem_ROUGE       |
+| retain↑           | retain_knowmem_ROUGE       |
+| extract↓          | extraction_strength        |
+| privleak          | privleak                   |
+
+## Gold / Baseline Reference
+
+Gold (retrain):  saves/eval/muse_Llama-2-7b-hf_News_retrain/MUSE_EVAL.json
+Target (pre-unlearn): model muse-bench/MUSE-News_target evaluated as-is

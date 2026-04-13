@@ -65,7 +65,11 @@ def compute_psi(
         m = re.search(r"layers\.(\d+)\.", param_name)
         if m:
             layer = int(m.group(1))
-            layer_grad_ratio.setdefault(layer, []).append(float(ratio))
+            # ratio may be a scalar float or a row-vector tensor (new format)
+            v = ratio
+            if hasattr(v, "mean"):
+                v = v.float().mean().item()
+            layer_grad_ratio.setdefault(layer, []).append(float(v))
 
     # --- Detect number of layers ---
     all_layers = set(layer_grad_ratio.keys())

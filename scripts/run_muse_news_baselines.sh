@@ -87,7 +87,6 @@ smart_train_dsbial() {
 # ─── 1. GradAscent (bs=16, accum=2, eff=32) ──────────────────────────────────
 TASK="muse_${MODEL}_${DATA_SPLIT}_GradAscent"
 echo "=== [1/7] GradAscent ===" | tee -a "$PROGRESS"
-rm -rf saves/unlearn/${TASK}
 if smart_train ${TASK} unlearn/muse/default.yaml 16 2 trainer=GradAscent; then
     run_eval ${TASK}; echo "[GradAscent done]" | tee -a "$PROGRESS"
 else echo "[WARN] GradAscent failed" | tee -a "$PROGRESS"; fi
@@ -95,7 +94,6 @@ else echo "[WARN] GradAscent failed" | tee -a "$PROGRESS"; fi
 # ─── 2. GradDiff (bs=16, accum=2, eff=32) ────────────────────────────────────
 TASK="muse_${MODEL}_${DATA_SPLIT}_GradDiff"
 echo "=== [2/7] GradDiff ===" | tee -a "$PROGRESS"
-rm -rf saves/unlearn/${TASK}
 if smart_train ${TASK} unlearn/muse/default.yaml 16 2 trainer=GradDiff; then
     run_eval ${TASK}; echo "[GradDiff done]" | tee -a "$PROGRESS"
 else echo "[WARN] GradDiff failed" | tee -a "$PROGRESS"; fi
@@ -117,7 +115,6 @@ else echo "[WARN] SimNPO failed" | tee -a "$PROGRESS"; fi
 # ─── 5. DS-BiAL (bs=1, accum=32, eff=32) ────────────────────────────────────
 TASK="muse_${MODEL}_${DATA_SPLIT}_DSBiAL"
 echo "=== [5/7] DS-BiAL ===" | tee -a "$PROGRESS"
-rm -rf saves/unlearn/${TASK}
 if smart_train_dsbial ${TASK}; then
     run_eval ${TASK}; echo "[DS-BiAL done]" | tee -a "$PROGRESS"
 else echo "[WARN] DS-BiAL failed" | tee -a "$PROGRESS"; fi
@@ -125,7 +122,6 @@ else echo "[WARN] DS-BiAL failed" | tee -a "$PROGRESS"; fi
 # ─── 6. BLURNPO (bs=1, accum=32, eff=32) ────────────────────────────────────
 TASK="muse_${MODEL}_${DATA_SPLIT}_BLURNPO"
 echo "=== [6/7] BLURNPO ===" | tee -a "$PROGRESS"
-rm -rf saves/unlearn/${TASK}
 if smart_train ${TASK} unlearn/muse/blurnpo.yaml 1 32; then
     run_eval ${TASK}; echo "[BLURNPO done]" | tee -a "$PROGRESS"
 else echo "[WARN] BLURNPO failed" | tee -a "$PROGRESS"; fi
@@ -133,7 +129,6 @@ else echo "[WARN] BLURNPO failed" | tee -a "$PROGRESS"; fi
 # ─── 7. RMU (bs=4, accum=8, eff=32, max_steps=80) ───────────────────────────
 TASK="muse_${MODEL}_${DATA_SPLIT}_RMU"
 echo "=== [7/7] RMU ===" | tee -a "$PROGRESS"
-rm -rf saves/unlearn/${TASK}
 if smart_train ${TASK} unlearn/muse/rmu.yaml 4 8 +trainer.args.max_steps=80; then
     run_eval ${TASK}; echo "[RMU done]" | tee -a "$PROGRESS"
 else echo "[WARN] RMU failed" | tee -a "$PROGRESS"; fi

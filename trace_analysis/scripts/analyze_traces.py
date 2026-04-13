@@ -64,9 +64,10 @@ class TextDataset(Dataset):
         }
 
 
-def load_and_tokenize(tokenizer, dataset_name, split_name, n_samples, max_length):
-    logger.info(f"Loading {dataset_name}  split={split_name}  (n_samples={n_samples})")
-    ds = load_dataset(dataset_name, name="raw", split=split_name)
+def load_and_tokenize(tokenizer, dataset_name, split_name, n_samples, max_length,
+                      dataset_config="raw"):
+    logger.info(f"Loading {dataset_name} [{dataset_config}] split={split_name} (n_samples={n_samples})")
+    ds = load_dataset(dataset_name, name=dataset_config, split=split_name)
     if n_samples < len(ds):
         ds = ds.select(range(n_samples))
     texts = list(ds["text"])
@@ -169,7 +170,13 @@ def extract_layer_component_matrix(param_traces, n_layers):
         li = int(m.group(1))
         for ci, comp in enumerate(components):
             if comp in name:
-                matrix[li, ci] = val if isinstance(val, float) else np.mean(val)
+                import torch as _torch
+                if isinstance(val, float):
+                    matrix[li, ci] = val
+                elif isinstance(val, _torch.Tensor):
+                    matrix[li, ci] = val.float().mean().item()
+                else:
+                    matrix[li, ci] = np.mean(val)
                 break
     return matrix, components
 
@@ -473,6 +480,8 @@ def main():
     parser.add_argument("--tokenizer", type=str,
                         default="meta-llama/Llama-2-7b-hf")
     parser.add_argument("--dataset", type=str, default="muse-bench/MUSE-News")
+    parser.add_argument("--dataset_config", type=str, default="raw",
+                        help="HuggingFace dataset config name (e.g. 'raw', 'train')")
     parser.add_argument("--forget_split", type=str, default="forget")
     parser.add_argument("--retain_split", type=str, default="retain1")
     parser.add_argument("--n_samples", type=int, default=10000,
@@ -480,7 +489,7 @@ def main():
     parser.add_argument("--max_length", type=int, default=512)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--trace_file", type=str,
-                        default="trace_analysis/figures/traces/muse_news_full/trace_results.pt",
+                        default="trace_analysis/figures/traces/muse_news/trace_results.pt",
                         help="Existing param-level traces (for layer-component heatmap)")
     parser.add_argument("--output_dir", type=str,
                         default="trace_analysis/figures/traces/analysis")
@@ -556,10 +565,12 @@ def main():
 
         forget_ds = load_and_tokenize(
             tokenizer, args.dataset, args.forget_split,
-            args.n_samples, args.max_length)
+            args.n_samples, args.max_length,
+            dataset_config=args.dataset_config)
         retain_ds = load_and_tokenize(
             tokenizer, args.dataset, args.retain_split,
-            args.n_samples, args.max_length)
+            args.n_samples, args.max_length,
+            dataset_config=args.dataset_config)
 
         forget_loader = DataLoader(forget_ds, batch_size=args.batch_size,
                                     shuffle=False, collate_fn=collate_fn)

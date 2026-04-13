@@ -1,21 +1,33 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-10 ~03:35 (S5 BROKE FRONTIER! T series designed, launching after S6/S7)
+## For agent continuity. Last updated: 2026-04-11 ~02:30 (PerTA confirmed best, all baselines done, saves cleaned)
 
 ---
 
-## GOLD TARGETS
-- fk ≤ 0.328 (forget knowmem ROUGE)
-- rk ≥ 0.560 (retain knowmem ROUGE)
+## GOLD TARGETS (verified 2026-04-10)
+- fk ≤ 0.324 (forget knowmem ROUGE) — fresh eval of retrain model
+- rk ≥ 0.552 (retain knowmem ROUGE) — fresh eval of retrain model
+- Note: prior session used fk≤0.328, rk≥0.560 from an older eval. ~0.008 variance from generation randomness.
 
 ---
 
-## COMPLETE RESULTS TABLE
+## REFERENCE MODEL EVALS (fresh, 2026-04-10)
 
-### Baselines
+| Model | fk↓ | rk↑ | fv | ex | CE frontier δ | notes |
+|-------|------|------|------|------|------|-------|
+| **Retrain (gold)** | **0.324** | **0.552** | 0.204 | 0.025 | **+0.204** | `muse-bench/MUSE-news_retrain` — WAY above CE frontier |
+| Target (finetuned) | 0.654 | 0.544 | 0.569 | 0.302 | +0.014 | `muse-bench/MUSE-News_target` — ON CE frontier |
+| Pretrained (base) | 0.270 | 0.345 | 0.188 | 0.021 | +0.027 | `meta-llama/Llama-2-7b-hf` — ABOVE CE frontier |
+
+### Critical insight: Pretrained as unlearning baseline
+The base LLM (never finetuned) has fk=0.270 (BELOW gold!) and rk=0.345. This means:
+- G1 (fk=0.274, rk=0.327) is **WORSE than pretrained on rk** — our "best" experiment doesn't beat "do nothing"
+- Any method with rk < 0.345 hasn't even matched the base model
+- The retrain model sits δ=+0.204 above CE frontier; our best (T8f) is δ=+0.056 — only 27% of the way
+- Target model is ON the CE frontier (δ=+0.014) — finetuning creates the correlated fk/rk pattern
+
+### Baselines (from prior sessions, not re-verified)
 | Method | fk↓ | rk↑ | notes |
 |--------|-----|-----|-------|
-| Gold (retrain) | 0.328 | 0.560 | target |
-| Pretrained | 0.644 | 0.555 | starting point |
 | GradAscent | 0.003 | 0.008 | model collapses |
 | GradDiff | 0.330 | 0.247 | good forget, bad retain |
 | NPO standalone | 0.517 | 0.420 | — |
@@ -49,17 +61,34 @@
 
 ---
 
-## CURRENT STATE (2026-04-10, updated ~03:35)
+## CURRENT STATE (2026-04-10, updated ~19:30)
 
-**FRONTIER BROKEN: S5** — fk=0.346, rk=0.382 — ABOVE CE frontier by +0.022
-**Best fk: G1** — fk=0.274 ✅ (beats gold 0.328), rk=0.327 ❌
-**Best above-frontier: S5** — fk=0.346 (slightly above gold), rk=0.382 — first controlled frontier break
-**Gap to gold:** rk needs +0.178 more from S5 (vs +0.233 from G1). fk needs 0.018 improvement from S5.
-**Note:** S5 proves the frontier CAN be broken with small-batch + sufficient ALM buildup.
+**🔥 NEW PARADIGM: PerTA BREAKS CE FRONTIER SYSTEMATICALLY**
+**BEST FRONTIER BREAK: PerTA λ=3.5** — fk=0.282 ✅, rk=0.396 — ABOVE CE frontier by δ=+0.071 (27% better than T8f)
+**Best rk at gold fk: PerTA λ=3.5 + LoRA r16** — fk=0.329 ≈ gold, rk=0.401, δ=+0.050
+**Best rk overall: PerTA λ=0.5** — fk=0.635, rk=0.567 > gold rk! (but fk too high)
+**Remaining gap: rk** — at fk≈gold, rk=0.396-0.401. Gold rk=0.552. Gap = +0.151.
+**Key mechanism:** Fisher-weighted per-parameter task arithmetic. Not gradient-based — direct weight surgery.
 
-**I series final verdict:** DGA soft mask is a dead end. Full β sweep (1,3,5,10,20) confirms: every β shows fk regression (+0.068 to +0.090 vs G1) with negligible rk gain (+0.003 to +0.028). Best rk was β=3 (rk=0.355) but fk=0.359 — still far from gold on both axes. No sweet spot exists.
+**PerTA λ=3.5 is CONFIRMED BEST and REPRODUCIBLE (deterministic).**
+Two identical runs produce identical metrics. No gradient randomness.
 
-**H series also DONE:** H0 (top-50 memorized seqs, G1 config) fk=0.005 ✅ rk=0.020 ❌ — collapsed again. Extreme gradient signal (scores up to 140×) destroys model in 1 epoch even with G1 steering.
+**All MUSE News baselines complete (2026-04-11):**
+| Method | fk | rk | notes |
+|---|---|---|---|
+| GradAscent | 0.003 | 0.008 | collapsed |
+| GradDiff | 0.330 | 0.247 | |
+| NPO | 0.517 | 0.420 | |
+| SimNPO | 0.584 | 0.470 | best gradient retain |
+| BLURNPO | 0.581 | 0.532 | checkpoint-100/130 (OOM full run) |
+| RMU | 0.516 | 0.457 | |
+| **PerTA (ours)** | **0.282** | **0.396** | **best fk by far, above CE frontier** |
+
+**Saves cleaned:** 522GB → 220GB. Kept: baselines, perta_l3.5, Fisher cache.
+
+**Remaining gap:** rk=0.396 vs gold 0.552. Gap = 0.156.
+
+**Generalization requirement:** Method must work on MUSE Books + WMDP. PerTA is fully general — only needs pretrained + target model + forget/retain data for Fisher computation.
 
 ### K/G5 series (2026-04-09) ✅ COMPLETE
 | Exp | fk↓ | rk↑ | verdict |
@@ -694,6 +723,329 @@ This is bilevel optimization 101: the inner problem must converge for the bileve
 2. T2: ~50 LOC — precompute Fisher, apply scaling in outer_step
 3. T3: ~30 LOC — extend inner_step loss computation
 4. T4: ~80 LOC — Fisher/SVD precomputation + projection in outer_step
+
+---
+
+## T SERIES RESULTS (2026-04-10, running)
+
+### Completed
+| Exp | Config | fk↓ | rk↑ | frontier | verdict |
+|-----|--------|------|------|----------|---------|
+| T0 | K=10, 5 steps, accum=32 | 0.072 | 0.123 | BELOW (-0.087) | Over-forgot. 5 steps of K=10 with accum=32 = NPO too strong, insufficient ALM buildup. |
+| T1 | K=5, 10 steps, accum=32 | 0.264 | 0.259 | BELOW (-0.057) | Also over-forgot. 10 steps still not enough for ALM at ρ=0.1 with accum=32. |
+| T2 | Fisher α=1.0, accum=32 | 0.386 | 0.336 | BELOW (-0.046) | Fisher dampened NPO → weaker forget (fk worse than G1). rk also below frontier. No improvement. |
+| T2b | Fisher α=10.0, accum=32 | 0.490 | 0.399 | BELOW (-0.041) | Stronger Fisher → even weaker forget. Slides along frontier. Both T2/T2b BELOW frontier — Fisher hurts bilevel dynamics. |
+| T3 | Contrastive inner (β=1,γ=0.5), accum=32 | 0.409 | 0.353 | BELOW (-0.041) | Contrastive weakened forget (fk 0.409 vs G1 0.274). K=1 inner step too weak for contrastive signal. |
+| T3b | Contrastive + K=3, accum=32 | 0.361 | 0.327 | BELOW (-0.042) | K=3 prevented L_fgt collapse (0.2-0.8 vs 0.04) but still BELOW. Different dynamics, same frontier. |
+| **T5** | **S5 + Fisher α=1.0 (accum=1, K=3, 100 steps)** | **0.365** | **0.305** | **BELOW (-0.066)** | **Fisher HURTS S5 — both axes worse than vanilla S5 (0.346, 0.382). Fisher is anti-bilevel.** |
+| **T6** | **S5 + contrastive (accum=1, K=3, 100 steps)** | **0.000** | **0.000** | **COLLAPSED** | **Contrastive DESTROYED model. L_ret spiked to 7.8, never recovered. Chaotic inner dynamics.** |
+| T7 | S5 + Fisher + contrastive | — | — | FAILED | Hydra config error (T3 config missing Fisher keys). Would collapse anyway (T6 collapsed). |
+
+### T0-T7 COMPLETE — ALL BELOW FRONTIER OR COLLAPSED
+**Not a single T series experiment broke the frontier.** S5 (vanilla accum=1, K=3, 100 steps) remains the ONLY controlled experiment above the CE frontier.
+
+### T8 Weighted Series Results (2026-04-10)
+| Exp | Config | fk↓ | rk↑ | frontier | verdict |
+|-----|--------|------|------|----------|---------|
+| T8 | S5 + log weighting, 100 steps | 0.003 | 0.038 | COLLAPSED | Log weighting alone → L_ret spiked to 7.7, model destroyed |
+| T8b | S5 + sqrt weighting, 100 steps | 0.354 | 0.368 | ON (+0.003) | sqrt weighting preserves S5's operating region, marginal frontier |
+| T8c | S5 + log weighting, 75 steps | 0.000 | 0.000 | COLLAPSED | Log weighting consistently collapses regardless of step count |
+| T8d | S5 + log + Fisher α=1.0 | — | — | FAILED | Config error (missing Fisher keys in T8 config). Fixed for future runs. |
+| T8e | G1 + log weighting, accum=32 | 0.390 | 0.331 | BELOW (-0.054) | Log weighting with accum=32 → weaker forget, no rk gain. Sampling diluted by batching. |
+| **T8f** | **S5 + log + contrastive inner** | **0.428** | **0.461** | **ABOVE (+0.056)** | **🔥 SYNERGY: log+contrastive stabilize each other. Highest above-frontier (δ=+0.056) but fk too high.** |
+
+### T8 KEY INSIGHT: Log weighting + contrastive = synergistic stabilization
+- **T8 (log weighting alone):** COLLAPSED — concentrated NPO on high-memorization chunks → extreme retain damage
+- **T6 (contrastive alone):** COLLAPSED — inner push-pull creates chaotic dynamics with single samples  
+- **T8f (log + contrastive):** ABOVE FRONTIER (+0.056) — the two mechanisms compensate each other:
+  1. Log weighting concentrates NPO → more targeted, less collateral damage per step
+  2. Contrastive inner actively separates retain/forget representations → prevents the retain spike
+  3. Together: L_ret=0.65 at step 40 (constraint SATISFIED!) vs T8's L_ret=7.7 and T6's L_ret=7.8
+  4. The focused NPO gives contrastive less interference to manage; contrastive gives NPO a safer optimization landscape
+
+**T8b (sqrt weighting):** Healthy dynamics (ON frontier) suggest weighting CAN work in S5 regime. The sqrt scheme is more aggressive but paradoxically more stable — it creates cleaner separation between high/low-memorization samples.
+
+**Log vs sqrt:** Log compresses the weight range (max 2.9x), making sampling more uniform-like. Sqrt amplifies (max 11.8x), creating stronger targeting. Log's quasi-uniform distribution may cause worse gradient consistency across steps (different step = different mix of high/low samples → noisy trajectory). Sqrt's strong targeting creates more consistent gradients (mostly high-memorization samples → consistent NPO signal).
+
+### T0/T1 Insights
+
+**T0 (K=10, 5 steps):** fk=0.072 is extremely low — the model forgot almost everything. But rk=0.123 means retain was destroyed too. With only 5 outer steps at accum=32, ALM λ reaches at most ~0.25 (ρ=0.1). That's ~5% retain protection. K=10 inner steps DID repair retain per-step, but the outer gradient at accum=32 was too diffuse — 32 samples averaged = broad damage the inner loop couldn't fully fix. Also, 5 steps × 32 accum = 160 samples processed — enough to wipe forget but not enough ALM buildup for retain.
+
+**T1 (K=5, 10 steps):** fk=0.264 (better than T0's 0.072), rk=0.259. Predicted rk at fk=0.264 is 0.315. T1 is BELOW by 0.057 — worse than the CE frontier. The intermediate K=5 + 10 steps doesn't improve over the baseline regime either. With accum=32, each outer step still makes broad perturbations. K=5 inner correction is insufficient for 32-sample-averaged gradients.
+
+**Key insight from T0+T1:** High K alone (T0: K=10) or intermediate K (T1: K=5) with accum=32 does NOT break the frontier. This confirms that the frontier break requires SMALL BATCH (accum=1) dynamics, not just high K. The 8r/S5 breakthrough came from single-sample gradients being low-rank enough for K=3-10 inner steps to compensate. Accum=32 averages the perturbation into a high-rank mess the inner loop can't efficiently fix.
+
+**T2 (Fisher α=1.0):** fk=0.386, rk=0.336, BELOW (-0.046). Fisher dampening WEAKENED forgetting — fk went from G1's 0.274 to 0.386 (worse). The Fisher diagonal correctly identifies retain-important parameters and suppresses NPO there, but this suppression reduces the effective NPO gradient magnitude across shared parameters. With 85% neuron overlap, most parameters are both retain- and forget-important. Dampening on these shared params means weaker NPO everywhere. Result: same frontier, just a different (worse) point on it.
+
+**T2 training dynamics vs G1:** Nearly identical λ trajectory (G1: ~2.7 at step 25; T2: 2.80). L_fgt collapsed to 0.04 by step 4 (same as G1). L_ret spike was slightly higher (6.9 vs G1's ~5), suggesting Fisher weighting didn't prevent early retain damage. The Fisher scaling 1/(1+αF) with α=1 and mean F≈0 is essentially a no-op for most parameters — only very high-Fisher params get dampened.
+
+**T2b (Fisher α=10):** fk=0.490, rk=0.399. Even further toward "more retain, less forget." Both T2 and T2b are BELOW the CE frontier (not just ON it) — Fisher weighting actually HURTS bilevel performance. The 1/(1+αF) scaling interferes with the coupled NPO/ALM dynamics. When NPO is dampened on retain-important params, the outer gradient becomes less effective at forgetting AND the ALM constraint residuals are smaller → λ grows slower → less retain protection. The Fisher scaling breaks the bilevel optimization's own feedback mechanism.
+
+**Fisher verdict: DEAD END across all regimes.**
+- accum=32: Both α=1 (T2: BELOW -0.046) and α=10 (T2b: BELOW -0.041) worse than G1.
+- accum=1: T5 (S5+Fisher) BELOW -0.066 — worse than vanilla S5 on BOTH axes.
+- Fisher scaling 1/(1+αF) breaks bilevel dynamics because it non-uniformly dampens the outer gradient. The bilevel framework relies on the outer gradient direction being correct (pointing toward forget); Fisher rotates this direction, causing the inner loop to compensate for the wrong perturbation. The result: less effective forgetting AND more retain damage.
+
+### G1-base (accum=32) verdict: ALL BELOW FRONTIER
+All four G1-base experiments (T2, T2b, T3, T3b) land BELOW the CE frontier — worse than vanilla G1 (which is ON frontier). Fisher and contrastive mechanisms, when applied to the accum=32 regime, consistently degrade performance. The mechanisms add noise to the bilevel optimization without improving the fundamental gradient geometry. With 32-sample-averaged outer gradients, the per-parameter adjustments (Fisher dampening) and per-representation adjustments (contrastive) are drowned out by the high-rank gradient noise.
+
+**T3b's qualitative difference:** K=3 + contrastive showed genuinely different training dynamics — L_fgt stayed at 0.2-0.8 instead of collapsing to 0.04. The inner loop with 3 steps and contrastive loss actively resisted NPO. But this resistance didn't translate to frontier improvement — it just produced a weaker operating point. The inner loop "fighting" the outer loop wastes gradient budget on an adversarial dynamic rather than cooperative bilevel optimization.
+
+### T5-T7 VERDICT: Fisher and contrastive HURT the S5 regime
+- **T5 (S5+Fisher):** BELOW (-0.066). Both fk and rk worse than vanilla S5. Fisher non-uniformly dampens the outer gradient → rotates the gradient direction → inner loop compensates for wrong perturbation.
+- **T6 (S5+contrastive):** COLLAPSED. L_ret spiked to 7.8 at step 40 and never recovered. Contrastive push-pull on single-sample representations creates chaotic inner dynamics. The inner loop fights itself — CE pulls retain toward data while contrastive pushes forget away, creating interference when representations overlap.
+- **T7 (S5+both):** Failed (config error), but would collapse since T6 collapsed.
+
+### CRITICAL INSIGHT FROM T SERIES: S5's frontier break is FRAGILE
+S5 (vanilla accum=1, K=3, 100 steps) breaks the frontier by δ=+0.022. But ANY modification to the S5 formula destroys it:
+- Fisher weighting → BELOW (-0.066)
+- Contrastive inner → COLLAPSED
+- The frontier break relies on a delicate balance between NPO gradient magnitude, inner loop compensation capacity (K=3), and ALM dual variable dynamics (ρ=0.01, 50+ steps to reach meaningful λ).
+- Perturbing ANY of these components — even with theoretically motivated mechanisms — disrupts the balance.
+
+**What this means for T8 (weighted sampling):** Score-weighted sampling changes the DISTRIBUTION of NPO gradients across the dataset. Unlike Fisher (which changes gradient direction) or contrastive (which adds inner loss terms), weighted sampling doesn't modify the optimization algorithm — it only reweights which samples appear. This is the most conservative modification and may preserve S5's fragile balance.
+
+---
+
+## U SERIES — Exploiting T8f Synergy (2026-04-10)
+
+### Rationale
+T8f (log weighting + contrastive inner) broke the frontier at δ=+0.056 — best ever. But fk=0.428 is too high.
+The synergy: log weighting focuses NPO on high-memorization chunks, contrastive inner prevents the retain spike that focused NPO would otherwise cause. Neither works alone (T8 collapsed, T6 collapsed), but together L_ret=0.65 at step 40 (constraint satisfied!).
+
+### U Series Results (2026-04-10)
+| Exp | Config | fk↓ | rk↑ | frontier | verdict |
+|-----|--------|------|------|----------|---------|
+| U0 | T8f + 200 steps | 0.003 | 0.019 | COLLAPSED | L_ret oscillated wildly after step 120 (λ=8+). 100 steps is the sweet spot. |
+| U1 | sqrt + contrastive | 0.002 | 0.011 | COLLAPSED | Only LOG + contrastive synergizes. Sqrt's aggressive targeting (11.8x) is too biased for contrastive to stabilize. |
+| U2 | T8f + npo_beta=1.0 | 0.201 | 0.240 | BELOW (-0.041) | Stronger NPO pushed fk to 0.201 but overwhelmed contrastive → synergy broke. |
+| U3 | T8f + ρ=0.005 | 0.000 | 0.000 | COLLAPSED | Slower ALM → no retain protection → destroyed. |
+| **U4** | **T8f + K=5** | **0.328** | **0.330** | **~ON (-0.021)** | **fk hits GOLD (0.328). K=5 inner with contrastive = precise correction. But rk=0.330 is 0.230 below gold.** |
+| U5 | T8f + γ=1.0 | 0.619 | 0.523 | ON (+0.012) | Stronger forget push weakened NPO significantly. Best rk=0.523 but fk destroyed. |
+| U6 | log + Fisher α=1.0 | 0.332 | 0.298 | BELOW (-0.054) | Fisher hurts as always. |
+
+### U Series Insights
+
+**U4 is the most controlled experiment at fk=gold:** K=5 inner steps with contrastive gives enough per-step correction to precisely balance NPO's forget pressure. fk=0.328 matches gold target. But rk=0.330 is the same ceiling we've been hitting since G1 (rk=0.327). The rk gap (+0.230) is structural — it's not a forgetting problem (fk is solved), it's a retain recovery problem.
+
+**U5 reveals the rk ceiling mechanism:** With γ=1.0 (strong forget push), NPO was weakened so much that fk=0.619 (near pretrained). But rk=0.523 — the BEST rk we've seen in the S5 regime, and close to M1's 0.563 (which used post-inner CE). The strong contrastive push essentially turned the inner loop into a retain-only optimizer (because the push term dominated). This confirms: rk CAN reach 0.52+ in the bilevel framework IF NPO is weakened sufficiently. The problem is always: weakening NPO → fk regression.
+
+**The fundamental rk ceiling at ~0.33 for fk~0.33:** When fk is near gold (0.274-0.346), rk is always 0.30-0.38. This is the CE Pareto frontier. The only way past it is to either:
+1. Find a mechanism that improves rk WITHOUT hurting fk (nothing tested so far does this)
+2. Accept a two-stage approach: first forget (get fk≤0.328), then recover retain separately
+
+**Log vs Sqrt weighting:** Log (compressed, max 2.9x) creates a quasi-uniform distribution that pairs with contrastive. Sqrt (aggressive, max 11.8x) is too concentrated → contrastive can't stabilize because it gets biased views. The log+contrastive synergy depends on sample diversity within each step.
+
+---
+
+## V SERIES RESULTS (partial, 2026-04-10)
+
+### Completed
+| Exp | Config | fk↓ | rk↑ | frontier | verdict |
+|-----|--------|------|------|----------|---------|
+| V_interp_a7 | 0.7*T8f + 0.3*U4 weights | — | — | — | safetensors fixed, eval pending |
+| V_interp_a5 | 0.5*T8f + 0.5*U4 weights | — | — | — | safetensors fixed, eval pending |
+| V_interp_a3 | 0.3*T8f + 0.7*U4 weights | — | — | — | safetensors fixed, eval pending |
+| V0 | K=4 + log + contrastive | 0.007 | 0.016 | COLLAPSED | K=4 breaks synergy. L_ret=7.85 at step 40 |
+| V1 | npo_beta=1.5 + log + contrastive | — | — | COLLAPSED | L_ret=7.90 at step 40. 25% beta reduction kills synergy |
+
+### Not yet run
+| Exp | Config | Hypothesis |
+|-----|--------|------------|
+| V2 | gamma=0.3 (weaker contrastive push) | More NPO headroom → fk drops, but does frontier break survive? |
+| V3 | gamma=0.7 (stronger push) | Between T8f (0.5) and U5 (1.0) — will it shift fk/rk balance? |
+| V4 | eta_theta=3e-4 (higher outer LR) | 50% more NPO per step without changing beta |
+| V5 | K=4 + gamma=0.3 | Likely dead (K=4 collapsed in V0) |
+| V6 | 80 steps (shorter) | Less ALM buildup → weaker retain → lower fk? |
+
+### V Series Insight: T8f is a knife-edge
+The T8f operating point (K=3, npo_beta=2.0, gamma=0.5, log weighting) is NOT a basin — it's a knife-edge. Both K=4 (V0) and npo_beta=1.5 (V1) collapse to L_ret≈7.9 at step 40, while T8f has L_ret=0.65 at step 40. The synergy between log weighting and contrastive inner requires:
+1. K=3 EXACTLY: K=4 gives the inner loop one extra contrastive iteration that overshoots. K=5 (U4) recovers stability but overcorrects → loses frontier break.
+2. npo_beta=2.0 EXACTLY: The NPO loss temperature controls gradient sharpness. At β=2.0, the signal is smooth enough for contrastive to stabilize. At β=1.5, sharper gradients create chaotic dynamics.
+
+The remaining V experiments (gamma sweep, LR, step count) keep K=3 and npo_beta=2.0 fixed — these are the most likely to preserve the synergy.
+
+---
+
+## H SERIES — G1 + Hard-50 Sequences (2026-04-10) ✅ DEAD END
+
+H0: G1 config restricted to top-50 most memorized sequences (score 20-140×).
+Result: fk=0.005, rk=0.020. **Complete model collapse.** The extreme gradient signal from top-50 memorized seqs (scores up to 140×) destroys ALL knowledge — both forget and retain — within 1 epoch. Even with G1's steering (coeff=5) the concentrated NPO gradient is too nuclear.
+
+Verdict: Subsetting to extreme-memorization sequences is always catastrophic. Score-weighted SAMPLING (T8 approach) is the right way — it adjusts frequency, not subsetting.
+
+---
+
+## V SERIES — Push T8f fk Lower (2026-04-10, PARTIALLY COMPLETE)
+
+### Core Challenge
+T8f (log + contrastive, K=3): fk=0.428, rk=0.461, δ=+0.056 (ABOVE frontier)
+U4 (log + contrastive, K=5): fk=0.328, rk=0.330, δ=-0.021 (ON frontier)
+
+**UPDATED AFTER V0/V1:** The synergy is razor-thin. K and npo_beta cannot change.
+Only safe knobs remaining: contrastive gamma, outer LR (eta_theta), step count.
+
+### Remaining Strategy (V2-V6)
+1. **V2: gamma=0.3** (weaker contrastive push) — weaker push → NPO has more headroom → fk drops. Risk: less disentanglement → rk drops too. MOST PROMISING.
+2. **V3: gamma=0.7** — between T8f (0.5) and U5 (1.0). May shift balance toward rk.
+3. **V4: eta_theta=3e-4** — 50% higher outer LR. Scales ENTIRE outer gradient (NPO+ALM), not just NPO shape. Different from beta change.
+4. **V5: K=4+gamma=0.3** — likely dead since K=4 collapsed in V0.
+5. **V6: 80 steps** — stop before ALM λ grows too large. T8f at 100 had fk=0.428; fewer steps = less ALM = potentially lower fk.
+6. **Weight interpolation eval** — T8f/U4 blends at alpha=0.7/0.5/0.3. Free experiment.
+
+### Additional ideas not yet in V series
+- **contrastive_beta=2.0** (stronger retain PULL, keep gamma=0.5) — untested knob
+- **Contrastive on layers [3,4,5]** (earlier layers) — different representational separation
+- **Steering coeff=10** (stronger retain steering) — more rk protection, frees NPO
+- **lambda_init=1.0** (warm-start ALM) — earlier retain protection, slower fk descent
+
+### Generalization Design
+Method components and their generalizability:
+- **Log-weighted sampling**: Needs memorization scores. General procedure: compute NPO loss ratio per sample → log(1+score). Works for any forget set.
+- **Contrastive inner loop**: Layer selection [5,6,7] is Llama-2-7b specific. For other models: pick layers at ~20-25% depth (where forget/retain representations diverge most).
+- **Steering**: coeff=5, same layers. Generalizable with same heuristic.
+- **ALM + bilevel**: Fully general. ρ=0.01, ε=0.70, K=3 are starting points.
+- **accum=1**: Critical for frontier-breaking dynamics. Non-negotiable.
+
+---
+
+## V_INTERP RESULTS — Weight Interpolation Between T8f and U4 (2026-04-10)
+
+Interpolated models: α*T8f + (1-α)*U4
+
+| Model | α (T8f weight) | fk | rk | δ (vs frontier) |
+|-------|----------------|------|------|-----------------|
+| V_interp_a7 | 0.7 | 0.427 | 0.421 | +0.016 |
+| V_interp_a5 | 0.5 | 0.410 | 0.385 | -0.010 |
+| V_interp_a3 | 0.3 | 0.381 | 0.367 | -0.013 |
+
+**Key finding:** Uniform interpolation quickly falls back to the CE frontier. Only heavy T8f weighting (a7) stays marginally above. This proves that **per-parameter selectivity** is needed to break the frontier — motivates PerTA approach.
+
+---
+
+## PARADIGM SHIFT — Beyond Gradient-Based Optimization (2026-04-10)
+
+### Diagnosis: Why 1000 experiments hit the same wall
+
+All gradient-based methods (A through V series) are trapped on the CE frontier:
+  rk ≈ 0.55*fk + 0.17 (R²=0.97)
+
+Root cause: 85% neuron overlap between forget and retain knowledge. Any gradient update that reduces forget also reduces retain proportionally. The retrain model breaks this because it was trained FROM SCRATCH without forget data — it never had entangled weights.
+
+### Three new approaches (weight-space, not gradient-based):
+
+1. **PerTA (Per-parameter Task Arithmetic)** — ✅ COMPLETE — BREAKS FRONTIER
+   θ_final = θ_target - λ * w * (θ_target - θ_pretrained)
+   w_i = F_forget_i / (F_forget_i + α * F_retain_i + ε)
+   Fisher weighting makes negation SELECTIVE: forget-heavy params negated, retain preserved.
+   Script: scripts/perta_unlearn.py
+   Fisher cache: saves/unlearn/_perta_fisher_cache_News_n64.pt
+   Fisher mask stats: mean_w=0.2377 (24% forget-dominated, 76% retain-protected)
+
+2. **Two-Stage LoRA Retain Recovery** — ✅ COMPLETE — MIXED RESULTS
+   Stage 1: PerTA λ=3.5 (fk=0.282, rk=0.396) — best PerTA base
+   Stage 2: Freeze base, add LoRA, train 3 epochs on retain data (retain1 split)
+   LoRA rank sweep: [4, 8, 16], alpha=2*rank, cosine LR 2e-4, batch 4×4 accum
+   Script: scripts/lora_retain_recovery.py
+   Result: r16 achieved fk=0.329 (GOLD!) with δ=+0.050
+
+3. **Token-Level NPO** — PLANNED (lower priority given PerTA success)
+   Only apply NPO to forget-informative tokens (high target/pretrained log-prob ratio).
+   General language tokens preserved → less collateral damage to retain knowledge.
+
+---
+
+## PerTA RESULTS — Per-parameter Task Arithmetic (2026-04-10) ✅ COMPLETE
+
+### Method
+  θ_final = θ_target - λ * w * (θ_target - θ_pretrained)
+  w_i = F_forget_i / (F_forget_i + α * F_retain_i + ε)
+
+Fisher computed on target model, 64 samples each from forget/retain splits (2048 tokens).
+Mean weight w=0.2377 → 24% of parameters are forget-dominated (negated strongly), 76% retain-protected.
+
+### Full Lambda Sweep (α=1.0)
+| Experiment | λ | fk↓ | rk↑ | vm | δ (vs CE frontier) | verdict |
+|------------|---|------|------|------|-----|---------|
+| perta_l0.3 | 0.3 | 0.649 | 0.566 | 0.556 | +0.039 | Near target — barely any negation |
+| perta_l0.5 | 0.5 | 0.635 | 0.567 | 0.528 | +0.048 | rk=0.567 NEAR GOLD! Best rk of any PerTA |
+| perta_l1.0 | 1.0 | 0.634 | 0.540 | 0.424 | +0.021 | fk barely moved, rk dropped — threshold effect |
+| perta_l1.5 | 1.5 | 0.537 | 0.513 | 0.329 | +0.047 | Forget starting to work |
+| perta_l2.0 | 2.0 | 0.516 | 0.508 | 0.251 | +0.054 | Strong above-frontier |
+| perta_l3.0 | 3.0 | 0.394 | 0.439 | 0.193 | +0.052 | Approaching gold fk zone |
+| **perta_l3.5** | **3.5** | **0.282** | **0.396** | **0.176** | **+0.071** | **🔥 BEST DELTA — fk BEATS gold** |
+| perta_l4.0 | 4.0 | 0.185 | 0.287 | 0.083 | +0.015 | Over-negated, both dropping |
+| perta_l4.5 | 4.5 | 0.027 | 0.050 | 0.008 | -0.135 | CLIFF — model collapsing |
+| perta_l5.0+ | 5+ | 0.000 | 0.000 | 0.000 | -0.170 | COLLAPSED |
+
+### Key Findings
+1. **ALL PerTA λ=0.3-4.0 are ABOVE the CE frontier** — PerTA systematically breaks the frontier
+2. **Best delta: λ=3.5 (δ=+0.071)** — 27% better than T8f's +0.056 gradient record
+3. **Best rk: λ=0.5 (rk=0.567)** — EXCEEDS gold target (0.552)! But fk=0.635 (too high)
+4. **Cliff at λ=4.5-5.0**: Aggressive negation destroys the model. Sweet spot is λ=3.0-3.5
+5. **λ=3.5 beats gold fk**: fk=0.282 < 0.324 gold. Only rk gap remains (+0.156)
+6. **The Fisher mask is the key**: mean_w=0.24 means 76% of params are retain-protected
+
+### Why PerTA Breaks the Frontier
+PerTA is NOT a gradient method — it's direct weight surgery:
+- Gradient methods (CE frontier): ∇L couples forget/retain through shared weights → rk ∝ fk
+- PerTA: Fisher identifies WHICH parameters encode forget vs retain → selectively negates forget
+- Task vector τ = θ_target - θ_pretrained captures EXACTLY what finetuning learned
+- Weighted negation θ - λ*w*τ removes forget-learned components while preserving retain-important params
+- This breaks the coupling that traps gradient methods
+
+### PerTA vs Gradient Methods (Pareto comparison)
+At fk≈0.28 (gold zone):
+- G1 (gradient): fk=0.274, rk=0.327, δ=+0.006
+- PerTA λ=3.5: fk=0.282, rk=0.396, δ=+0.071
+- **PerTA provides +0.069 rk improvement over gradient at same fk**
+
+At fk≈0.43 (T8f zone):
+- T8f (gradient): fk=0.428, rk=0.461, δ=+0.056
+- PerTA λ=2.0: fk=0.516, rk=0.508, δ=+0.054 (comparable delta, higher fk)
+
+---
+
+## LoRA RETAIN RECOVERY ON PerTA λ=3.5 (2026-04-10) ✅ COMPLETE
+
+### Method
+Stage 1: PerTA λ=3.5 base model (fk=0.282, rk=0.396)
+Stage 2: Add LoRA adapters, train 3 epochs on retain1 data only
+- Target modules: q/k/v/o_proj, gate/up/down_proj (all 7 linear layers)
+- LR: 2e-4, cosine schedule, warmup 10%
+- Batch: 4 × 4 gradient accumulation = effective batch 16
+- bf16, gradient checkpointing
+
+### Results
+| Rank | Trainable params | Train time | fk↓ | rk↑ | vm | δ | verdict |
+|------|-----------------|------------|------|------|------|-------|---------|
+| base (PerTA 3.5) | — | — | 0.282 | 0.396 | 0.176 | +0.071 | Starting point |
+| **r4** | 13.6M (0.2%) | 1664s | **0.354** | **0.431** | 0.213 | **+0.067** | **Best rk gain** (+0.035) but fk leaked +0.072 |
+| r8 | 27.3M (0.4%) | 1633s | 0.357 | 0.405 | 0.220 | +0.039 | Rank 8 worse than r4 — more capacity, more forget leakage, less rk gain |
+| **r16** | 54.5M (0.8%) | ~1700s | **0.329** | **0.401** | 0.219 | **+0.050** | **🔥 fk=0.329 ≈ GOLD (0.324)! Minimal forget leakage** |
+
+### Key Findings
+1. **r16 hits gold fk**: fk=0.329 is within noise of gold (0.324). δ=+0.050 still well above frontier.
+2. **r4 best raw rk**: rk=0.431 is highest, but fk=0.354 misses gold target.
+3. **Non-monotonic with rank**: r8 is WORST (δ=+0.039). Mid-rank finds a "worst of both" — enough capacity to re-learn forget, not enough to selectively target retain.
+4. **r16 paradox**: Higher rank = more parameters = should leak MORE forget. But r16 leaked LESS (fk +0.047) than r4 (+0.072). Hypothesis: higher rank LoRA has enough expressive power to selectively recover retain representations without touching forget-relevant subspace. Low-rank (r4) is too constrained — it can't avoid the forget subspace.
+5. **LoRA retain recovery has diminishing returns**: rk improved only +0.005 to +0.035 from base 0.396. The rk gap to gold (0.552) remains +0.151 at best.
+
+### LoRA vs PerTA-only Comparison
+| Model | fk | rk | δ | vs gold rk gap |
+|-------|------|------|-------|------|
+| PerTA λ=3.5 (base) | 0.282 | 0.396 | +0.071 | -0.156 |
+| PerTA λ=3.5 + LoRA r16 | 0.329 | 0.401 | +0.050 | -0.151 |
+| PerTA λ=3.5 + LoRA r4 | 0.354 | 0.431 | +0.067 | -0.121 |
+| Gold (retrain) | 0.324 | 0.552 | +0.204 | 0.000 |
+
+LoRA r4 closes the rk gap most (from -0.156 to -0.121) but misses fk gold. r16 barely closes rk gap (-0.151) but preserves fk at gold. **The LoRA approach provides marginal rk improvement** — the retain knowledge gap is NOT a low-rank correction from the PerTA base.
+
+### Implications
+The rk gap to gold (0.552) is +0.151 even with the best LoRA configuration. This suggests:
+1. The PerTA base model at λ=3.5 has lost retain knowledge at a DEEPER level than LoRA can recover
+2. Retain recovery needs a different λ point — e.g., PerTA λ=1.5 (rk=0.513, fk=0.537) followed by targeted forget enhancement
+3. Or: PerTA with different α values to shift the Fisher mask balance
 
 ---
 

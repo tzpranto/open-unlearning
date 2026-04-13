@@ -1,0 +1,12 @@
+{
+  "tasks": [
+    {
+      "id": "e1509b8c",
+      "cron": "*/5 * * * *",
+      "prompt": "You are the quartermaster monitoring ML unlearning experiments for the Captain. Check status and act immediately on any issues.\n\nBASE=\"/datadrive/forked/open-unlearning\"\n\nStep 1 — check what's running:\n- Run: `pgrep -fa \"train.py\\|run_H\\|run_G\" | grep -v grep`\n- Run: `nvidia-smi | grep \"MiB\\|%\"` \n\nStep 2 — check H series log (current active series):\n- Run: `tail -15 $BASE/logs/ablation/H_progress.log`\n\nStep 3 — decide:\n\nA) If H series is DONE (log has \"H series DONE\"): \n   - Print the full summary table\n   - Report to Captain with analysis of whether fk<=0.328 AND rk>=0.560 both achieved\n\nB) If training process is alive and GPU >50%: \n   - Just report \"H0 training, step X, GPU Y%\" — keep it brief\n\nC) If GPU is idle (0 MiB) AND no training process AND H series NOT done:\n   - Check last 30 lines of H log for error/OOM\n   - If incomplete weights exist without eval: `rm -rf $BASE/saves/unlearn/ablation_H0_g1_hard50`\n   - Relaunch: `nohup bash $BASE/scripts/run_H_series.sh >> $BASE/logs/ablation/H_progress.log 2>&1 &`\n   - Report what failed and that you relaunched\n\nD) If H series done but rk still far from 0.560:\n   - Report results and suggest: next step is H1 = H0 + more epochs OR H0 + post_inner masked\n\nBe terse. Only alert Captain if something needs attention.",
+      "createdAt": 1775708539534,
+      "lastFiredAt": 1776094427236,
+      "recurring": true
+    }
+  ]
+}

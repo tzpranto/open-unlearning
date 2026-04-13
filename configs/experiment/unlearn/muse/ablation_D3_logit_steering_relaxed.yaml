@@ -1,0 +1,128 @@
+# @package _global_
+# Ablation D3: logit_margin + steering (layers 5-7, retain_match) + relaxed epsilon
+# Hypothesis: Steering provides the activation-space forget signal that logit_margin lacks.
+#   logit_margin flattens logit distribution; steering pushes hidden states toward retain.
+#   Together with ε=0.8 to avoid ALM constraint bottleneck.
+#   Using steering_only=false so both losses contribute.
+# Date: 2026-04-08
+
+defaults:
+  - override /model: Llama-2-7b-hf
+  - override /trainer: SIBL
+  - override /data: unlearn
+  - override /data/datasets@data.forget: MUSE_forget
+  - override /data/datasets@data.retain: MUSE_retain
+  - override /eval: muse
+
+data_split: News
+forget_split: forget
+retain_split: retain1
+retain_logs_path: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: muse-bench/MUSE-${data_split}_target
+
+data:
+  anchor: forget
+  forget:
+    MUSE_forget:
+      args:
+        hf_args:
+          split: ${forget_split}
+          path: muse-bench/MUSE-${data_split}
+        max_length: 1024
+  retain:
+    MUSE_retain:
+      args:
+        hf_args:
+          path: muse-bench/MUSE-${data_split}
+          split: ${retain_split}
+        max_length: 1024
+
+eval:
+  muse:
+    data_split: ${data_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+trainer:
+  args:
+    num_train_epochs: 3
+  method_args:
+    use_sparsity: false
+    epsilon: 0.8
+    T: 75
+    K: 5
+    eta_theta: 2e-4
+    eta_in: 1e-4
+    rho: 0.3
+    gamma: 2e-4
+    regularization_type: none
+
+    forget_loss_type: logit_margin
+    npo_beta: 2.0
+    simnpo_beta: 1.0
+    simnpo_delta: 0.0
+    elastic_net_l1_ratio: 0.5
+
+    neuron_traces_path: null
+    neuron_bitmap_path: null
+    mask_th_low: 0.5
+    mask_th_high: 1.0
+    outer_lr_smooth: 0.6
+    mask_freeze_layers: null
+    outer_freeze_layers: null
+    proportional_outer_lr: false
+    retain_protection_layers: null
+    retain_lr_multiplier: 2.0
+    implicit_block_skip_layers: null
+
+    gradient_projection: false
+    gradient_projection_scope: layer
+    projection_strength: 1.0
+    projection_schedule: constant
+    projection_rescale: false
+    projection_layers: null
+
+    use_implicit: true
+    implicit_solver: neumann
+    implicit_blockwise: true
+    implicit_block_last_n_layers: 2
+    implicit_block_include_attn: true
+    implicit_block_include_mlp: true
+    neumann_variant: richardson
+    neumann_steps: 2
+    neumann_mu: 1.0
+    neumann_alpha_default: 0.01
+    neumann_alpha_min: 1e-5
+    neumann_alpha_max: 0.02
+    neumann_use_probe_alpha: false
+    neumann_max_growth_ratio: 5.0
+    neumann_backtrack_factor: 0.5
+    neumann_backtrack_max_tries: 4
+    cg_iters: 10
+    cg_tol: 1e-3
+    cg_damping: 0.01
+
+    # logit_margin + retain-match steering (dual-space, stable loss)
+    use_steering: true
+    steering_layers: [5, 6, 7]
+    steering_coeff: 20.0
+    steering_alpha: 1.0
+    steering_only: false
+    steering_retain_match: true
+    steering_neuron_mask_path: null
+
+    inner_repr_anchor: false
+    inner_repr_alpha: 1.0
+    inner_repr_layers: null
+    post_unlearn_inner_steps: 0
+    post_inner_retain_only: false
+
+    debug_implicit: false
+    debug_save_arrays: false
+    debug_stop_after_outer: null
+    debug_condition_probes: 3
+
+task_name: ???

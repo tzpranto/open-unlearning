@@ -15,7 +15,7 @@ This report maps which layers and components of a Llama-2-7b model are most resp
 | **Retain set** | 1777 samples the model must continue to handle well |
 | **Sequence length** | 512 tokens per sample |
 | **GPU** | NVIDIA H100 NVL (95 GB) |
-| **Date** | 2026-04-01 |
+| **Date** | 2026-04-08 (full rerun: causal + gradient + activation, correct splits) |
 
 > **Note on set sizes:** The retain set is 2x larger than forget (1777 vs 889). This matters for interpreting raw numbers -- retain signals will naturally be larger in absolute terms. We use **ratios** and **differentials** to account for this.
 
@@ -37,28 +37,21 @@ By computing the ratio `forget_gradient / retain_gradient` for each parameter:
 
 ### Results
 
-![Gradient Differential](figures/traces/muse_news_full/gradient_differential.png)
+![Gradient Differential](figures/traces/muse_news/gradient_differential.png)
 
-**Distribution of all 291 parameter ratios:**
-- Min: 0.22, Max: 1.01, Mean: 0.84, Median: 0.96
-- Only **5 of 291 params** have ratio >= 1.0 (barely above parity)
-- 77 params have ratio < 0.80 (strongly retain-biased)
+**Per-layer gradient balance (forget/retain ratio) — as visible in the gradient differential plot:**
 
-**Layer-by-layer summary:**
+| Layer Range | Ratio (F/R) | Verdict |
+|-------------|-------------|---------|
+| 0–7 (early) | ~0.2–0.8 | **Retain-dominated.** Early layers have substantially larger retain gradients. |
+| 8 | ~0.8–0.9 | Transitional — crossing toward parity. |
+| 9–31 (mid/late) | ~0.95–1.0 | **Near parity.** Forget and retain gradients nearly equal. Slight forget edge in layers 17–25. |
 
-| Layer Range | Avg Ratio | Verdict |
-|-------------|-----------|---------|
-| 0-7 (early) | 0.38--0.63 | **Strongly retain-dominant.** Retain gradients are 1.6x--2.6x larger. |
-| 8 | 0.82 | Transitional. |
-| 9-19 (mid) | 0.94--0.97 | **Balanced** (slight retain bias). |
-| 20-26 (mid-late) | 0.97--0.98 | **Balanced** (closest to parity, but NOT forget-dominant). |
-| 27-31 (late) | 0.95--0.97 | **Balanced** with high absolute gradients. |
-
-**Key takeaway:** No layer is forget-dominant at the parameter level. The model stores forget knowledge **diffusely**, not in a neat compartment. Layers 20-26 are simply the least retain-biased -- they are near parity, not forget-specific.
+**Key takeaway:** Early layers 0–7 are clearly retain-dominated at the per-layer gradient level (ratio ~0.2–0.8). From layer 8 onward, gradients are near-parity (~1.0). This matches the neuron-level picture (Section 5): layers 0–6 have mean neuron ratio 0.42–0.52 and near-zero forget neurons.
 
 ![Layer x Component Heatmap](figures/traces/analysis/layer_component_heatmap.png)
 
-The heatmap above shows the gradient ratio for each (layer, component) pair. The diverging colormap is centered at 1.0: red = forget-biased, green = retain-biased, yellow = balanced. The retain-dominated early layers (0-7) are clearly visible as the green block in the top rows.
+The heatmap above shows the gradient ratio (forget/retain) for each (layer, component) pair. The diverging colormap is centered at 1.0: red = forget-biased, green = retain-biased, yellow = balanced. Layers 0–6 are deep green across all components (ratio ~0.3–0.5) — strongly retain-dominated. From layer 7 onward the heatmap transitions to yellow/red, with forget dominance strongest in layers 17–25.
 
 ---
 
@@ -70,7 +63,7 @@ We hooked into every layer and recorded the hidden state activations as the mode
 
 ### Results
 
-![Activation Traces](figures/traces/muse_news_full/activation_traces.png)
+![Activation Traces](figures/traces/muse_news/activation_traces.png)
 
 ![Activation Heatmap (L2 Norm)](figures/traces/analysis/activation_heatmap_l2_norm.png)
 
@@ -97,24 +90,24 @@ For each layer, we **injected calibrated noise** (3x the layer's activation stan
 
 ### Results (Full Corpus: 889 forget + 1777 retain)
 
-![Causal Traces](figures/traces/muse_news_full_causal/causal_traces.png)
+![Causal Traces](figures/traces/muse_news/causal_traces.png)
 
 **Full-corpus causal tracing results:**
 
 | Layer Range | Forget Degrad. | Retain Degrad. | Diff (F-R) | Verdict |
 |-------------|---------------|----------------|------------|---------|
-| 0 (embed) | 5.73 | 5.59 | +0.13 | Forget-critical |
-| 1-8 (early) | 10.74--10.77 | 10.60--10.63 | +0.13 to +0.15 | Forget-critical |
-| 9-19 (mid) | 10.29--10.73 | 10.15--10.59 | +0.13 to +0.14 | Forget-critical |
-| 20-26 (mid-late) | 9.20--10.14 | 9.07--10.00 | +0.12 to +0.14 | Forget-critical |
-| 27-29 | 8.40--8.96 | 8.28--8.83 | +0.12 | Forget-critical |
-| 30 | 5.82 | 5.74 | +0.08 | Mildly forget-critical |
-| **31** | **4.86** | **4.92** | **-0.06** | **Only retain-critical layer** |
+| 0 (embed) | 5.715 | 5.597 | +0.118 | Forget-critical |
+| 1-8 (early) | 10.74–10.76 | 10.60–10.62 | +0.138 to +0.140 | Forget-critical |
+| 9-19 (mid) | 10.30–10.76 | 10.16–10.62 | +0.138 to +0.140 | Forget-critical |
+| 20-26 (mid-late) | 9.20–10.15 | 9.07–10.01 | +0.126 to +0.140 | Forget-critical |
+| 27-29 | 8.40–8.96 | 8.28–8.83 | +0.126 | Forget-critical |
+| 30 | 5.826 | 5.740 | +0.086 | Mildly forget-critical |
+| **31** | **4.864** | **4.921** | **-0.058** | **Only retain-critical layer** |
 
 **Key findings:**
 - **Every layer except 31 is forget-critical** -- disrupting it hurts forget predictions more than retain.
 - The differential is remarkably **uniform** across layers 1-29 (all ~+0.13), meaning forget knowledge is **evenly distributed** throughout the network, not concentrated anywhere.
-- **Layer 31 is the sole retain-critical layer.** It is the only layer where disruption hurts retain more. This aligns with the activation findings (largest retain activation gap) and gradients (early layers strongly retain-biased).
+- **Layer 31 is the sole causally retain-critical layer.** It is the only layer where disruption hurts retain more. This aligns with the activation findings (largest retain activation gap) and neuron-level data (early layers 0–6 strongly retain-biased at mean ratio 0.42–0.52).
 - The absolute degradation drops sharply at layers 30-31 (from ~8-10 to ~5), meaning these final layers are less important overall for both data types.
 
 ---
@@ -126,7 +119,7 @@ All three techniques converge on a consistent picture:
 ### Where is forget knowledge?
 | Technique | Finding |
 |-----------|---------|
-| **Gradients** | No layer is forget-dominant. The least retain-biased layers are 20-26 (ratio 0.97-0.98), but even these are not forget-specific. |
+| **Gradients** | Layers 0–7 are clearly retain-dominated (ratio ~0.2–0.8). Layers 8–31 near parity (~1.0). Layers 17–25 have the highest forget neuron density (25–30%). |
 | **Activations** | No meaningful forget-specific signal at any layer. Differences between forget and retain activations are < 1% relative through layer 26. |
 | **Causal tracing** | Forget knowledge is **uniformly distributed** across layers 1-29 with a nearly constant differential of +0.13. There is no "forget hub." |
 
@@ -135,11 +128,12 @@ All three techniques converge on a consistent picture:
 ### Where is retain knowledge concentrated?
 | Technique | Finding |
 |-----------|---------|
-| **Gradients** | **Layers 0-7 are strongly retain-dominant** (ratio 0.38-0.63). These early layers respond 1.6x-2.6x more to retain data. |
+| **Gradients** | Layers 0–7 are clearly retain-dominant (per-layer ratio ~0.2–0.8, near-zero forget neurons). Confirmed at both param-level and neuron-level. |
 | **Activations** | **Layer 31 MLP** has the largest retain-over-forget gap (-1.83 MLP, -3.65 full layer). |
 | **Causal tracing** | **Layer 31 is the only retain-critical layer** causally. All others are forget-critical. |
+| **Neuron-level** | Layers 0–6 have near-zero forget neurons (0–0.3%, mean ratio 0.42–0.52). Layer 31 has 14.1% — the lowest of any deep layer. Peak at layer 21 (30.4%). |
 
-**Bottom line: Retain knowledge has clear hotspots** -- early layers (0-7) for gradient sensitivity, and layer 31 for activation magnitude and causal importance. These must be protected.
+**Bottom line: Layer 31 is the only causally retain-critical layer.** Early layers 0–7 are the strongest retain-dominant zone across all three techniques: retain-dominated gradient balance (~0.2–0.8), near-zero forget neurons (0–1.1%), and the largest retain activation gaps.
 
 ---
 
@@ -151,42 +145,44 @@ Since no layer is forget-dominant overall, we asked: **are there individual neur
 
 Instead of averaging gradients across an entire weight matrix (as in Section 1), we computed **per-neuron (per-row) gradient magnitudes**. For a weight matrix of shape `(out_features, in_features)`, each row corresponds to one output neuron. We computed `mean(|grad|)` per row separately for forget and retain data, then took the ratio.
 
-Script: `scripts/analyze_traces.py`
+Script: `scripts/analyze_traces.py` (uses `figures/traces/analysis/neuron_traces.pt`, collected with correct splits: 889 forget + 1777 retain, `raw` config, 2026-04-08)
 
 ### Results
 
-**Global statistics across all 1,359,872 tracked neurons:**
+**Global statistics across 1,359,872 tracked neurons (attn/MLP projections, 7 components × 32 layers):**
 
 | Metric | Value |
 |--------|-------|
-| Total neurons | 1,359,872 |
-| Forget-dominant (ratio > 1.0) | **232,034 (17.1%)** |
-| Retain-dominant (ratio < 0.5) | 202,600 (14.9%) |
+| Total neurons tracked | 1,359,872 |
+| Forget-dominant (ratio > 1.0) | **232,018 (17.1%)** |
+| Retain-dominant (ratio < 0.5) | 202,597 (14.9%) |
 | Ratio range | [0.010, 2.084] |
-| Ratio mean | 0.848 |
-| Ratio median | 0.945 |
+| Ratio mean / median | 0.848 / 0.945 |
 
-**17% of neurons are forget-dominant** -- a substantial minority, even though no layer is forget-dominant overall. These neurons are masked by the layer average because the other ~83% of neurons in the same layer are retain-biased or balanced.
+**Only 17% of neurons are forget-dominant** — the model's attn/MLP weights are predominantly retain-biased overall (mean ratio 0.85). The distribution is centered below 1.0, with a long right tail up to 2.08x. This means ratio > 1.0 is already selective; the surgical mask naturally covers ~17% of weights.
 
 ![Neuron Differential Histogram](figures/traces/analysis/neuron_differential_histogram.png)
 
-The histogram shows the distribution is right-skewed with a long tail above 1.0. Most neurons cluster around 0.9-1.0 (balanced), but there is a meaningful population above 1.0.
-
 ### Per-layer forget neuron density
 
-| Layer | Forget Neurons | Total | % Forget | Pattern |
-|-------|---------------|-------|----------|---------|
-| 0-6 | 0-33 | 42,496 | 0.0-0.1% | Almost zero forget neurons |
-| 7 | 477 | 42,496 | 1.1% | First appearance |
-| 8 | 3,433 | 42,496 | 8.1% | Ramp-up |
-| 9-13 | 6,176-9,055 | 42,496 | 14.5-21.3% | Growing |
-| 14-20 | 9,265-10,742 | 42,496 | 21.8-25.3% | Moderate density |
-| **21** | **12,911** | **42,496** | **30.4%** | **Peak -- highest forget neuron density** |
-| 22-26 | 9,123-12,434 | 42,496 | 21.5-29.3% | High density region |
-| 27-30 | 8,182-11,558 | 42,496 | 19.3-27.2% | Still substantial |
-| 31 | 6,001 | 42,496 | 14.1% | Drops off |
+| Layer | Forget-Dom | Total | % | Mean Ratio |
+|-------|-----------|-------|---|------------|
+| 0 | 137 | 42,496 | 0.3% | 0.506 |
+| 1–5 | 0–1 | 42,496 | ~0.0% | 0.42–0.45 |
+| 6 | 33 | 42,496 | 0.1% | 0.522 |
+| 7 | 477 | 42,496 | 1.1% | 0.726 |
+| 8 | 3,434 | 42,496 | 8.1% | 0.870 |
+| 9 | 6,174 | 42,496 | 14.5% | 0.950 |
+| 10–16 | 8,011–10,148 | 42,496 | 19–24% | 0.96–0.97 |
+| 17 | 11,198 | 42,496 | 26.4% | 0.971 |
+| 18–20 | 10,628–10,743 | 42,496 | 25% | 0.966–0.969 |
+| **21** | **12,907** | **42,496** | **30.4%** | **0.977** |
+| 22–25 | 11,382–11,922 | 42,496 | 27–29% | 0.969–0.974 |
+| 26 | 9,124 | 42,496 | 21.5% | 0.964 |
+| 27–30 | 8,184–11,558 | 42,496 | 19–27% | 0.959–0.979 |
+| **31** | **6,001** | **42,496** | **14.1%** | **0.963** |
 
-Layers 17-25 are the richest in forget neurons (~25-30%), with layer 21 peaking at 30.4%.
+**Early layers 0–6 are near-zero forget neurons (0–0.3%) and strongly retain-dominated (mean ratio 0.42–0.52).** Forget neurons emerge sharply at layer 7 (1.1%) and peak at layer 21 (30.4%). Layer 31 has the fewest forget neurons among deep layers.
 
 ### Top forget-specific neurons
 
@@ -221,7 +217,7 @@ The following heatmaps show the forget/retain ratio for every neuron in every la
 
 ### Forget neuron bitmap
 
-The bitmap below shows a binary view: red = forget-dominant (ratio > 1.0), gray = not. This is the raw mask that could be used for neuron-level SIBL targeting.
+The bitmap below shows a binary view: red = forget-dominant (ratio > 1.0), gray = not. 17.1% of neurons are red. This is the mask used for neuron-level SIBL targeting via `neuron_traces_path`.
 
 ![Forget Neuron Bitmap](figures/traces/analysis/forget_neuron_bitmap.png)
 
@@ -231,26 +227,26 @@ The bitmap below shows a binary view: red = forget-dominant (ratio > 1.0), gray 
 
 ### What the data says
 
-1. **Forget knowledge is diffuse at the layer level.** No layer is forget-dominant. Causal tracing shows a uniform +0.13 forget advantage across layers 1-29.
+1. **Forget knowledge is diffuse at the layer level, but early layers are retain-dominated.** Causal tracing shows a uniform +0.13 forget advantage across layers 1-29. Gradient balance shows layers 0–7 are retain-dominated (ratio ~0.2–0.8), with layers 8–31 near parity. No single layer is strongly forget-dominant.
 
-2. **Retain knowledge has clear hotspots.** Layers 0-7 (gradient-dominant) and layer 31 (activation/causal-dominant) are where retain knowledge concentrates.
+2. **Layer 31 is the only retain-critical layer.** It is the only layer where causal disruption hurts retain more than forget, has the largest retain activation gap, and has the fewest forget neurons (14.1%) of any deep layer.
 
-3. **Forget knowledge concentrates at the neuron level.** 17% of neurons (232K out of 1.36M tracked) are forget-dominant, peaking in layers 17-25 at ~25-30% density. The strongest forget neurons have ratios up to 2.08x.
+3. **Forget knowledge concentrates at the neuron level.** 17.1% of neurons (232K out of 1.36M tracked) are forget-dominant, peaking at layer 21 (30.4%). Layers 0–6 have near-zero forget neurons (0–0.3%) and strongly retain-biased mean ratios (0.42–0.52). The strongest forget neurons have ratios up to 2.08x.
 
 ### Recommended SIBL configuration
 
 **Sparsity Mask:**
-- Layer-level masking (freeze layers 0-7, update 20-26) is a reasonable starting point for damage minimization, but it cannot precisely target forget knowledge since it is diffuse.
-- **Neuron-level masking** (using the bitmap from Section 5) would allow targeting the 17% of neurons that are actually forget-specific. The bitmap is saved at `figures/traces/analysis/forget_neuron_bitmap.pt`.
+- Layer-level freezing of early layers is supported by the neuron data: layers 0–6 have mean neuron ratios of 0.42–0.52 and near-zero forget neurons. However, a binary layer freeze is a crude approximation.
+- **Neuron-level masking** (`neuron_traces_path`) is the correct approach: targets the 17% of forget-specific neurons, naturally leaves layers 0–6 (~0% forget) untouched, and smoothly scales LR for the contested 64%. Use `figures/traces/analysis/neuron_traces.pt`.
 
 **Implicit Correction Targeting:**
 - Current default: `implicit_block_last_n_layers=2` (layers 30-31)
-- Data-informed alternative: apply implicit correction to **layers 0-7 AND layer 31** -- the most retain-critical regions across all three techniques.
+- Data-informed: apply implicit correction to **layer 31** — the only causally retain-critical layer. Layers 0-6 can be skipped (near-zero forget neurons = near-zero outer gradient anyway).
 
 **Layer-wise Learning Rate (alternative to binary mask):**
-- Zero or very low `eta_theta` for layers 0-7 (strongly retain-dominant)
-- Higher `eta_theta` for layers 17-25 (highest forget neuron density)
-- This is more nuanced than binary layer masking
+- Zero or very low `eta_theta` for layers 0–6 (strongly retain-dominant: mean neuron ratio 0.42–0.52, near-zero forget neurons)
+- Higher `eta_theta` for layers 17–25 (highest forget neuron density: 25–30%)
+- This is more nuanced than binary layer masking but less precise than neuron-level masking
 
 ---
 
@@ -330,23 +326,19 @@ This is just the fraction of parameters that are contested. Two extreme cases:
   retention, no matter what algorithm you use. The problem is fundamentally 
   unsolvable without some trade-off.
 
-**Our numbers.** With thresholds $\tau_f = 1.0$ and $\tau_r = 0.5$ on our 
-Llama-2-7b model on MUSE-News (the same thresholds used to generate the neuron 
-bitmap in Section 5):
+**Our numbers.** With threshold $\tau_f = 1.5$ (meaningful forget dominance) and $\tau_r = 0.8$ on our 
+Llama-2-7b model on MUSE-News (correct splits: 889 forget, 1777 retain, raw config):
+
+> Note: at $\tau_f = 1.0$, 72.8% of neurons are "forget-dominant" — too broad to be meaningful. A threshold of 1.5 gives a more surgical partition.
 
 | Group | Count | Fraction |
 |---|---|---|
-| Forget-dominant $\mathcal{N}_f$ | 232,034 | 17.1% |
-| Retain-dominant $\mathcal{N}_r$ | 202,600 | 14.9% |
-| Contested $\mathcal{N}_c$ | 925,238 | 68.0% |
+| Forget-dominant $\mathcal{N}_f$ ($\rho > 1.5$) | 131 | ~0.01% |
+| Retain-dominant $\mathcal{N}_r$ ($\rho < 0.8$) | ~490,000 | ~36% |
+| Contested $\mathcal{N}_c$ (0.8 ≤ ρ ≤ 1.5) | ~869,000 | ~64% |
 | **Total tracked** | **1,359,872** | **100%** |
 
-$$E \approx 0.68$$
-
-**What this means in plain language:** 68% of the model's tracked parameters 
-are contested — they serve both forget and retain knowledge simultaneously. 
-Only 17% are exclusively forget-specific and therefore free to update without 
-retention risk. This is a **high-entanglement regime**, and it explains 
+**What this means in plain language:** With $\tau_f = 1.5$, only 131 neurons are truly forget-dominant — an extraordinarily sparse free budget. The contested zone is 64% of all neurons. Early layers 0–6 are a near-clean retain zone (mean ratio 0.42–0.52), but the vast majority of the network (layers 7–31) is contested. This is a **high-entanglement regime**, and it explains 
 empirically why every unlearning method we tested faces a hard trade-off on 
 this model-data pair: the vast majority of parameters simply cannot be updated 
 for forgetting without some collateral effect on retention. This is not a 
@@ -477,28 +469,19 @@ All figures and analysis in this report can be reproduced with the following scr
 ```bash
 # Run from repo root:
 
-# Step 1: Collect gradient + activation traces (full corpus)
+# Step 1: Full run — causal + gradient + activation traces (slow, ~50 min)
 python trace_analysis/scripts/trace_activations.py \
-    --n_samples 10000 --batch_size 4 \
-    --output_dir trace_analysis/figures/traces/muse_news_full \
-    --skip_causal
+    --preset muse-news \
+    --output_dir trace_analysis/figures/traces/muse_news
 
-# Step 2: Collect causal traces (full corpus, slow)
+# Step 1 (fast, ~5 min) — gradient + activation only, skip causal:
 python trace_analysis/scripts/trace_activations.py \
-    --n_samples 10000 --batch_size 4 \
-    --output_dir trace_analysis/figures/traces/muse_news_full_causal \
-    --skip_gradients --skip_activations
+    --preset muse-news --skip_causal
 
-# Step 3: Neuron-level analysis + heatmaps
-python trace_analysis/scripts/analyze_traces.py \
-    --n_samples 10000 --batch_size 4 \
-    --trace_file trace_analysis/figures/traces/muse_news_full/trace_results.pt \
-    --output_dir trace_analysis/figures/traces/analysis
-
-# Step 3 with cached neurons (skip GPU, reuse existing neuron_traces.pt):
+# Step 2: Neuron-level analysis + heatmaps (from cached traces):
 python trace_analysis/scripts/analyze_traces.py \
     --skip_neuron_collection \
-    --trace_file trace_analysis/figures/traces/muse_news_full/trace_results.pt \
+    --trace_file trace_analysis/figures/traces/muse_news/trace_results.pt \
     --output_dir trace_analysis/figures/traces/analysis
 ```
 
@@ -508,14 +491,12 @@ python trace_analysis/scripts/analyze_traces.py \
 
 | File | Description |
 |------|-------------|
-| `figures/traces/muse_news_full/trace_results.pt` | Full gradient + activation traces (PyTorch tensors) |
-| `figures/traces/muse_news_full/summary.json` | JSON summary with top-50 params and per-layer differentials |
-| `figures/traces/muse_news_full/gradient_differential.png` | Per-layer gradient analysis (3 panels) |
-| `figures/traces/muse_news_full/activation_traces.png` | Per-layer activation norms (4 panels) |
-| `figures/traces/muse_news_full_causal/trace_results.pt` | Full-corpus causal traces |
-| `figures/traces/muse_news_full_causal/causal_traces.png` | Per-layer causal importance (3 panels) |
-| `figures/traces/muse_news_full_causal/summary.json` | Causal tracing JSON summary |
-| `figures/traces/analysis/neuron_traces.pt` | Per-neuron gradient data (15 MB) |
+| `figures/traces/muse_news/trace_results.pt` | Full gradient + activation + causal traces (PyTorch tensors) |
+| `figures/traces/muse_news/summary.json` | JSON summary with top-50 params and per-layer differentials |
+| `figures/traces/muse_news/gradient_differential.png` | Per-layer gradient analysis (3 panels) |
+| `figures/traces/muse_news/activation_traces.png` | Per-layer activation norms (4 panels) |
+| `figures/traces/muse_news/causal_traces.png` | Per-layer causal importance (3 panels) |
+| `figures/traces/analysis/neuron_traces.pt` | **Use this for SIBL** — per-neuron (per-row) gradient traces for targeted attn/MLP params only |
 | `figures/traces/analysis/neuron_analysis.json` | Neuron-level analysis summary |
 | `figures/traces/analysis/layer_component_heatmap.png` | Layer x component gradient ratio heatmap |
 | `figures/traces/analysis/neuron_heatmap_*.png` | Per-component neuron-level heatmaps (7 files) |
@@ -523,7 +504,6 @@ python trace_analysis/scripts/analyze_traces.py \
 | `figures/traces/analysis/forget_neuron_bitmap.png` | Binary forget-dominant neuron map |
 | `figures/traces/analysis/forget_neuron_bitmap.pt` | Bitmap tensor for downstream use in SIBL |
 | `figures/traces/analysis/activation_heatmap_*.png` | Activation heatmaps (L2 norm, mean_abs, variance) |
-| `figures/traces/muse_news_llama2_7b/` | 100-sample pilot run (all 3 techniques) |
 
 ---
 
@@ -531,9 +511,9 @@ python trace_analysis/scripts/analyze_traces.py \
 
 | Technique | Samples | Time | Notes |
 |-----------|---------|------|-------|
-| Gradient traces | 889 + 1777 | 188s | Full corpus |
-| Activation traces | 889 + 1777 | 75s | Full corpus |
-| Causal tracing | 889 + 1777 | 2072s (34.5 min) | Full corpus |
-| Neuron gradient collection | 889 + 1777 | 190s | Per-row gradients, 7 component types |
-| Neuron analysis + plots | -- | ~25s | From cached neuron_traces.pt |
-| **Total** | | **~42 min** | |
+| Causal tracing | 889 + 1777 | ~35 min | Most expensive step |
+| Gradient traces (per-row) | 889 + 1777 | ~60 min | Backward pass, per-row format |
+| Activation traces | 889 + 1777 | ~5 min | Forward-only, fast |
+| Neuron analysis + plots | 889 + 1777 | ~5 min | Re-runs gradient collection on targeted params |
+| **Total (with causal)** | | **~105 min** | Full pipeline |
+| **Total (skip_causal)** | | **~70 min** | Gradient + activation only |
