@@ -57,6 +57,10 @@ trainer:
     rho: 0.5  # AL penalty (reduced to slow lambda growth)
     gamma: 2e-4  # L1 regularization
     regularization_type: none  # Default: L1 sparsity-inducing regularization
+    lambda_init: 0.0  # Initial dual variable (>0 = early retain protection)
+    lambda_boost_step: 0  # Outer step at which to boost lambda (0 = disabled)
+    lambda_boost_value: 5.0  # Lambda target after boost
+    rho_boost_value: 1.0  # Rho target after boost
 
     # Loss-specific parameters
     npo_beta: 1.0  # Temperature for NPO loss (used when forget_loss_type=npo)
@@ -117,6 +121,51 @@ trainer:
     inner_repr_layers: null  # defaults to steering_layers
     post_unlearn_inner_steps: 0  # Pure CE inner steps after T outer iters for retention recovery
     post_inner_retain_only: false  # If true, invert bitmap mask during post-inner (update only retain-dominant neurons)
+    post_inner_soft_mask_path: null
+    post_inner_soft_mask_beta: 5.0
+
+    # Inverted inner mask (complementary bilevel)
+    invert_inner_mask: false
+    outer_full_model: false
+
+    # Trace-guided implicit
+    implicit_trace_guided: false
+    implicit_trace_threshold: 0.5
+
+    # Checkpoint trajectory
+    checkpoint_every_steps: 0
+
+    # Fisher-weighted outer gradient
+    use_fisher_weighting: false
+    fisher_alpha: 1.0
+    fisher_n_samples: 64
+
+    # Score-weighted forget sampling
+    forget_sample_weights_path: null
+    forget_weight_scheme: log
+
+    # Contrastive inner loop
+    inner_contrastive: false
+    inner_contrastive_beta: 0.1
+    inner_contrastive_gamma: 0.5
+    inner_contrastive_layers: [5, 6, 7]
+
+    # KL-anchored inner loop
+    inner_loss_type: ce
+    outer_retain_loss_type: ce
+    inner_kl_temperature: 2.0
+    post_inner_loss_type: ce
+
+    # Forget loss type
+    forget_loss_type: npo
+
+    # External reference model (null = deepcopy of init model)
+    ref_model_path: null
+
+    # Fisher disjoint masks (null = disabled)
+    fisher_mask_path: null
+    fisher_mask_threshold: 0.3
+    fisher_mask_alpha: 1.0
 
     # Debug instrumentation (kept off by default for normal runs)
     debug_implicit: false

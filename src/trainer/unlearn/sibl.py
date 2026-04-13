@@ -164,6 +164,15 @@ class SIBL(UnlearnTrainer):
         # Score-weighted forget sampling: preferentially draw high-memorization samples
         forget_sample_weights_path: Optional[str] = None,  # Path to memorization scores JSON
         forget_weight_scheme: str = "log",  # "log", "sqrt", "linear", "uniform"
+        # External reference model: load from a different path instead of deepcopy(self.model)
+        # Use when init model is PerTA-modified but ref should be original target
+        ref_model_path: Optional[str] = None,
+        # Fisher-based disjoint masks for outer/inner loops
+        # Outer mask: w > threshold (forget-dominant params for NPO)
+        # Inner mask: w <= threshold (retain-dominant params for CE)
+        fisher_mask_path: Optional[str] = None,  # Path to Fisher cache .pt
+        fisher_mask_threshold: float = 0.3,  # w threshold for outer/inner split
+        fisher_mask_alpha: float = 1.0,  # alpha in w = F_f / (F_f + alpha*F_r + eps)
         **kwargs
     ):
         super().__init__(*args, **kwargs)
@@ -297,6 +306,10 @@ class SIBL(UnlearnTrainer):
         self.forget_sample_weights_path = forget_sample_weights_path
         self.forget_weight_scheme = forget_weight_scheme
         self._forget_sample_weights = None  # Populated in get_train_dataloader if path given
+        self.ref_model_path = ref_model_path
+        self.fisher_mask_path = fisher_mask_path
+        self.fisher_mask_threshold = fisher_mask_threshold
+        self.fisher_mask_alpha = fisher_mask_alpha
 
         # Validate loss and regularization types
         if forget_loss_type not in AVAILABLE_FORGET_LOSSES:
@@ -638,6 +651,9 @@ class SIBL(UnlearnTrainer):
 
     def _initialize_mask(self):
         """Initialize sparsity mask for the model."""
+        if self.fisher_mask_path:
+            self.mask_dict, self.inner_mask_dict = self._load_fisher_disjoint_masks()
+            return
         if self.neuron_traces_path:
             self.mask_dict = self._load_neuron_traces_mask()
         elif self.neuron_bitmap_path:
@@ -659,17 +675,91 @@ class SIBL(UnlearnTrainer):
                 for name, param in self.model.named_parameters()
             }
 
+    def _load_fisher_disjoint_masks(self):
+        """Load Fisher cache and create disjoint outer/inner masks.
+
+        Outer mask: w > threshold (forget-dominant params — NPO updates these)
+        Inner mask: w <= threshold (retain-dominant params — CE updates these)
+        w = F_forget / (F_forget + alpha * F_retain + eps)
+
+        Returns (outer_mask_dict, inner_mask_dict).
+        """
+        logger.info(f"Loading Fisher disjoint masks from {self.fisher_mask_path} "
+                    f"(threshold={self.fisher_mask_threshold}, alpha={self.fisher_mask_alpha})")
+        cached = torch.load(self.fisher_mask_path, map_location="cpu", weights_only=True)
+        fisher_forget = cached["forget"]
+        fisher_retain = cached["retain"]
+
+        outer_mask = {}
+        inner_mask = {}
+        n_outer = 0
+        n_inner = 0
+        n_total = 0
+
+        for name, param in self.model.named_parameters():
+            if name in fisher_forget and name in fisher_retain:
+                ff = fisher_forget[name].float()
+                fr = fisher_retain[name].float()
+                w = ff / (ff + self.fisher_mask_alpha * fr + 1e-8)
+                outer_m = (w > self.fisher_mask_threshold).float().to(self.args.device)
+                inner_m = (w <= self.fisher_mask_threshold).float().to(self.args.device)
+                n_o = outer_m.sum().item()
+                n_i = inner_m.sum().item()
+            else:
+                # Non-Fisher params (embeddings, layernorm, lm_head): inner only (retain protection)
+                outer_m = torch.zeros_like(param.data).to(self.args.device)
+                inner_m = torch.ones_like(param.data).to(self.args.device)
+                n_o = 0
+                n_i = inner_m.numel()
+
+            outer_mask[name] = outer_m
+            inner_mask[name] = inner_m
+            n_outer += n_o
+            n_inner += n_i
+            n_total += param.numel()
+
+        pct_outer = 100 * n_outer / max(n_total, 1)
+        pct_inner = 100 * n_inner / max(n_total, 1)
+        logger.info(f"Fisher disjoint masks: outer={n_outer:,} ({pct_outer:.1f}%), "
+                    f"inner={n_inner:,} ({pct_inner:.1f}%), total={n_total:,}")
+        return outer_mask, inner_mask
+
     def _prepare_ref_model(self):
-        """Prepare reference model for NPO loss (lazy initialization)."""
-        if self.ref_model is None and self.forget_loss_type == "npo":
-            logger.info("Creating reference model for NPO loss...")
+        """Prepare reference model for NPO loss (lazy initialization).
+
+        If ref_model_path is set, loads from that path (e.g. original target model
+        when init is PerTA-modified). Otherwise creates a frozen deepcopy.
+        """
+        if self.ref_model is not None:
+            return
+
+        device = next(self.model.parameters()).device
+
+        if self.ref_model_path is not None:
+            from transformers import AutoModelForCausalLM
+            logger.info(f"Loading external reference model from {self.ref_model_path}")
+            self.ref_model = AutoModelForCausalLM.from_pretrained(
+                self.ref_model_path,
+                torch_dtype=torch.bfloat16,
+                device_map="cpu",
+                attn_implementation="sdpa",
+            )
+            self.ref_model.eval()
+            for param in self.ref_model.parameters():
+                param.requires_grad = False
+            self.ref_model.to(device)
+            logger.info(f"External reference model loaded and frozen from {self.ref_model_path}")
+        else:
+            logger.info("Creating reference model via deepcopy (CPU to avoid OOM)...")
+            self.model.to("cpu")
+            torch.cuda.empty_cache()
             self.ref_model = copy.deepcopy(self.model)
             self.ref_model.eval()
             for param in self.ref_model.parameters():
                 param.requires_grad = False
-            # Move to same device
-            self.ref_model = self.ref_model.to(self.args.device)
-            logger.info("Reference model created and frozen")
+            self.ref_model.to(device)
+            self.model.to(device)
+            logger.info("Reference model created and frozen (deepcopy)")
 
     def compute_forget_loss(self, batch):
         """
@@ -2196,13 +2286,18 @@ class SIBL(UnlearnTrainer):
         # If T was explicitly configured (non-default), honour it as an override.
         # Default T=10 in the original code was the entire "training"; now it's per-epoch steps.
         # We only use self.T if it differs from the dataloader-derived count, as an explicit cap.
-        if self.T != total_outer_steps:
+        if self.T < total_outer_steps:
             logger.info(
-                f"S-BiAL: self.T={self.T} overridden by epoch-derived total "
-                f"({num_epochs} epochs × {steps_per_epoch} steps/epoch = {total_outer_steps} outer steps). "
-                f"Set trainer.method_args.T explicitly to cap."
+                f"S-BiAL: capping at T={self.T} outer steps "
+                f"(epoch-derived total would be {total_outer_steps} = {num_epochs} epochs × {steps_per_epoch} steps/epoch)"
             )
-        effective_T = total_outer_steps
+            effective_T = self.T
+        else:
+            effective_T = total_outer_steps
+            if self.T != total_outer_steps:
+                logger.info(
+                    f"S-BiAL: T={self.T} ≥ epoch-derived {total_outer_steps}, using {effective_T} steps"
+                )
 
         # Single data iterator that advances through ALL epochs
         data_iter = iter(train_dataloader)
