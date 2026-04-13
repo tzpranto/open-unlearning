@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-13 ~19:20 (X2-series COMPLETE: X1f breakthrough δ=+0.064 with accum=1+K=10+warm ALM from PerTA l1.5)
+## For agent continuity. Last updated: 2026-04-13 ~21:15 (Y-series COMPLETE: Tracks A/B/C all failed — NPO saturation + OOM. Fundamental limitations identified.)
 
 ---
 
@@ -1353,3 +1353,65 @@ The bilevel framework CAN add value on top of PerTA, but ONLY with accum=1 (sing
 2. Run X1f from PerTA l2.0 init (fk=0.516, rk=0.508) — stronger forget baseline
 3. Run X1f with T=25 (does more training help with accum=1 + warm ALM?)
 4. Consider masked outer step (freeze retain-dominant params in outer loop)
+
+---
+
+## Y SERIES (2026-04-13): Three-Track Bilevel Exploration
+
+### Motivation
+Test three strategies: (A) bilevel from PerTA-masked th0.5 (rk=GOLD), (B) from th0.3 (best δ), (C) Fisher disjoint masks from target.
+Key implementation: `ref_model_path` loads external target as NPO reference, `fisher_mask_path` creates disjoint outer/inner masks.
+
+### Y-SERIES RESULTS
+
+#### Track A: Bilevel from PerTA-masked th0.5 (init: fk=0.591, rk=0.552, δ=+0.057)
+ref_model = original target model (not deepcopy of init)
+
+| Experiment | Config | fk | rk | δ | Verdict |
+|---|---|---|---|---|---|
+| **Init (th0.5)** | — | 0.591 | 0.552 | +0.057 | baseline |
+| A1 (G1-style) | accum=32 K=1 T=25 β=2 steer=5 λ=0 | 0.612 | 0.551 | +0.045 | fk WORSE, rk flat |
+| A2 (warm ALM) | accum=32 K=1 T=25 β=2 steer=5 λ=2 ρ=0.5 | 0.619 | 0.532 | +0.022 | both worse |
+| A3 (accum=1) | accum=1 K=10 T=15 β=0.5 λ=1 | 0.000 | 0.000 | -0.170 | COLLAPSED |
+
+**Root cause:** th0.5 init is 98.1% identical to target (ref). NPO gradient ∝ (model_nll - ref_nll) ≈ 0. L_fgt saturates at 0.031 (logsigmoid floor) in 1-4 steps. After that, outer step = pure ALM noise. accum=1 with K=10 amplifies noise catastrophically.
+
+#### Track B: Bilevel from PerTA-masked th0.3 (init: fk=0.510, rk=0.514, δ=+0.063)
+ref_model = original target model
+
+| Experiment | Config | fk | rk | δ | Verdict |
+|---|---|---|---|---|---|
+| **Init (th0.3)** | — | 0.510 | 0.514 | +0.063 | baseline |
+| B1 (G1-style) | accum=32 K=1 T=25 β=2 steer=5 λ=0 | 0.504 | 0.496 | +0.049 | marginal fk gain, rk loss |
+| B2 (accum=1) | accum=1 K=10 T=15 β=0.5 λ=1 | 0.504 | 0.488 | +0.041 | same — degraded |
+
+**Root cause:** Same NPO saturation. th0.3 has 13.9% modified params but NPO still saturates within 5-6 steps (L_fgt→0.032). Bilevel can't improve on the init.
+
+#### Track C: Fisher disjoint masks from target (standard bilevel setup)
+Outer: NPO on 13.9% forget-dominant params (w>0.3). Inner: CE on 86.1% retain-dominant params.
+
+| Experiment | Config | fk | rk | δ | Verdict |
+|---|---|---|---|---|---|
+| C1 (no implicit) | accum=1 K=10 T=25 β=2 λ=1 bs=1 | 0.000 | 0.001 | -0.169 | COLLAPSED |
+| C2 (implicit) | C1 + FD-HVP | — | — | — | OOM (model+ref+HVP >93GB) |
+| C3 (accum=4) | C1 but accum=4 | — | — | — | OOM (grad clone ×4 batches) |
+
+**Root cause for C1:** NPO on only 14% of params concentrates gradient on fewer params → 7× per-param gradient magnitude. Single step destroys the 14% forget-dominant params (L_fgt=3.6→0.0 in 1 step), L_ret explodes to 8.8.
+**Root cause for C2/C3:** NPO ref_model (deepcopy, 14GB) + main model (14GB) + gradients + Fisher cache = >93GB GPU. The `grad.clone()` in accum>1 path adds another ~14GB.
+
+### Y-SERIES CONCLUSION
+
+**All three tracks failed.** The fundamental problems are:
+
+1. **NPO saturation from PerTA init (Tracks A/B):** When init model is modified from target (ref), NPO gradients ∝ (model_nll - ref_nll) vanish after 1-5 steps because NPO loss has a floor at ~0.031. After saturation, outer step = pure ALM noise with no forget signal.
+
+2. **NPO gradient concentration (Track C):** Fisher disjoint masks restrict outer NPO to 14% of params. This concentrates the gradient 7× per-param, making even a single step catastrophic. The model collapses in 1 outer step.
+
+3. **Memory wall (Track C):** NPO requires a frozen ref_model (14GB), which combined with main model + gradients + Fisher cache exceeds 93GB GPU. FD-HVP implicit correction adds another forward pass, making it impossible.
+
+**Key insight:** The CE Pareto frontier trap is NOT about initialization or mask design. It's about the NPO loss function itself. NPO with DPO-style log-ratio saturates quickly from any starting point, leaving the bilevel with no meaningful forget signal. The only exception was X1f (accum=1 from PerTA l1.5 with deepcopy ref), where the PerTA init placed the model far enough from ref that NPO had signal for ~15 steps.
+
+**Surviving strategy:** X1f (PerTA l1.5 init + accum=1 bilevel, δ=+0.064) remains the only frontier-breaking result with novelty. Focus on:
+1. Ablation table for X1f (implicit on/off, T variations)
+2. TOFU/WMDP benchmark extension
+3. Theoretical analysis of why accum=1 works (inner/outer ratio argument)

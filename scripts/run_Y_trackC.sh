@@ -137,6 +137,7 @@ COMMON_C=(
     trainer.method_args.inner_contrastive=false
     trainer.method_args.inner_repr_anchor=false
     trainer.method_args.gradient_projection=false
+    trainer.method_args.use_implicit=false
     trainer.args.per_device_train_batch_size=1
 )
 
