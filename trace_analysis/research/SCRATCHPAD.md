@@ -1,5 +1,5 @@
 # Research Scratchpad — DS-BiAL MUSE News
-## For agent continuity. Last updated: 2026-04-11 ~02:30 (PerTA confirmed best, all baselines done, saves cleaned)
+## For agent continuity. Last updated: 2026-04-13 ~19:20 (X2-series COMPLETE: X1f breakthrough δ=+0.064 with accum=1+K=10+warm ALM from PerTA l1.5)
 
 ---
 
@@ -61,32 +61,36 @@ The base LLM (never finetuned) has fk=0.270 (BELOW gold!) and rk=0.345. This mea
 
 ---
 
-## CURRENT STATE (2026-04-10, updated ~19:30)
+## CURRENT STATE (2026-04-13, updated ~19:00)
 
-**🔥 NEW PARADIGM: PerTA BREAKS CE FRONTIER SYSTEMATICALLY**
-**BEST FRONTIER BREAK: PerTA λ=3.5** — fk=0.282 ✅, rk=0.396 — ABOVE CE frontier by δ=+0.071 (27% better than T8f)
-**Best rk at gold fk: PerTA λ=3.5 + LoRA r16** — fk=0.329 ≈ gold, rk=0.401, δ=+0.050
-**Best rk overall: PerTA λ=0.5** — fk=0.635, rk=0.567 > gold rk! (but fk too high)
-**Remaining gap: rk** — at fk≈gold, rk=0.396-0.401. Gold rk=0.552. Gap = +0.151.
-**Key mechanism:** Fisher-weighted per-parameter task arithmetic. Not gradient-based — direct weight surgery.
+**STRATEGY UPDATE: Bilevel from PerTA works ONLY with accum=1**
+- Track 1 (accum=8): ALL 4 experiments worse than PerTA init (δ=+0.047) — outer step too large
+- Track 2 (accum=8 from PerTA l1.0): Also worse than init — same pattern
+- Track 3 (PerTA-Masked): Best δ=+0.063 at masked_l1.5_th0.3, no training needed
+- **Track 4 (accum=1): X1f δ=+0.064 — beats PerTA init!** Recipe: accum=1, K=10, λ_init=1.0, ρ=0.1, T=15
+- Root cause of accum=8 failure: NPO ref = PerTA init → saturates to L_fgt=0 in 1 step → large outer step (accum=8) overwhelms inner loop
+- accum=1 works because outer perturbation is small enough for K=10 inner steps to fully compensate
 
-**PerTA λ=3.5 is CONFIRMED BEST and REPRODUCIBLE (deterministic).**
-Two identical runs produce identical metrics. No gradient randomness.
+**Best results to date:**
+| Method | fk | rk | δ | notes |
+|---|---|---|---|---|
+| GradAscent | 0.003 | 0.008 | — | collapsed |
+| GradDiff | 0.330 | 0.247 | — | |
+| NPO | 0.517 | 0.420 | — | |
+| SimNPO | 0.584 | 0.470 | — | best gradient retain |
+| BLURNPO | 0.581 | 0.532 | — | checkpoint-100/130 (OOM full run) |
+| RMU | 0.516 | 0.457 | — | |
+| **PerTA λ=3.5** | **0.282** | **0.396** | **+0.071** | **best fk+δ, zero novelty** |
+| PerTA+LoRA r16 | 0.329 | 0.401 | +0.050 | fk≈gold, marginal rk gain |
+| **PerTA-masked l1.5 th0.3** | **0.510** | **0.514** | **+0.063** | **binary mask variant, connects to S-BiAL** |
+| PerTA-masked l1.5 th0.5 | 0.591 | **0.552** | +0.057 | **rk=GOLD!** but fk too high |
+| T8f (log+contrastive) | 0.428 | 0.461 | +0.056 | best gradient above-frontier, knife-edge |
+| S5 (accum=1, K=3, 100 steps) | 0.346 | 0.382 | +0.022 | fragile frontier break |
+| **X1f (PerTA+bilevel accum=1)** | **0.470** | **0.492** | **+0.064** | **bilevel adds value! accum=1+K=10+warm ALM** |
+| X1e (PerTA+bilevel+implicit) | 0.528 | 0.497 | +0.036 | best Track 1, still worse than PerTA init |
 
-**All MUSE News baselines complete (2026-04-11):**
-| Method | fk | rk | notes |
-|---|---|---|---|
-| GradAscent | 0.003 | 0.008 | collapsed |
-| GradDiff | 0.330 | 0.247 | |
-| NPO | 0.517 | 0.420 | |
-| SimNPO | 0.584 | 0.470 | best gradient retain |
-| BLURNPO | 0.581 | 0.532 | checkpoint-100/130 (OOM full run) |
-| RMU | 0.516 | 0.457 | |
-| **PerTA (ours)** | **0.282** | **0.396** | **best fk by far, above CE frontier** |
-
-**Saves cleaned:** 522GB → 220GB. Kept: baselines, perta_l3.5, Fisher cache.
-
-**Remaining gap:** rk=0.396 vs gold 0.552. Gap = 0.156.
+**Gold targets:** fk ≤ 0.324, rk ≥ 0.552
+**CE frontier:** rk ≈ 0.55*fk + 0.17 (R²=0.97)
 
 **Generalization requirement:** Method must work on MUSE Books + WMDP. PerTA is fully general — only needs pretrained + target model + forget/retain data for Fisher computation.
 
@@ -1049,7 +1053,303 @@ The rk gap to gold (0.552) is +0.151 even with the best LoRA configuration. This
 
 ---
 
+---
+
+## X SERIES — Bilevel from PerTA Initialization (2026-04-13)
+
+### Rationale
+PerTA λ=3.5 breaks the CE frontier (fk=0.282, rk=0.396, δ=+0.071) but has zero novelty and rk gap of -0.156.
+LoRA retain recovery on λ=3.5 only gains +0.005 to +0.035 rk — damage is too deep.
+
+**Key insight: start from MILD PerTA (λ=1.5, rk=0.513) instead of λ=3.5 (rk=0.396).**
+- PerTA λ=1.5: fk=0.537, rk=0.513. Only -0.039 from gold rk. fk is high but bilevel NPO pushes fk down naturally.
+- This inverts the problem: start with good rk, push fk down, use ALM to protect rk.
+
+### X Series Experiments
+Runner: `scripts/run_X_series.sh` — 8 experiments, restart-resistant with skip logic.
+Config: bs=2, accum=16 (eff_bs=32), T=50, K=3, npo_beta=2.0, ρ=0.01, eta_theta=1e-4, eta_in=1e-4
+
+| Exp | Init | ε | Novel Components |
+|-----|------|---|------------------|
+| X1 | PerTA λ=1.5 | 0.85 | Bilevel ALM only (baseline) |
+| X2 | PerTA λ=1.5 | 0.85 | + Implicit correction (Neumann 2-step, last 2 layers) |
+| X3 | PerTA λ=1.5 | 0.85 | + Fisher-weighted outer |
+| X4 | PerTA λ=1.5 | 0.85 | Implicit + score-weighted NPO (log scheme) |
+| X5 | PerTA λ=2.0 | 0.95 | Implicit |
+| X6 | PerTA λ=1.0 | 0.80 | Implicit |
+| X7 | PerTA λ=1.5 | 0.85 | Implicit + contrastive inner |
+| X8 | PerTA λ=1.5 | 0.70 | Implicit + tight ε |
+
+### X1 Result: CATASTROPHIC NPO COLLAPSE
+
+Training log (from `/tmp/X_series_main.log`):
+
+| Step | L_fgt | L_ret | λ_dual |
+|------|-------|-------|--------|
+| 0 | 2.59 | 1.08 | 0.002 |
+| 2 | **0.00** | 2.64 | 0.042 |
+| 4 | 0.00 | 2.39 | 0.074 |
+| 6 | 0.00 | 2.33 | 0.103 |
+| 8 | 0.00 | 2.29 | 0.132 |
+| 10 | 0.00 | 2.13 | 0.159 |
+| 12 | 0.00 | 2.13 | 0.185 |
+| 14 | 0.00 | 2.20 | 0.211 |
+(Terminated after step 14)
+
+**L_fgt collapsed to 0.0 in 2 outer steps.** NPO with npo_beta=2.0 + eff_bs=32 is far too aggressive on the PerTA λ=1.5 model. Once L_fgt=0, the forget gradient vanishes → model drifts → retain destroyed.
+
+### Root Cause Analysis: Inner/Outer Imbalance
+
+**Outer step**: 16 mini-batches accumulated (eff_bs=32) → one large gradient step on L_alm.
+**Inner step**: K=3 steps × bs=2 = 6 retain samples total.
+
+The inner loop is massively outgunned. Three tiny SGD steps on 6 samples cannot compensate for one accumulated outer update on 32 samples. The inner/outer compute ratio is 6:32 (0.19:1). Compare to 8r which had 10:1 inner/outer ratio.
+
+**Why PerTA init makes NPO MORE aggressive (not less):**
+- PerTA λ=1.5 has already partially negated forget knowledge in weight space
+- The ref model (frozen copy of PerTA model) also has reduced forget probs
+- NPO loss = log(p_ref / p_model) → when p_ref is already low (from PerTA negation), even small model prob gives large positive loss
+- The NPO gradient is amplified because both model and ref start from a partially-unlearned state
+- With eff_bs=32, this amplified gradient is averaged over many samples → large, consistent push
+
+**Why ε=0.85 didn't help:**
+- L_ret_init=1.08 > ε=0.85 → constraint was violated from step 0
+- But ρ=0.01 → λ grows by ~0.01 per step → by step 2 λ=0.002 → negligible retain protection
+- ALM penalty at step 0: 0.5 * 0.01 * (1.08-0.85)² = 0.00026 → completely dwarfed by L_fgt=2.59
+
+### Design Flaws Identified (2026-04-13)
+
+1. **npo_beta=2.0 too aggressive for PerTA init**: Prior S5/T8f experiments ran from target model where NPO needed to work hard. PerTA model is already partially unlearned → NPO signal is much stronger per step.
+
+2. **eff_bs=32 amplifies the problem**: Large batch gives consistent, high-confidence NPO gradient. S5 broke the frontier with accum=1 precisely because single-sample NPO is noisy/targeted → inner loop can compensate precisely.
+
+3. **K=3 insufficient at eff_bs=32**: Inner/outer ratio of 0.19:1 is worst of any experiment. Even G1 (K=1, accum=32) survived because NPO was weaker from target model. PerTA init + large batch + small K = guaranteed collapse.
+
+4. **ρ=0.01 too slow for eff_bs=32 regime**: At ρ=0.01, ALM needs 50+ steps to build meaningful λ (S5 showed this). But with eff_bs=32, the model is destroyed in 2 steps. Need either ρ≥0.1 or λ_init>0.
+
+### What Needs to Change for X-series v2
+
+**User guidance (2026-04-13):**
+- eff_bs=16 is acceptable (not necessarily 32)
+- Too many outer steps may hurt
+- Inner K must be set appropriately — K=3 is too few for the outer step size
+- Inner loop must actually make meaningful gradient updates (it does — manual SGD at eta_in — but the magnitude is insufficient)
+
+**Concrete fixes needed:**
+1. **Reduce outer aggressiveness**: Lower npo_beta (e.g., 0.5-1.0) and/or lower eta_theta (e.g., 5e-5)
+2. **Increase inner capacity**: K=10+ or higher eta_in (e.g., 5e-4)
+3. **Reduce eff_bs**: accum=8 (eff_bs=16) gives more targeted gradients
+4. **Faster ALM**: ρ=0.1 or λ_init=1.0 for immediate retain protection
+5. **Fewer outer steps**: T=15-25 instead of 50 (with stronger per-step ALM)
+
+**Key question: what is the right inner/outer balance for PerTA init?**
+- 8r (frontier break): 10:1 inner/outer ratio, accum=1
+- S5 (frontier break): 3:1, accum=1, 100 steps (slow ALM buildup)
+- G1 (on frontier): 1:1, accum=32, 25 steps
+- X1 (collapsed): 0.19:1, accum=16, 50 steps ← worst ratio ever
+
+The evidence says: inner/outer ratio ≥ 3:1 is needed, and accum=1 helps. PerTA init may need even higher ratio because NPO is amplified.
+
+---
+
 ## LONGER TERM
 - Once fk + rk both hit targets: run on MUSE Books + WMDP
 - Baselines still needed: BLURNPO (checkpoint at saves/), RMU (needs fresh run)
 - Publish as DS-BiAL: bilevel NPO + trace-guided KL distillation + selective implicit differentiation
+
+---
+
+## OPEN QUESTIONS (2026-04-13)
+
+### Q1: What is the right inner/outer balance for PerTA init?
+
+Evidence from all experiments:
+
+| Experiment | Inner/Outer ratio | accum | K | Result |
+|---|---|---|---|---|
+| 8r | 10:1 | 1 | 10 | frontier break (δ=+0.043) |
+| S5 | 3:1 | 1 | 3 | frontier break (δ=+0.022) |
+| G1 | 1:1 | 32 | 1 | on frontier (δ=+0.006) |
+| T0 | 10:1 | 32 | 10 | below frontier (over-forgot) |
+| T1 | 5:1 | 32 | 5 | below frontier |
+| **X1** | **0.19:1** | **16** | **3** | **collapsed in 2 steps** |
+
+Key observations:
+- Frontier breaks ONLY happened with accum=1 (single-sample gradients)
+- High K with accum=32 (T0/T1) didn't break frontier — batch size matters independently of K
+- PerTA init amplifies NPO → likely needs HIGHER inner/outer ratio than target-model experiments
+- User says eff_bs=16 acceptable, too many steps may hurt
+
+### Resolution: 4-Track Experiment Plan (2026-04-13)
+
+**TRACK 1: Fix X-series from PerTA λ=1.5 (main bet, 4-6 runs)**
+
+| Config | Value | Rationale |
+|---|---|---|
+| npo_beta | 0.5 | PerTA amplifies NPO — 4x reduction from X1's 2.0 |
+| eta_theta | 5e-5 | Half X1. Smaller outer steps. |
+| K | 10 | Inner/outer ratio 1.25:1 (10 vs 8 accum). Still below 3:1 threshold but warm-start λ compensates. |
+| eta_in | 5e-4 | 5x higher inner LR — makes K=10 steps meaningful |
+| accum | 8 (eff_bs=16) | Per user guidance |
+| T | 15 | Fewer steps, stronger per-step ALM |
+| ρ | 0.1 | 10x X1. λ reaches ~1.5 by step 15. |
+| λ_init | 1.0 | Warm-start prevents irreversible early damage (P-series lesson) |
+| ε | 0.85 | Keep from X1 |
+
+Run order: X1b (above) → X1c (npo_beta=0.3) → X1d (K=5, eta_in=1e-3) → X1e (best + implicit)
+Success: fk ≤ 0.40, rk ≥ 0.45, δ > +0.03
+
+**TRACK 2: PerTA λ=1.0 init (backup, 2 runs)**
+λ=1.0: fk=0.634, rk=0.540. rk only -0.012 from gold. NPO has to push fk down 0.31.
+- X6b: npo_beta=1.0, K=10, ρ=0.1, λ_init=0.5, T=20
+- X6c: npo_beta=0.5
+
+**TRACK 3: PerTA-masked (no training, 10 min each)**
+Apply PerTA only to params with w_i > threshold. Connects to S-BiAL mask formulation.
+- threshold=0.3: negate top ~30% forget-dominant params
+- threshold=0.5: negate top ~15% forget-dominant params
+
+**TRACK 4: accum=1 from PerTA (if time)**
+- X1f: accum=1, K=10, T=15, npo_beta=0.5, ρ=0.01, PerTA λ=1.5
+- X1g: T=50 (S5-style slow ALM)
+
+**Monitoring criteria (kill if at step 2):**
+- L_fgt = 0.0 → NPO too aggressive, lower beta
+- L_ret > 3.0 → retain destroyed, increase λ_init or ρ
+- λ_dual > 5 by step 5 → ALM diverging, lower ρ
+
+**Execution order:** Track 3 (free) → Track 1 X1b → adjust → Track 2 if needed → Track 4 if time
+
+---
+
+## X2 SERIES RESULTS (2026-04-13 ~17:50-19:00)
+
+### Track 3: PerTA-Masked Results (binary threshold variant)
+
+θ = θ_target - λ * m * τ, where m = 1{w > threshold}, τ = θ_target - θ_pretrained
+
+Fisher mask stats: w>0.1: 68.8%, w>0.2: 36.2%, w>0.3: 13.9%, w>0.5: 1.9%, w>0.9: 0.0%
+
+| Experiment | λ | th | fk↓ | rk↑ | vm | δ | verdict |
+|---|---|---|---|---|---|---|---|
+| masked_l1.5_th0.3 | 1.5 | 0.3 | 0.510 | 0.514 | 0.242 | **+0.063** | **Best masked δ** |
+| masked_l1.5_th0.5 | 1.5 | 0.5 | 0.591 | **0.552** | 0.528 | +0.057 | **rk=GOLD!** but fk/vm weak |
+| masked_l2.0_th0.3 | 2.0 | 0.3 | 0.392 | 0.424 | 0.201 | +0.038 | Good balance |
+| masked_l2.0_th0.5 | 2.0 | 0.5 | 0.586 | 0.528 | 0.470 | +0.036 | High fk |
+| masked_l3.0_th0.3 | 3.0 | 0.3 | 0.008 | 0.005 | 0.005 | -0.170 | **COLLAPSED** — 13.9% params negated 3x too extreme |
+| masked_l3.0_th0.5 | 3.0 | 0.5 | 0.507 | 0.462 | 0.370 | +0.013 | Marginal |
+| masked_l3.5_th0.3 | 3.5 | 0.3 | 0.001 | 0.017 | 0.004 | -0.153 | **COLLAPSED** |
+| masked_l3.5_th0.5 | 3.5 | 0.5 | 0.363 | 0.198 | 0.318 | -0.171 | Collapsed rk |
+
+**Key findings:**
+1. Binary masking BEATS continuous PerTA at low λ: masked_l1.5_th0.3 (δ=+0.063) > continuous l1.5 (δ=+0.047)
+2. High λ + low threshold = catastrophic: negating only 13.9% of params by 3x+ is too extreme
+3. th=0.5 preserves rk better (fewer params negated) — masked_l1.5_th0.5 achieves rk=0.552=GOLD
+4. **Novel contribution**: binary mask connects directly to S-BiAL's mask formulation (Eq. 5-7)
+
+**Masked vs continuous comparison at same λ:**
+| λ | Continuous δ | Masked th0.3 δ | Masked th0.5 δ |
+|---|---|---|---|
+| 1.5 | +0.047 | **+0.063** | +0.057 |
+| 2.0 | +0.054 | +0.038 | +0.036 |
+| 3.5 | +0.071 | -0.153 | -0.171 |
+
+Binary masking is more selective at mild λ but collapses at high λ.
+
+### Track 1: Bilevel from PerTA λ=1.5 — ALL WORSE THAN INIT
+
+Common config: PerTA l1.5 init (fk=0.537, rk=0.513, δ=+0.047), accum=8 (eff_bs=16), T=15, ρ=0.1, λ_init=1.0, ε=0.85, grad_checkpointing=true
+
+| Exp | npo_beta | K | eta_in | Implicit | fk↓ | rk↑ | vm | δ | vs init |
+|---|---|---|---|---|---|---|---|---|---|
+| X1b | 0.5 | 10 | 5e-4 | No | 0.561 | 0.498 | 0.258 | +0.019 | **↓0.028** |
+| X1c | 0.3 | 10 | 5e-4 | No | 0.570 | 0.486 | 0.259 | +0.002 | **↓0.045** |
+| X1d | 0.5 | 5 | 1e-3 | No | 0.522 | 0.492 | 0.232 | +0.035 | **↓0.012** |
+| X1e | 0.5 | 10 | 5e-4 | Yes (Neumann 2-step) | 0.528 | 0.497 | 0.257 | +0.036 | **↓0.011** |
+
+**All experiments degrade from PerTA init.** Training helps vm (0.329→0.23-0.26) but hurts rk more than fk improves.
+
+**Training dynamics (universal across all 4 experiments):**
+- Step 0: L_fgt ≈ 19-34 (depends on beta), L_ret ≈ 0.97
+- Step 1: L_fgt = 0.000 (NPO saturated), L_ret ≈ 1.55 (outer step damaged retain)
+- Steps 2-14: L_fgt ≈ 0, L_ret slowly recovers to ≈1.15-1.18 (inner loop)
+- λ grows from 1.0 to ≈1.6 (provides increasing retain protection)
+
+**ROOT CAUSE: ref_model = deepcopy(self.model) = PerTA init**
+- NPO measures model_nll vs ref_nll on forget data
+- At step 0: model ≈ ref → loss ≈ 2/β * ln(2) * seq_len
+- After 1 outer step: model_nll >> ref_nll (model moved away from PerTA init) → NPO loss = 0
+- NPO is fundamentally satisfied because the model has moved RELATIVE TO ITSELF
+- The outer step then contributes zero forget signal — it's pure ALM retain penalty + noise
+- Inner loop spends effort recovering from damage the outer step caused
+- Net result: worse than doing nothing (PerTA init)
+
+**Even with target model as ref, PerTA init has already unlearned significantly relative to target → NPO would be near 0 from the start. NPO cannot add value from any PerTA init.**
+
+### Track 2: Bilevel from PerTA λ=1.0
+
+PerTA l1.0 init: fk=0.635, rk=0.540, δ=+0.021
+
+| Exp | Config | fk↓ | rk↑ | δ | vs init |
+|---|---|---|---|---|---|
+| X6b | npo_beta=0.5, K=10, T=20, ρ=0.1, λ_init=1.0 | 0.546 | 0.485 | +0.015 | **↓0.006** |
+| X6c | (running, npo_beta=0.3?) | ~0.590 | ~0.512 | ~+0.017 | ~↓0.004 |
+
+Same pattern: bilevel destroys rk (0.540→0.485) while modestly improving fk (0.635→0.546). Net negative.
+
+### Track 4: accum=1 from PerTA (still running: X1f, X1g)
+
+Expected to show same NPO saturation. accum=1 changes gradient granularity but not the ref_model problem.
+
+### X2-SERIES VERDICT: Bilevel NPO from PerTA Init is DEAD
+
+**The bilevel framework CANNOT improve on PerTA initialization because:**
+1. NPO's ref_model is a frozen copy of the init model (PerTA)
+2. Any gradient step from PerTA init makes model_nll >> ref_nll (1 step saturation)
+3. With L_fgt=0, the outer step is pure ALM retain penalty + noise — counterproductive
+4. Even if ref_model = original target, PerTA has already unlearned enough for NPO to be near 0
+
+**What would work from PerTA init:**
+1. **Masked retain fine-tuning**: Only update retain-dominant params (inverse Fisher mask). Recovers rk without touching forget-dominant params. Simple, potentially effective, Fisher mask is the novel component.
+2. **Different forget objective**: Something that doesn't saturate (gradient ascent on forget CE, contrastive representation loss). But GA is destructive and contrastive collapsed in T6.
+3. **No outer forget step**: Just do inner CE on retain data. But then it's not bilevel — it's fine-tuning.
+4. **Accept PerTA results**: PerTA-masked l1.5 th0.3 (δ=+0.063) or continuous l3.5 (δ=+0.071) are already strong. Add novelty through the bilevel FRAMEWORK paper (analysis/theory) rather than trying to beat PerTA empirically.
+
+### Track 4: accum=1 from PerTA λ=1.5 — X1F BREAKS THROUGH
+
+| Exp | accum | K | T | ρ | λ_init | fk↓ | rk↑ | vm | δ | vs init |
+|---|---|---|---|---|---|---|---|---|---|---|
+| **X1f** | **1** | **10** | **15** | **0.1** | **1.0** | **0.470** | **0.492** | **0.229** | **+0.064** | **↑0.017** |
+| X1g | 1 | 10 | 50 | 0.01 | 0.0 | 0.519 | 0.479 | 0.261 | +0.024 | ↓0.023 |
+
+**X1f is the ONLY bilevel experiment that improves on PerTA init (δ=+0.064 vs +0.047).**
+
+**Why X1f works when all accum=8 experiments fail:**
+1. accum=1 → outer step magnitude is 1/8th of accum=8 (2 samples vs 16)
+2. Even though NPO still saturates at L_fgt=0 after step 0, the outer perturbation is SMALL
+3. K=10 inner steps can FULLY compensate for the small perturbation
+4. Warm-start λ=1.0 + ρ=0.1 provides immediate retain protection
+5. Net effect: inner loop does gradual retain recovery while outer step makes small, tolerable perturbations
+
+**Why X1g fails:** ρ=0.01, λ_init=0 → λ only reaches 0.18 by step 50. Essentially NO retain protection throughout training. The S5-style slow ALM doesn't work from PerTA init because there aren't enough steps for λ to build up. PerTA init is more fragile than target model init.
+
+**X1f comparison with all methods:**
+| Method | fk | rk | δ | notes |
+|---|---|---|---|---|
+| PerTA l3.5 (continuous) | 0.282 | 0.396 | +0.071 | best overall, zero novelty |
+| **X1f (PerTA l1.5 + bilevel)** | **0.470** | **0.492** | **+0.064** | **bilevel adds value, has novelty** |
+| PerTA-masked l1.5 th0.3 | 0.510 | 0.514 | +0.063 | binary mask, connects to S-BiAL |
+| T8f (gradient only) | 0.428 | 0.461 | +0.056 | knife-edge, not reproducible |
+| PerTA l1.5 (init) | 0.537 | 0.513 | +0.047 | X1f's starting point |
+
+**Critical recipe for bilevel from PerTA init:** accum=1 + K=10 + λ_init=1.0 + ρ=0.1 + T=15
+
+### X2-SERIES CONCLUSION
+
+The bilevel framework CAN add value on top of PerTA, but ONLY with accum=1 (single-sample gradients). Large batch (accum≥8) outer steps overwhelm the inner loop's correction capacity, causing net degradation.
+
+**Next priorities:**
+1. Run X1f with implicit correction (novelty claim) — does Neumann correction help the accum=1 regime?
+2. Run X1f from PerTA l2.0 init (fk=0.516, rk=0.508) — stronger forget baseline
+3. Run X1f with T=25 (does more training help with accum=1 + warm ALM?)
+4. Consider masked outer step (freeze retain-dominant params in outer loop)
