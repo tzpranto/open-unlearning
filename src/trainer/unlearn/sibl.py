@@ -1856,14 +1856,22 @@ class SIBL(UnlearnTrainer):
             # Scale by 1/n_accum so averaged gradient matches single-batch scale
             (L_alm / n_accum).backward(retain_graph=False)
 
-            for name, param in self.model.named_parameters():
-                g = param.grad.clone() if param.grad is not None else torch.zeros_like(param.data)
-                if name in g_alm_dict:
-                    g_alm_dict[name] = g_alm_dict[name] + g
-                else:
-                    g_alm_dict[name] = g
-
-            self.model.zero_grad()
+            if n_accum == 1:
+                # Single batch: move grads to g_alm_dict without clone (saves ~14GB VRAM)
+                for name, param in self.model.named_parameters():
+                    if param.grad is not None:
+                        g_alm_dict[name] = param.grad.detach()
+                        param.grad = None  # Detach without zeroing (already moved)
+                    else:
+                        g_alm_dict[name] = torch.zeros_like(param.data)
+            else:
+                for name, param in self.model.named_parameters():
+                    g = param.grad.clone() if param.grad is not None else torch.zeros_like(param.data)
+                    if name in g_alm_dict:
+                        g_alm_dict[name] = g_alm_dict[name] + g
+                    else:
+                        g_alm_dict[name] = g
+                self.model.zero_grad()
 
             L_fgt_accum += L_fgt.item()
             L_ret_accum += L_ret.item()
