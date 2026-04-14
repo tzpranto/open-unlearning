@@ -62,10 +62,21 @@ class LoRABiAL(UnlearnTrainer):
         epsilon: float = 0.70,
         rho: float = 0.1,
         lambda_init: float = 1.0,
+        lambda_max: float = 0.0,  # 0 = no cap; >0 = cap dual variable
         # Forget loss
         forget_loss_type: str = "npo",  # "npo" or "ga"
         npo_beta: float = 2.0,
         ga_clip: float = 1.0,
+        # Epoch-aware training (new)
+        lr_schedule: str = "constant",  # "constant" or "cosine"
+        warmup_fraction: float = 0.0,  # fraction of total steps for warmup
+        npo_saturation_threshold: float = 0.01,
+        saturation_patience: int = 5,
+        retain_only_after_saturation: bool = False,
+        checkpoint_every_epoch: bool = False,
+        # Intermediate checkpoints for dynamics analysis
+        # Saves merged model at these steps; eval them after training
+        eval_at_steps: Optional[list] = None,  # e.g. [25, 50, 100, 200]
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -87,9 +98,17 @@ class LoRABiAL(UnlearnTrainer):
         self.epsilon = epsilon
         self.rho = rho
         self.lambda_init = lambda_init
+        self.lambda_max = lambda_max
         self.forget_loss_type = forget_loss_type
         self.npo_beta = npo_beta
         self.ga_clip = ga_clip
+        self.lr_schedule = lr_schedule
+        self.warmup_fraction = warmup_fraction
+        self.npo_saturation_threshold = npo_saturation_threshold
+        self.saturation_patience = saturation_patience
+        self.retain_only_after_saturation = retain_only_after_saturation
+        self.checkpoint_every_epoch = checkpoint_every_epoch
+        self.eval_at_steps = set(eval_at_steps) if eval_at_steps else set()
 
         # Runtime state
         self.lambda_dual = float(lambda_init)
@@ -326,6 +345,8 @@ class LoRABiAL(UnlearnTrainer):
 
         # Dual variable update
         self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r_val)
+        if self.lambda_max > 0:
+            self.lambda_dual = min(self.lambda_dual, self.lambda_max)
 
         return L_fgt.item(), L_ret.item(), L_ret.item() - self.epsilon
 
@@ -368,24 +389,55 @@ class LoRABiAL(UnlearnTrainer):
 
         # Data
         train_dataloader = self.get_train_dataloader()
-        accum_steps = max(1, self.args.gradient_accumulation_steps)
-        steps_per_epoch = max(1, len(train_dataloader) // accum_steps)
+        batch_size = self.args.per_device_train_batch_size
+        steps_per_epoch = len(train_dataloader)
         num_epochs = max(1, int(self.args.num_train_epochs))
-        total_outer_steps = num_epochs * steps_per_epoch
-        effective_T = min(self.T, total_outer_steps)
 
-        data_iter = iter(train_dataloader)
+        # Determine total training steps
+        # T > 0: fixed step count (backward compat with Ze0: T=25)
+        # T <= 0: run full epochs (new mode for data coverage)
+        if self.T > 0:
+            max_outer_steps = self.T
+        else:
+            max_outer_steps = num_epochs * steps_per_epoch
+
+        # LR schedulers
+        if self.lr_schedule == "cosine":
+            from torch.optim.lr_scheduler import CosineAnnealingLR, SequentialLR, LinearLR
+            warmup_steps = int(self.warmup_fraction * max_outer_steps)
+            if warmup_steps > 0:
+                warmup_outer = LinearLR(self._outer_opt, start_factor=0.1, total_iters=warmup_steps)
+                cosine_outer = CosineAnnealingLR(self._outer_opt, T_max=max_outer_steps - warmup_steps)
+                self._outer_scheduler = SequentialLR(self._outer_opt, [warmup_outer, cosine_outer], milestones=[warmup_steps])
+                warmup_inner = LinearLR(self._inner_opt, start_factor=0.1, total_iters=warmup_steps)
+                cosine_inner = CosineAnnealingLR(self._inner_opt, T_max=max_outer_steps - warmup_steps)
+                self._inner_scheduler = SequentialLR(self._inner_opt, [warmup_inner, cosine_inner], milestones=[warmup_steps])
+            else:
+                self._outer_scheduler = CosineAnnealingLR(self._outer_opt, T_max=max_outer_steps)
+                self._inner_scheduler = CosineAnnealingLR(self._inner_opt, T_max=max_outer_steps)
+        else:
+            self._outer_scheduler = None
+            self._inner_scheduler = None
 
         logger.info("=" * 60)
         logger.info("Stage 3: Bilevel ALM optimization")
         logger.info("=" * 60)
-        logger.info(f"  T={effective_T}, K={self.K}, accum={accum_steps}")
+        logger.info(f"  Mode: {'epoch-based' if self.T <= 0 else f'fixed T={self.T}'}")
+        logger.info(f"  Epochs={num_epochs}, steps/epoch={steps_per_epoch}, "
+                     f"max_steps={max_outer_steps}, K={self.K}")
+        logger.info(f"  Batch size={batch_size}, "
+                     f"samples/epoch={steps_per_epoch * batch_size}")
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
-        logger.info(f"  ALM: ε={self.epsilon}, ρ={self.rho}, λ_init={self.lambda_init}")
-        logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}")
+        logger.info(f"  ALM: ε={self.epsilon}, ρ={self.rho}, λ_init={self.lambda_init}"
+                     f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
+        logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, "
+                     f"schedule={self.lr_schedule}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
         if self.perta_lambda > 0:
             logger.info(f"  PerTA: λ={self.perta_lambda}, α={self.perta_alpha}")
+        if self.retain_only_after_saturation:
+            logger.info(f"  Saturation: threshold={self.npo_saturation_threshold}, "
+                         f"patience={self.saturation_patience}")
 
         # GPU memory check
         if torch.cuda.is_available():
@@ -393,66 +445,153 @@ class LoRABiAL(UnlearnTrainer):
             logger.info(f"  GPU memory before bilevel: {mem:.1f} GB")
 
         history = []
+        global_step = 0
+        saturated_count = 0
+        total_saturated_steps = 0  # steps where we skipped outer
 
-        for t in range(effective_T):
-            t_start = time.time()
+        for epoch in range(num_epochs):
+            epoch_start = time.time()
+            epoch_inner_losses = []
+            epoch_fgt_losses = []
+            epoch_ret_losses = []
 
-            # Collect batches
-            forget_batches = []
-            retain_batches = []
-            for _ in range(accum_steps):
-                try:
-                    combined_batch = next(data_iter)
-                except StopIteration:
-                    data_iter = iter(train_dataloader)
-                    combined_batch = next(data_iter)
-                forget_batches.append(combined_batch["forget"])
-                retain_batches.append(combined_batch["retain"])
+            for batch_idx, combined_batch in enumerate(train_dataloader):
+                # Check max steps
+                if global_step >= max_outer_steps:
+                    break
 
-            if not forget_batches:
-                break
+                t_start = time.time()
+                forget_batch = combined_batch["forget"]
+                retain_batch = combined_batch["retain"]
 
-            # Inner loop: K steps of retain CE
-            inner_losses = []
-            retain_cycle = (
-                retain_batches * ((self.K // len(retain_batches)) + 1)
-            )[: self.K]
-            for rb in retain_cycle:
-                l_in = self.inner_step(rb, device)
-                inner_losses.append(l_in)
+                # Inner loop: K steps of retain CE
+                inner_losses = []
+                for _k in range(self.K):
+                    l_in = self.inner_step(retain_batch, device)
+                    inner_losses.append(l_in)
 
-            # Outer step: ALM(forget + retain constraint)
-            L_fgt, L_ret, r = self.outer_step(
-                forget_batches[0], retain_batches[0], device
-            )
+                # Saturation check: skip outer step if NPO has saturated
+                if (self.retain_only_after_saturation
+                        and saturated_count >= self.saturation_patience):
+                    L_fgt, L_ret, r = 0.0, inner_losses[-1], 0.0
+                    total_saturated_steps += 1
+                else:
+                    # Outer step: ALM(forget + retain constraint)
+                    L_fgt, L_ret, r = self.outer_step(
+                        forget_batch, retain_batch, device
+                    )
 
-            dt = time.time() - t_start
+                    # Track NPO saturation
+                    if L_fgt < self.npo_saturation_threshold:
+                        saturated_count += 1
+                    else:
+                        saturated_count = 0
 
-            step_info = {
-                "step": t,
-                "L_fgt": L_fgt,
-                "L_ret": L_ret,
-                "r": r,
-                "lambda": self.lambda_dual,
-                "inner_loss_mean": sum(inner_losses) / len(inner_losses),
-                "dt": dt,
-            }
-            history.append(step_info)
+                # Step LR schedulers
+                if self._outer_scheduler is not None:
+                    self._outer_scheduler.step()
+                    self._inner_scheduler.step()
 
-            if t % 5 == 0 or t == effective_T - 1:
+                dt = time.time() - t_start
+
+                step_info = {
+                    "step": global_step,
+                    "epoch": epoch,
+                    "L_fgt": L_fgt,
+                    "L_ret": L_ret,
+                    "r": r,
+                    "lambda": self.lambda_dual,
+                    "inner_loss_mean": sum(inner_losses) / len(inner_losses),
+                    "saturated": saturated_count >= self.saturation_patience,
+                    "dt": dt,
+                }
+                history.append(step_info)
+                epoch_inner_losses.extend(inner_losses)
+                epoch_fgt_losses.append(L_fgt)
+                epoch_ret_losses.append(L_ret)
+
+                # Periodic logging
+                log_every = max(1, steps_per_epoch // 10)  # ~10 logs per epoch
+                if global_step % log_every == 0 or global_step == max_outer_steps - 1:
+                    lr_info = ""
+                    if self._outer_scheduler is not None:
+                        lr_info = f" olr={self._outer_opt.param_groups[0]['lr']:.2e}"
+                    sat_info = " [SAT]" if saturated_count >= self.saturation_patience else ""
+                    logger.info(
+                        f"  [{global_step:4d}/{max_outer_steps}|e{epoch+1}] "
+                        f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
+                        f"r={r:+.4f} λ={self.lambda_dual:.3f} "
+                        f"inner={sum(inner_losses) / len(inner_losses):.4f}"
+                        f"{lr_info}{sat_info} dt={dt:.1f}s"
+                    )
+
+                global_step += 1
+
+                # Intermediate checkpoint: non-destructive merge → save → unmerge
+                if global_step in self.eval_at_steps:
+                    ckpt_dir = os.path.join(
+                        self.args.output_dir, f"step-{global_step}"
+                    )
+                    logger.info(f"  Saving intermediate checkpoint at step {global_step}...")
+                    os.makedirs(ckpt_dir, exist_ok=True)
+                    self.model.eval()
+                    # Merge LoRA into base (reversible)
+                    self.model.merge_adapter()
+                    # Extract state dict with clean key names (strip PEFT wrapper)
+                    peft_sd = self.model.base_model.model.state_dict()
+                    clean_sd = {}
+                    for key, val in peft_sd.items():
+                        clean_key = key.replace(".base_layer", "")
+                        if "lora_" in clean_key:
+                            continue
+                        clean_sd[clean_key] = val
+                    # Save as standard model (handles sharding automatically)
+                    self.model.base_model.model.save_pretrained(
+                        ckpt_dir, state_dict=clean_sd
+                    )
+                    if self.tokenizer is not None:
+                        self.tokenizer.save_pretrained(ckpt_dir)
+                    # Unmerge to restore LoRA state for continued training
+                    self.model.unmerge_adapter()
+                    self.model.train()
+                    # Save history snapshot
+                    with open(os.path.join(ckpt_dir, "lora_bial_history.json"), "w") as f:
+                        json.dump(history, f, indent=2)
+                    logger.info(f"  Checkpoint step-{global_step} saved (non-destructive).")
+
+                # Early termination: model collapsed
+                if L_ret > 10.0:
+                    logger.warning(
+                        f"  L_ret={L_ret:.1f} > 10.0 — model collapsed. "
+                        f"Stopping at step {global_step}."
+                    )
+                    break
+
+            # End of epoch summary
+            if epoch_fgt_losses:
+                n_samples_seen = (batch_idx + 1) * batch_size
                 logger.info(
-                    f"  [{t:3d}/{effective_T}] L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
-                    f"r={r:+.4f} λ={self.lambda_dual:.3f} "
-                    f"inner={sum(inner_losses) / len(inner_losses):.4f} "
-                    f"dt={dt:.1f}s"
+                    f"  Epoch {epoch+1}/{num_epochs} done: "
+                    f"{batch_idx + 1} steps, ~{n_samples_seen} samples, "
+                    f"mean_fgt={sum(epoch_fgt_losses)/len(epoch_fgt_losses):.4f}, "
+                    f"mean_ret={sum(epoch_ret_losses)/len(epoch_ret_losses):.4f}, "
+                    f"saturated_steps={total_saturated_steps}, "
+                    f"dt={time.time()-epoch_start:.0f}s"
                 )
 
-            # Early termination check: model collapsed
+            # Per-epoch checkpoint
+            if (self.checkpoint_every_epoch
+                    and epoch < num_epochs - 1
+                    and epoch_fgt_losses):
+                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-epoch{epoch+1}")
+                os.makedirs(ckpt_dir, exist_ok=True)
+                # Save LoRA state (not merged) for checkpoint
+                self.model.save_pretrained(ckpt_dir)
+                logger.info(f"  Checkpoint saved: {ckpt_dir}")
+
+            if global_step >= max_outer_steps:
+                break
             if L_ret > 10.0:
-                logger.warning(
-                    f"  L_ret={L_ret:.1f} > 10.0 — model likely collapsed. "
-                    f"Stopping early at step {t}."
-                )
                 break
 
         # Merge LoRA into base and save

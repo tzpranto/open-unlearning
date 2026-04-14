@@ -6,7 +6,7 @@ method_args:
   # PerTA parameters (stage 1)
   perta_lambda: 3.5
   perta_alpha: 1.0
-  fisher_cache_path: saves/unlearn/_perta_fisher_cache_News_n64.pt
+  fisher_cache_path: saves/unlearn/_perta_fisher_cache_News_ps_full.pt
   pretrained_model_name: meta-llama/Llama-2-7b-hf
 
   # LoRA parameters (stage 2)
@@ -16,20 +16,31 @@ method_args:
   lora_target_modules: null  # null = default 7 modules (q/k/v/o/gate/up/down)
 
   # Bilevel parameters (stage 3)
-  T: 25
-  K: 5
-  eta_theta: 1e-4
+  T: -1  # T <= 0 = epoch-based. T > 0 = fixed step count (Ze0 compat)
+  K: 3
+  eta_theta: 3e-5
   eta_in: 2e-4
 
   # ALM parameters
   epsilon: 0.70
   rho: 0.1
   lambda_init: 1.0
+  lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
 
   # Forget loss
   forget_loss_type: npo  # "npo" or "ga"
-  npo_beta: 2.0
+  npo_beta: 4.0
   ga_clip: 1.0
+
+  # Epoch-aware training
+  # T > 0: fixed step count (Ze0 compat). T <= 0: run full epochs.
+  lr_schedule: constant  # "constant" or "cosine"
+  warmup_fraction: 0.0
+  npo_saturation_threshold: 0.01
+  saturation_patience: 5
+  retain_only_after_saturation: false
+  checkpoint_every_epoch: false
+  eval_at_steps: null  # e.g. [25, 50, 100, 200, 445] for dynamics analysis
 
 args:
   per_device_train_batch_size: 2
