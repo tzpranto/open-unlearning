@@ -53,7 +53,7 @@ run_exp gsp_baseline \
     trainer.method_args.gsp_beta=0.0 \
     trainer.method_args.K=3 \
     trainer.method_args.eta_theta=5e-5 \
-    args.num_train_epochs=2
+    trainer.args.num_train_epochs=2
 
 # A2: Moderate GSP (α=5, β=5) — needs high α because E_f has low spread
 run_exp gsp_a5b5 \
@@ -61,7 +61,7 @@ run_exp gsp_a5b5 \
     trainer.method_args.gsp_beta=5.0 \
     trainer.method_args.K=3 \
     trainer.method_args.eta_theta=5e-5 \
-    args.num_train_epochs=2
+    trainer.args.num_train_epochs=2
 
 # A3: Strong GSP (α=20, β=20) — amplify the small differences
 run_exp gsp_a20b20 \
@@ -69,7 +69,7 @@ run_exp gsp_a20b20 \
     trainer.method_args.gsp_beta=20.0 \
     trainer.method_args.K=3 \
     trainer.method_args.eta_theta=5e-5 \
-    args.num_train_epochs=2
+    trainer.args.num_train_epochs=2
 
 # ─── Sweep B: K and LR ────────────────────────────────────
 # B1: K=5, aggressive outer LR
@@ -78,7 +78,7 @@ run_exp gsp_k5_lr4 \
     trainer.method_args.gsp_beta=5.0 \
     trainer.method_args.K=5 \
     trainer.method_args.eta_theta=1e-4 \
-    args.num_train_epochs=2
+    trainer.args.num_train_epochs=2
 
 # B2: K=5 + recovery
 run_exp gsp_k5_rec2 \
@@ -87,7 +87,7 @@ run_exp gsp_k5_rec2 \
     trainer.method_args.K=5 \
     trainer.method_args.eta_theta=5e-5 \
     trainer.method_args.recovery_epochs=2 \
-    args.num_train_epochs=2
+    trainer.args.num_train_epochs=2
 
 # B3: 3 epochs, high LR
 run_exp gsp_3ep_lr4 \
@@ -95,7 +95,7 @@ run_exp gsp_3ep_lr4 \
     trainer.method_args.gsp_beta=5.0 \
     trainer.method_args.K=3 \
     trainer.method_args.eta_theta=1e-4 \
-    args.num_train_epochs=3
+    trainer.args.num_train_epochs=3
 
 log "═══════════════════════════════════════════════════════════════"
 log "  All GSP-SIBL experiments done!"
