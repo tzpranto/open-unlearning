@@ -201,9 +201,14 @@ class LoRAImplicit(UnlearnTrainer):
     def _compute_logit_margin_loss(self, batch, device):
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
+        labels = batch.get("labels", input_ids).to(device)
         outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
         logits = outputs.logits
         margins = logits.max(dim=-1)[0] - logits.mean(dim=-1)
+        # Only compute on answer tokens (where labels != -100), matching NPO/CE
+        mask = (labels != -100).float()
+        if mask.sum() > 0:
+            return (margins * mask).sum() / mask.sum()
         return margins.mean()
 
     def _compute_forget_loss(self, batch, device):
