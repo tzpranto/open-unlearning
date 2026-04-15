@@ -1,0 +1,65 @@
+defaults:
+  - finetune
+
+handler: FisherMaskedSIBL
+method_args:
+  # PerTA parameters (stage 1)
+  perta_lambda: 3.5
+  perta_alpha: 1.0
+  fisher_cache_path: saves/unlearn/_perta_fisher_cache_News_ps_full.pt
+  pretrained_model_name: meta-llama/Llama-2-7b-hf
+
+  # LoRA parameters
+  lora_r: 64
+  lora_alpha: 128
+  lora_dropout: 0.0
+  lora_target_modules: null  # null = default 7 modules
+
+  # Bilevel parameters
+  T: -1  # T <= 0 = epoch-based; T > 0 = fixed step count
+  K: 3
+  eta_theta: 3e-5   # outer LR (retain)
+  eta_in: 2e-4      # inner LR (forget)
+
+  # ALM parameters
+  epsilon: 0.70
+  rho: 0.1
+  lambda_init: 1.0
+  lambda_max: 5.0
+
+  # Forget loss
+  forget_loss_type: npo
+  npo_beta: 4.0
+
+  # Bilevel mode: "forget_inner" or "retain_inner"
+  bilevel_mode: forget_inner
+
+  # Gradual unfreezing
+  gradual_unfreeze: true
+  # Each entry: [step_fraction, n_layers_from_end]
+  unfreeze_schedule: [[0.0, 4], [0.25, 12], [0.6, 32]]
+  # Each entry: [step_fraction, lr_multiplier]
+  lr_schedule_phases: [[0.0, 1.0], [0.6, 0.5], [0.85, 0.1]]
+
+  # Checkpoints
+  eval_at_steps: null
+
+args:
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 4
+  bf16: True
+  bf16_full_eval: True
+  logging_steps: 2
+  output_dir: ${paths.output_dir}
+  logging_dir: ${trainer.args.output_dir}/logs
+  report_to: tensorboard
+  ddp_find_unused_parameters: None
+  gradient_checkpointing: True
+  save_strategy: 'no'
+  save_only_model: True
+  eval_strategy: 'no'
+  do_train: True
+  do_eval: False
+  eval_on_start: False
+  seed: 0

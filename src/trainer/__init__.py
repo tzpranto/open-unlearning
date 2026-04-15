@@ -17,6 +17,8 @@ from trainer.unlearn.wga import WGA
 from trainer.unlearn.pdu import PDU
 from trainer.unlearn.sibl import SIBL
 from trainer.unlearn.lora_bial import LoRABiAL
+from trainer.unlearn.lora_implicit import LoRAImplicit
+from trainer.unlearn.fisher_masked_sibl import FisherMaskedSIBL
 
 
 import logging
@@ -104,3 +106,5 @@ _register_trainer(WGA)
 _register_trainer(PDU)
 _register_trainer(SIBL)
 _register_trainer(LoRABiAL)
+_register_trainer(LoRAImplicit)
+_register_trainer(FisherMaskedSIBL)

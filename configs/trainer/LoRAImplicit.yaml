@@ -1,0 +1,84 @@
+defaults:
+  - finetune
+
+handler: LoRAImplicit
+method_args:
+  # LoRA
+  lora_r: 16
+  lora_alpha: 32
+  lora_dropout: 0.0
+  lora_target_modules: null  # null = default 7 modules
+
+  # Bilevel structure
+  bilevel_mode: forget_outer  # "forget_outer" or "forget_inner"
+  T: -1          # T<=0 = epoch-based, T>0 = fixed steps
+  K: 3
+  eta_theta: 3e-5
+  eta_in: 2e-4
+
+  # ALM constraint on retain
+  epsilon: 0.70
+  rho: 0.1
+  lambda_init: 1.0
+  lambda_max: 0.0
+
+  # Forget loss
+  forget_loss_type: npo
+  npo_beta: 4.0
+  ga_clip: 1.0
+
+  # Implicit correction (FD-HVP + Truncated Neumann)
+  use_implicit: true
+  neumann_steps: 5
+  neumann_mu: 0.01
+  neumann_alpha_default: 0.1
+  neumann_alpha_min: 1e-6
+  neumann_alpha_max: 1.0
+  neumann_use_probe_alpha: true
+  neumann_max_growth_ratio: 10.0
+  fd_hvp_eps: 0.01
+  implicit_warmup_steps: 20  # skip implicit while LoRA is near-zero
+
+  # Post-unlearning retain recovery
+  recovery_epochs: 0       # 0 = off; >0 = pure retain CE epochs after bilevel
+  recovery_lr: 1e-5
+
+  # Adaptive LR
+  adaptive_lr: true
+  adapt_ema_decay: 0.95
+  adapt_check_every: 20
+  adapt_degrad_threshold: 0.05
+  adapt_lr_factor: 0.5
+  adapt_lr_min: 1e-6
+
+  # LR schedule
+  lr_schedule: constant
+  warmup_fraction: 0.0
+
+  # Layer control
+  freeze_inner_layers: null
+  freeze_outer_layers: null
+
+  # Checkpointing
+  checkpoint_every_epoch: false
+  eval_at_steps: null
+
+args:
+  per_device_train_batch_size: 2
+  per_device_eval_batch_size: 16
+  gradient_accumulation_steps: 1
+  bf16: True
+  bf16_full_eval: True
+  logging_steps: 2
+  output_dir: ${paths.output_dir}
+  logging_dir: ${trainer.args.output_dir}/logs
+  report_to: tensorboard
+  ddp_find_unused_parameters: None
+  gradient_checkpointing: True
+  save_strategy: 'no'
+  save_only_model: True
+  eval_strategy: 'no'
+  do_train: True
+  do_eval: False
+  eval_on_start: False
+  seed: 0
