@@ -19,6 +19,7 @@ from trainer.unlearn.sibl import SIBL
 from trainer.unlearn.lora_bial import LoRABiAL
 from trainer.unlearn.lora_implicit import LoRAImplicit
 from trainer.unlearn.fisher_masked_sibl import FisherMaskedSIBL
+from trainer.unlearn.gsp_sibl import GspSIBL
 
 
 import logging
@@ -108,3 +109,4 @@ _register_trainer(SIBL)
 _register_trainer(LoRABiAL)
 _register_trainer(LoRAImplicit)
 _register_trainer(FisherMaskedSIBL)
+_register_trainer(GspSIBL)
