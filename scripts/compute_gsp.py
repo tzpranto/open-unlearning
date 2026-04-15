@@ -49,30 +49,44 @@ def setup_logging(log_path):
     return logging.getLogger(__name__)
 
 
-def load_model(data_split):
+def load_model(data_split, benchmark="muse"):
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    model_name = f"muse-bench/MUSE-{data_split}_target"
+    if benchmark == "muse":
+        model_name = f"muse-bench/MUSE-{data_split}_target"
+        tokenizer_name = "meta-llama/Llama-2-7b-hf"
+    elif benchmark == "wmdp":
+        model_name = "HuggingFaceH4/zephyr-7b-beta"
+        tokenizer_name = model_name
+    else:
+        raise ValueError(f"Unknown benchmark: {benchmark}")
+
     logger.info(f"Loading model: {model_name}")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16,
-        device_map="cpu",  # We'll move to GPU per-sample
+        device_map="cpu",
         attn_implementation="sdpa",
     )
-    # Use base Llama-2 tokenizer (MUSE target tokenizer can have loading issues)
-    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-hf")
+    tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     model.eval()
     return model, tokenizer
 
 
-def load_dataset_split(data_split, split_name, tokenizer, max_length=1024):
+def load_dataset_split(data_split, split_name, tokenizer, max_length=1024, benchmark="muse"):
     from datasets import load_dataset
 
-    logger.info(f"Loading {split_name} from muse-bench/MUSE-{data_split}")
-    ds = load_dataset(f"muse-bench/MUSE-{data_split}", "raw", split=split_name)
+    if benchmark == "muse":
+        logger.info(f"Loading {split_name} from muse-bench/MUSE-{data_split}")
+        ds = load_dataset(f"muse-bench/MUSE-{data_split}", "raw", split=split_name)
+    elif benchmark == "wmdp":
+        data_file = f"data/wmdp/wmdp-corpora/{data_split}-{split_name}-corpus.jsonl"
+        logger.info(f"Loading {split_name} from {data_file}")
+        ds = load_dataset("text", data_files=data_file, split="train")
+    else:
+        raise ValueError(f"Unknown benchmark: {benchmark}")
 
     # Tokenize
     samples = []
@@ -298,29 +312,45 @@ def partition_and_report(E_f, E_r, forget_samples, retain_samples, percentiles=[
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_split", default="News")
+    parser.add_argument("--benchmark", default="muse", choices=["muse", "wmdp"])
     parser.add_argument("--top_k", type=int, default=10)
     parser.add_argument("--max_length", type=int, default=1024)
     parser.add_argument("--skip_signatures", action="store_true",
                         help="Skip signature computation, load from cache")
     args = parser.parse_args()
 
+    # WMDP uses different split names and model architecture
+    if args.benchmark == "wmdp":
+        forget_split = "forget"
+        retain_split = "retain"
+        prefix = f"wmdp_{args.data_split}"
+    else:
+        forget_split = "forget"
+        retain_split = "retain1"
+        prefix = args.data_split
+
     global logger
-    logger = setup_logging(f"logs/gsp_analysis_{args.data_split}.log")
+    logger = setup_logging(f"logs/gsp_analysis_{prefix}.log")
 
     logger.info("=" * 60)
-    logger.info(f"GSP: Gradient Subspace Partitioning — MUSE {args.data_split}")
+    logger.info(f"GSP: Gradient Subspace Partitioning — {args.benchmark.upper()} {args.data_split}")
     logger.info("=" * 60)
 
     saves_dir = "saves/unlearn"
     os.makedirs(saves_dir, exist_ok=True)
     os.makedirs("logs", exist_ok=True)
 
-    sig_path = f"{saves_dir}/gsp_signatures_{args.data_split}.pt"
-    int_path = f"{saves_dir}/gsp_interference_{args.data_split}.pt"
+    sig_path = f"{saves_dir}/gsp_signatures_{prefix}.pt"
+    int_path = f"{saves_dir}/gsp_interference_{prefix}.pt"
 
+    # Mistral/Zephyr-7b: 32 layers, intermediate_size=14336
     # Llama-2-7b: 32 layers, intermediate_size=11008
-    target_layers = [28, 29, 30, 31]
-    sig_dim_per_layer = 11008
+    if args.benchmark == "wmdp":
+        target_layers = [28, 29, 30, 31]
+        sig_dim_per_layer = 14336  # Mistral intermediate_size
+    else:
+        target_layers = [28, 29, 30, 31]
+        sig_dim_per_layer = 11008
 
     if args.skip_signatures and os.path.exists(sig_path):
         logger.info(f"Loading cached signatures from {sig_path}")
@@ -335,9 +365,15 @@ def main():
         logger.info("STAGE 1: Gradient Signatures")
         logger.info("=" * 60)
 
-        model, tokenizer = load_model(args.data_split)
-        forget_samples = load_dataset_split(args.data_split, "forget", tokenizer, args.max_length)
-        retain_samples = load_dataset_split(args.data_split, "retain1", tokenizer, args.max_length)
+        model, tokenizer = load_model(args.data_split, benchmark=args.benchmark)
+        forget_samples = load_dataset_split(
+            args.data_split, forget_split, tokenizer, args.max_length,
+            benchmark=args.benchmark
+        )
+        retain_samples = load_dataset_split(
+            args.data_split, retain_split, tokenizer, args.max_length,
+            benchmark=args.benchmark
+        )
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
