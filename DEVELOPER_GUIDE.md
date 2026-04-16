@@ -39,20 +39,21 @@ open-unlearning/
 
 ### 1. Python Environment
 
-Always use the `unlearning` conda environment. Without it, flash attention and other dependencies will fail.
+Always use the `unlearning` conda environment. Flash Attention is installed there — without the correct env it will silently fall back or OOM.
 
 ```bash
-# Option A: use the binary directly
+# Option A: use the binary directly (most reliable)
 /datadrive/conda/envs/unlearning/bin/python src/train.py ...
 
 # Option B: activate first
 source /datadrive/conda/etc/profile.d/conda.sh && conda activate unlearning
 ```
 
-Flash Attention is not installed in this env. Always pass:
+**Important**: `conda activate unlearning` does not always update `python` on the PATH. After activating, always verify:
+```bash
+which python  # must show /datadrive/conda/envs/unlearning/bin/python
 ```
-model.model_args.attn_implementation=sdpa
-```
+If it doesn't, use Option A (the full path) instead. Without the correct env, flash attention will not be available and training will fail or degrade silently.
 
 ### 2. Clean Code and Folder Structure
 

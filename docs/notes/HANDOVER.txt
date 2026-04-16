@@ -14,9 +14,10 @@ Or activate first:
 
     source /datadrive/conda/etc/profile.d/conda.sh && conda activate unlearning
 
-Flash Attention note: the `unlearning` env does NOT have flash_attn installed.
-Always pass `model.model_args.attn_implementation=sdpa` to all train and eval commands.
-Using `flash_attention_2` will fail silently or OOM.
+Flash Attention IS installed in the `unlearning` env. It works by default.
+Note: `conda activate unlearning` does not always switch `python` on the PATH.
+Always verify with `which python` — it must show /datadrive/conda/envs/unlearning/bin/python.
+Without the correct env, flash attention will not be available.
 
 Also always set:
 
