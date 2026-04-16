@@ -2,25 +2,27 @@
 LoRA-BiAL: LoRA-based Bilevel Augmented Lagrangian for Unlearning
 =================================================================
 
-Two-stage approach:
-1. PerTA weight surgery on base model (selective per-param negation)
-2. LoRA bilevel optimization for retain recovery
+Approach:
+1. (Optional) PerTA weight surgery on base model
+2. LoRA bilevel optimization for unlearning
 
 Key innovations vs standard bilevel (SIBL):
 - Zero-overhead ref model: ref = base model with LoRA adapters disabled
 - Naturally constrained update space: LoRA limits collateral damage
 - Solves OOM: ~55MB LoRA gradients vs ~14GB full model gradients
-- PerTA init places model ABOVE CE frontier; bilevel recovers retain
+- FD-HVP implicit correction: flash-attention-compatible bilevel differentiation
 
 The bilevel dynamics:
 - Inner loop: LoRA learns retain CE → some forget knowledge spillover
 - Outer loop: NPO/GA detects spillover, corrects LoRA to reduce forget probs
-- ALM constraint: prevents over-correction (maintains fk quality from PerTA)
+- ALM constraint: prevents over-correction
+- Implicit correction: accounts for inner loop's response to outer update
 """
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 import time
 import logging
 import os
@@ -77,6 +79,17 @@ class LoRABiAL(UnlearnTrainer):
         # Intermediate checkpoints for dynamics analysis
         # Saves merged model at these steps; eval them after training
         eval_at_steps: Optional[list] = None,  # e.g. [25, 50, 100, 200]
+        # Implicit differentiation (FD-HVP)
+        use_implicit: bool = False,
+        neumann_steps: int = 5,       # J: truncated Neumann series terms
+        neumann_mu: float = 0.01,     # damping for (H + μI)
+        neumann_alpha_default: float = 0.1,   # fallback step size
+        neumann_alpha_min: float = 1e-6,
+        neumann_alpha_max: float = 1.0,
+        neumann_use_probe_alpha: bool = True,  # adapt α from curvature probe
+        neumann_max_growth_ratio: float = 10.0,
+        fd_hvp_eps: float = 0.01,     # finite-difference perturbation size
+        implicit_offload_cpu: bool = False,  # offload Neumann vectors to CPU
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -109,6 +122,16 @@ class LoRABiAL(UnlearnTrainer):
         self.retain_only_after_saturation = retain_only_after_saturation
         self.checkpoint_every_epoch = checkpoint_every_epoch
         self.eval_at_steps = set(eval_at_steps) if eval_at_steps else set()
+        self.use_implicit = use_implicit
+        self.neumann_steps = neumann_steps
+        self.neumann_mu = neumann_mu
+        self.neumann_alpha_default = neumann_alpha_default
+        self.neumann_alpha_min = neumann_alpha_min
+        self.neumann_alpha_max = neumann_alpha_max
+        self.neumann_use_probe_alpha = neumann_use_probe_alpha
+        self.neumann_max_growth_ratio = neumann_max_growth_ratio
+        self.fd_hvp_eps = fd_hvp_eps
+        self.implicit_offload_cpu = implicit_offload_cpu
 
         # Runtime state
         self.lambda_dual = float(lambda_init)
@@ -288,6 +311,22 @@ class LoRABiAL(UnlearnTrainer):
         # Negative KL: we want model to diverge FROM ref on forget data
         return -kl
 
+    def _compute_logit_margin_loss(self, batch, device):
+        """Logit margin flattening: minimize (max_logit - mean_logit).
+
+        Pushes model output toward uniform distribution on forget data.
+        Never saturates — there's always room to flatten further.
+        """
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        max_logits = logits.max(dim=-1)[0]
+        mean_logits = logits.mean(dim=-1)
+        margins = max_logits - mean_logits
+        return margins.mean()
+
     def _compute_forget_loss(self, batch, device):
         """Dispatch to configured forget loss."""
         if self.forget_loss_type == "npo":
@@ -297,8 +336,144 @@ class LoRABiAL(UnlearnTrainer):
             return -self._compute_ce_loss(batch, device)
         elif self.forget_loss_type == "kl":
             return self._compute_kl_loss(batch, device)
+        elif self.forget_loss_type == "logit_margin":
+            return self._compute_logit_margin_loss(batch, device)
         else:
             raise ValueError(f"Unknown forget_loss_type: {self.forget_loss_type}")
+
+    # ------------------------------------------------------------------
+    # Implicit differentiation (FD-HVP + Truncated Neumann)
+    # ------------------------------------------------------------------
+    def _unflatten_params(self, flat_vec, params_list):
+        """Unflatten vector back to parameter shapes."""
+        out = []
+        offset = 0
+        for p in params_list:
+            n = p.numel()
+            out.append(flat_vec[offset:offset + n].reshape(p.shape))
+            offset += n
+        return out
+
+    def _compute_hvp_fd(self, loss_fn, params, v):
+        """Finite-difference HVP: H*v ≈ (∇L(θ+εv̂) - ∇L(θ-εv̂)) / (2ε) * ||v||
+
+        Works with any attention backend (no create_graph needed).
+        Only perturbs LoRA params (~55M), so the perturbation is cheap.
+        """
+        eps = self.fd_hvp_eps
+        v_norm = v.norm().clamp(min=1e-12)
+        v_unit = v / v_norm
+        v_list = self._unflatten_params(v_unit, params)
+
+        # +ε perturbation
+        with torch.no_grad():
+            for p, dv in zip(params, v_list):
+                p.data.add_(eps * dv.to(p.dtype))
+        loss_p = loss_fn()
+        grads_p = torch.autograd.grad(loss_p, params, allow_unused=True)
+        grads_p = [
+            g.detach().clone() if g is not None else torch.zeros_like(p)
+            for g, p in zip(grads_p, params)
+        ]
+        del loss_p
+
+        # -ε perturbation (from +ε → -ε = subtract 2ε)
+        with torch.no_grad():
+            for p, dv in zip(params, v_list):
+                p.data.sub_(2.0 * eps * dv.to(p.dtype))
+        loss_m = loss_fn()
+        grads_m = torch.autograd.grad(loss_m, params, allow_unused=True)
+        grads_m = [
+            g.detach().clone() if g is not None else torch.zeros_like(p)
+            for g, p in zip(grads_m, params)
+        ]
+        del loss_m
+
+        # Restore params
+        with torch.no_grad():
+            for p, dv in zip(params, v_list):
+                p.data.add_(eps * dv.to(p.dtype))
+
+        hvp_list = [(gp - gm) / (2.0 * eps) for gp, gm in zip(grads_p, grads_m)]
+        hvp_flat = torch.cat([h.reshape(-1) for h in hvp_list])
+        return hvp_flat * v_norm.item()
+
+    def _truncated_neumann(self, params_list, v, inner_loss_fn, alm_loss_fn):
+        """Truncated Neumann implicit correction.
+
+        Approximates h ≈ (H_inner + μI)^{-1} v via Richardson iteration,
+        then computes corrected gradient: g_corr = v - H_outer(h).
+
+        v: flat outer gradient (on same device as params)
+        Returns (g_corr_flat, status_string).
+        """
+        device = v.device
+        dtype = v.dtype
+        offload = self.implicit_offload_cpu
+
+        if not torch.isfinite(v).all():
+            logger.warning("Neumann: non-finite v, skipping correction")
+            return v, "fallback_nonfinite_v"
+
+        # Damped inner Hessian: H_tilde(x) = H_inner(x) + μx
+        def H_in(x):
+            # If offloaded, move to GPU for HVP then back
+            if offload:
+                x_gpu = x.to(device)
+            else:
+                x_gpu = x
+            Hv = self._compute_hvp_fd(inner_loss_fn, params_list, x_gpu)
+            result = Hv + self.neumann_mu * x_gpu
+            if offload:
+                return result.cpu()
+            return result
+
+        # Choose α via curvature probe
+        alpha = self.neumann_alpha_default
+        if self.neumann_use_probe_alpha:
+            u = torch.randn_like(v)
+            u = u / u.norm().clamp(min=1e-12)
+            Hu = H_in(u)
+            L_est = Hu.norm().clamp(min=1e-12).item()
+            alpha = 0.5 / (L_est + 1e-12)
+            if not np.isfinite(alpha) or alpha <= 0:
+                alpha = self.neumann_alpha_default
+        alpha = float(np.clip(alpha, self.neumann_alpha_min, self.neumann_alpha_max))
+
+        # Richardson iteration: h_{k+1} = h_k + α(v - H_tilde h_k)
+        work_v = v.cpu() if offload else v
+        h = torch.zeros_like(work_v)
+        for j in range(self.neumann_steps + 1):
+            residual = work_v - H_in(h)
+            if not torch.isfinite(residual).all():
+                logger.warning(f"Neumann step {j}: non-finite residual, fallback")
+                return v, "fallback_nonfinite"
+            h = h + alpha * residual
+            if not torch.isfinite(h).all():
+                logger.warning(f"Neumann step {j}: non-finite h, fallback")
+                return v, "fallback_nonfinite"
+
+        # Outer HVP: c = H_alm(h)
+        h_gpu = h.to(device) if offload else h
+        c = self._compute_hvp_fd(alm_loss_fn, params_list, h_gpu)
+        g_corr = v - c
+
+        # Safety: fallback if correction explodes
+        v_norm = v.norm().clamp(min=1e-12).item()
+        g_corr_norm = g_corr.norm().item()
+        h_norm = h_gpu.norm().item()
+        if g_corr_norm > self.neumann_max_growth_ratio * v_norm:
+            logger.warning(
+                f"Neumann: correction exploded ||g_corr||={g_corr_norm:.4f} "
+                f"> {self.neumann_max_growth_ratio}*||v||={v_norm:.4f}, fallback"
+            )
+            return v, "fallback_exploded"
+
+        logger.debug(
+            f"Neumann: α={alpha:.6f} ||v||={v_norm:.4f} "
+            f"||h||={h_norm:.4f} ||g_corr||={g_corr_norm:.4f}"
+        )
+        return g_corr, "ok"
 
     # ------------------------------------------------------------------
     # Bilevel inner and outer steps
@@ -316,7 +491,12 @@ class LoRABiAL(UnlearnTrainer):
         return loss.item()
 
     def outer_step(self, forget_batch, retain_batch, device):
-        """Outer step: ALM loss = L_fgt + retain_coeff * L_ret."""
+        """Outer step: ALM loss = L_fgt + retain_coeff * L_ret.
+
+        When use_implicit=True, applies FD-HVP Neumann correction to the
+        outer gradient before the optimizer step. This accounts for the
+        inner loop's response to the outer update (proper bilevel).
+        """
         self.model.enable_adapter_layers()
         self.model.train()
         self._outer_opt.zero_grad()
@@ -340,6 +520,40 @@ class LoRABiAL(UnlearnTrainer):
                 [p for p in self.model.parameters() if p.requires_grad],
                 self.ga_clip,
             )
+
+        # Implicit correction: replace .grad with Neumann-corrected gradient
+        if self.use_implicit:
+            lora_params = [p for p in self.model.parameters() if p.requires_grad]
+            # Capture outer gradient as v
+            v = torch.cat([p.grad.reshape(-1) for p in lora_params])
+
+            # Free autograd graph before FD-HVP forward passes
+            torch.cuda.empty_cache()
+
+            # FD-HVP closures — recompute losses from current model state
+            def _inner_loss_fn():
+                return self._compute_ce_loss(retain_batch, device)
+
+            def _alm_loss_fn():
+                l_f = self._compute_forget_loss(forget_batch, device)
+                l_r = self._compute_ce_loss(retain_batch, device)
+                r_t = max(0.0, l_r.item() - self.epsilon)
+                coeff = self.lambda_dual + self.rho * r_t
+                return l_f + coeff * l_r
+
+            g_corr, status = self._truncated_neumann(
+                lora_params, v, _inner_loss_fn, _alm_loss_fn
+            )
+
+            # Write corrected gradient back to .grad
+            offset = 0
+            for p in lora_params:
+                n = p.numel()
+                p.grad = g_corr[offset:offset + n].reshape(p.shape).to(p.dtype)
+                offset += n
+
+            if status != "ok":
+                logger.info(f"  Implicit: {status} (using uncorrected gradient)")
 
         self._outer_opt.step()
 
@@ -435,6 +649,11 @@ class LoRABiAL(UnlearnTrainer):
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
         if self.perta_lambda > 0:
             logger.info(f"  PerTA: λ={self.perta_lambda}, α={self.perta_alpha}")
+        if self.use_implicit:
+            logger.info(f"  Implicit: FD-HVP Neumann, steps={self.neumann_steps}, "
+                         f"μ={self.neumann_mu}, eps={self.fd_hvp_eps}, "
+                         f"probe_α={self.neumann_use_probe_alpha}, "
+                         f"offload_cpu={self.implicit_offload_cpu}")
         if self.retain_only_after_saturation:
             logger.info(f"  Saturation: threshold={self.npo_saturation_threshold}, "
                          f"patience={self.saturation_patience}")
@@ -464,7 +683,7 @@ class LoRABiAL(UnlearnTrainer):
                 forget_batch = combined_batch["forget"]
                 retain_batch = combined_batch["retain"]
 
-                # Inner loop: K steps of retain CE
+                # Inner loop: K steps of retain CE (K=0 → no bilevel, outer only)
                 inner_losses = []
                 for _k in range(self.K):
                     l_in = self.inner_step(retain_batch, device)
@@ -501,7 +720,7 @@ class LoRABiAL(UnlearnTrainer):
                     "L_ret": L_ret,
                     "r": r,
                     "lambda": self.lambda_dual,
-                    "inner_loss_mean": sum(inner_losses) / len(inner_losses),
+                    "inner_loss_mean": sum(inner_losses) / len(inner_losses) if inner_losses else 0.0,
                     "saturated": saturated_count >= self.saturation_patience,
                     "dt": dt,
                 }
@@ -521,7 +740,7 @@ class LoRABiAL(UnlearnTrainer):
                         f"  [{global_step:4d}/{max_outer_steps}|e{epoch+1}] "
                         f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
                         f"r={r:+.4f} λ={self.lambda_dual:.3f} "
-                        f"inner={sum(inner_losses) / len(inner_losses):.4f}"
+                        f"inner={sum(inner_losses) / len(inner_losses) if inner_losses else 0.0:.4f}"
                         f"{lr_info}{sat_info} dt={dt:.1f}s"
                     )
 

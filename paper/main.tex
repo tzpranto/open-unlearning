@@ -1,0 +1,75 @@
+\documentclass[11pt]{article}
+
+% --- NeurIPS 2025 style ---
+% Options: [final] for camera-ready, [preprint] for preprint, [] for anonymous submission
+\usepackage[preprint]{neurips_2025}
+
+% --- Common packages ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{enumitem}
+\usepackage{xspace}
+\usepackage{wrapfig}
+
+% --- Custom commands (shared across all sections) ---
+\input{macros}
+
+% --- Title and authors ---
+\title{LoRA-BiAL: Low-Rank Bilevel Adversarial Learning \\ for Robust LLM Unlearning}
+
+\author{
+  Author One\thanks{Equal contribution.} \\
+  Department of Computer Science\\
+  University Name\\
+  \texttt{author1@university.edu} \\
+  \And
+  Author Two\footnotemark[1] \\
+  Department of Computer Science\\
+  University Name\\
+  \texttt{author2@university.edu} \\
+}
+
+\begin{document}
+
+\maketitle
+
+% --- Abstract ---
+\input{sections/abstract}
+
+% --- Main sections ---
+\input{sections/introduction}
+\input{sections/related_work}
+\input{sections/method}
+\input{sections/experiments}
+\input{sections/conclusion}
+
+% --- Acknowledgements (only in final version) ---
+% \begin{ack}
+% We thank ...
+% \end{ack}
+
+% --- References ---
+\bibliography{references}
+
+% --- Appendix ---
+\newpage
+\appendix
+\input{sections/appendix}
+
+\end{document}

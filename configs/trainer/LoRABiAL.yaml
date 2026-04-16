@@ -42,6 +42,18 @@ method_args:
   checkpoint_every_epoch: false
   eval_at_steps: null  # e.g. [25, 50, 100, 200, 445] for dynamics analysis
 
+  # Implicit differentiation (FD-HVP + Truncated Neumann)
+  use_implicit: false
+  neumann_steps: 5
+  neumann_mu: 0.01
+  neumann_alpha_default: 0.1
+  neumann_alpha_min: 1e-6
+  neumann_alpha_max: 1.0
+  neumann_use_probe_alpha: true
+  neumann_max_growth_ratio: 10.0
+  fd_hvp_eps: 0.01
+  implicit_offload_cpu: false
+
 args:
   per_device_train_batch_size: 2
   per_device_eval_batch_size: 16

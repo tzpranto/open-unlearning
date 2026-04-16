@@ -181,6 +181,10 @@ def main():
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--fisher_cache", default=None,
                         help="Path to cache Fisher dicts (skip recomputation)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Random seed for shuffling samples before selection")
+    parser.add_argument("--skip_after_fisher", action="store_true",
+                        help="Only compute Fisher, skip PerTA application and model saving")
     args = parser.parse_args()
 
     t0 = time.time()
@@ -215,6 +219,16 @@ def main():
         retain_ds = load_dataset(f"muse-bench/MUSE-{args.data_split}", "raw", split="retain1")
         retain_texts = [row["text"] for row in retain_ds]
 
+        # Shuffle if seed is provided
+        if args.seed is not None:
+            import random
+            rng = random.Random(args.seed)
+            forget_texts = forget_texts.copy()
+            retain_texts = retain_texts.copy()
+            rng.shuffle(forget_texts)
+            rng.shuffle(retain_texts)
+            logger.info(f"  Shuffled with seed={args.seed}")
+
         # Compute Fisher diagonals
         logger.info("Computing FORGET Fisher...")
         fisher_forget = compute_fisher(
@@ -235,6 +249,10 @@ def main():
         # Free GPU memory
         del model
         torch.cuda.empty_cache()
+
+    if args.skip_after_fisher:
+        logger.info("--skip_after_fisher set, stopping after Fisher computation")
+        return
 
     # --- Load both models' state dicts ---
     logger.info(f"Loading target state dict: {args.target}")

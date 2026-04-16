@@ -1,0 +1,216 @@
+% NeurIPS 2025 Style File
+% Based on the official NeurIPS formatting instructions
+% https://neurips.cc/
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_2025}[2025/01/01 NeurIPS 2025 submission/camera-ready style]
+
+% ---------------------------------------------------------------
+% Options
+% ---------------------------------------------------------------
+\newif\if@neuripsfinal\@neuripsfinalfalse
+\newif\if@neuripspreprint\@neuripspreprintfalse
+\newif\if@neuripsnonatbib\@neuripsnonatbibfalse
+
+\DeclareOption{final}{\@neuripsfinaltrue}
+\DeclareOption{preprint}{\@neuripspreprinttrue}
+\DeclareOption{nonatbib}{\@neuripsnonatbibtrue}
+\ProcessOptions\relax
+
+% ---------------------------------------------------------------
+% Fonts and spacing
+% ---------------------------------------------------------------
+\renewcommand{\rmdefault}{ptm}
+\renewcommand{\sfdefault}{phv}
+
+\usepackage[verbose=true,letterpaper]{geometry}
+\AtBeginDocument{
+  \newgeometry{
+    textheight=9in,
+    textwidth=5.5in,
+    top=1in,
+    headheight=12pt,
+    headsep=25pt,
+    footskip=30pt
+  }
+  \@ifpackageloaded{fullpage}{\PackageWarning{neurips_2025}{fullpage package not allowed! Overriding.}}{}
+}
+
+\widowpenalty=10000
+\clubpenalty=10000
+\flushbottom
+\sloppy
+
+% ---------------------------------------------------------------
+% Font sizes (from official template)
+% ---------------------------------------------------------------
+\renewcommand{\normalsize}{%
+  \@setfontsize\normalsize\@xpt\@xiipt
+  \abovedisplayskip      7\p@ \@plus 2\p@ \@minus 5\p@
+  \abovedisplayshortskip \z@ \@plus 3\p@
+  \belowdisplayskip      \abovedisplayskip
+  \belowdisplayshortskip 4\p@ \@plus 3\p@ \@minus 3\p@
+}
+\normalsize
+\renewcommand{\small}{%
+  \@setfontsize\small\@ixpt{11}%
+  \abovedisplayskip      6\p@ \@plus 1.5\p@ \@minus 4\p@
+  \abovedisplayshortskip \z@  \@plus 2\p@
+  \belowdisplayskip      \abovedisplayskip
+  \belowdisplayshortskip 3\p@ \@plus 2\p@ \@minus 2\p@
+}
+\renewcommand{\footnotesize}{\@setfontsize\footnotesize\@viiipt{10}}
+\renewcommand{\scriptsize}{\@setfontsize\scriptsize\@viipt{8}}
+\renewcommand{\tiny}{\@setfontsize\tiny\@vipt{7}}
+\renewcommand{\large}{\@setfontsize\large\@xiipt{14}}
+\renewcommand{\Large}{\@setfontsize\Large\@xivpt{16}}
+\renewcommand{\LARGE}{\@setfontsize\LARGE\@xviipt{20}}
+\renewcommand{\huge}{\@setfontsize\huge\@xxpt{23}}
+\renewcommand{\Huge}{\@setfontsize\Huge\@xxvpt{28}}
+
+% ---------------------------------------------------------------
+% Sections
+% ---------------------------------------------------------------
+\def\@seccntformat#1{\csname the#1\endcsname.\quad}
+
+\renewcommand\section{\@startsection{section}{1}{\z@}%
+  {-2.0ex \@plus -0.5ex \@minus -0.2ex}%
+  {1.5ex \@plus 0.3ex \@minus 0.2ex}%
+  {\large\bf\raggedright}}
+\renewcommand\subsection{\@startsection{subsection}{2}{\z@}%
+  {-1.8ex \@plus -0.5ex \@minus -0.2ex}%
+  {0.8ex \@plus 0.2ex}%
+  {\normalsize\bf\raggedright}}
+\renewcommand\subsubsection{\@startsection{subsubsection}{3}{\z@}%
+  {-1.5ex \@plus -0.5ex \@minus -0.2ex}%
+  {0.5ex \@plus 0.2ex}%
+  {\normalsize\bf\raggedright}}
+\renewcommand\paragraph{\@startsection{paragraph}{4}{\z@}%
+  {0.5ex \@plus 0.5ex \@minus 0.2ex}{-1em}%
+  {\normalsize\bf}}
+\renewcommand\subparagraph{\@startsection{subparagraph}{5}{\z@}%
+  {0.5ex \@plus 0.5ex \@minus 0.2ex}{-1em}%
+  {\normalsize\bf}}
+
+% ---------------------------------------------------------------
+% Title / Author
+% ---------------------------------------------------------------
+\providecommand{\@maketitle}{}
+\renewcommand{\@maketitle}{%
+  \vbox{%
+    \hsize\textwidth
+    \linewidth\hsize
+    \vskip 0.1in
+    \centering
+    {\LARGE\bf \@title\par}
+    \if@neuripsfinal
+      \def\And{\end{tabular}\hfil\linebreak[0]\hfil
+        \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\ignorespaces}%
+      \def\AND{\end{tabular}\hfil\linebreak[4]\hfil
+        \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\ignorespaces}%
+      \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\@author\end{tabular}%
+    \else
+      \if@neuripspreprint
+        \def\And{\end{tabular}\hfil\linebreak[0]\hfil
+          \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\ignorespaces}%
+        \def\AND{\end{tabular}\hfil\linebreak[4]\hfil
+          \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\ignorespaces}%
+        \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}\@author\end{tabular}%
+      \else
+        \begin{tabular}[t]{c}\bf\rule{\z@}{24pt}
+          Anonymous Author(s)
+        \end{tabular}%
+      \fi
+    \fi
+    \vskip 0.3in \@minus 0.1in
+  }
+}
+\renewcommand\maketitle{\par
+  \begingroup
+    \renewcommand\thefootnote{\fnsymbol{footnote}}%
+    \renewcommand\@makefntext[1]{\parindent 1em\noindent
+      \hb@xt@1.8em{\hss\@makefnmark}##1}%
+    \@maketitle
+    \@thanks
+  \endgroup
+  \let\maketitle\relax
+  \let\@maketitle\relax
+  \let\thanks\relax
+}
+
+% ---------------------------------------------------------------
+% Abstract
+% ---------------------------------------------------------------
+\renewenvironment{abstract}%
+{%
+  \centerline{\large\bf Abstract}%
+  \vspace{0.5ex}%
+  \begin{quote}%
+}
+{
+  \par
+  \end{quote}%
+  \vskip 1ex%
+}
+
+% ---------------------------------------------------------------
+% Headings (running heads)
+% ---------------------------------------------------------------
+\if@neuripsfinal
+  \pagestyle{myheadings}
+\else
+  \if@neuripspreprint
+    \pagestyle{myheadings}
+  \else
+    \pagestyle{empty}
+  \fi
+\fi
+
+% ---------------------------------------------------------------
+% Citation (natbib)
+% ---------------------------------------------------------------
+\if@neuripsnonatbib\else
+  \RequirePackage{natbib}
+  \bibliographystyle{abbrvnat}
+  \setcitestyle{authoryear,round,citesep={;},aysep={,},yysep={;}}
+\fi
+
+% ---------------------------------------------------------------
+% Footnotes
+% ---------------------------------------------------------------
+\setlength{\footnotesep}{6.65\p@}
+\setlength{\skip\footins}{9\p@ \@plus 4\p@ \@minus 2\p@}
+\renewcommand\footnoterule{\kern-3\p@ \hrule width 12pc \kern 2.6\p@}
+\setcounter{footnote}{0}
+
+% ---------------------------------------------------------------
+% Lists
+% ---------------------------------------------------------------
+\setlength\parindent{1em}
+\setlength\itemsep{0ex \@plus 0.2ex}
+
+% ---------------------------------------------------------------
+% Floats
+% ---------------------------------------------------------------
+\renewcommand\topfraction{.9}
+\renewcommand\bottomfraction{.9}
+\renewcommand\textfraction{.1}
+\renewcommand\floatpagefraction{.8}
+\renewcommand\dbltopfraction{.9}
+\renewcommand\dblfloatpagefraction{.8}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{4}
+\setcounter{totalnumber}{4}
+\setcounter{dbltopnumber}{4}
+
+% ---------------------------------------------------------------
+% Anonymization helpers
+% ---------------------------------------------------------------
+\if@neuripsfinal\else\if@neuripspreprint\else
+  \newcommand{\@tmpneurips}{\textcolor{red}{Anonymous Submission}}
+  \AtBeginDocument{%
+    \markboth{\@tmpneurips}{\@tmpneurips}%
+  }
+\fi\fi
+
+\endinput
