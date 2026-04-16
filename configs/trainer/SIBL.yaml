@@ -3,73 +3,46 @@ defaults:
 
 handler: SIBL
 method_args:
-  # Sparsity configuration
+  # Sparsity
   use_sparsity: true
-  sparsity: 0.9  # 90% sparsity
-  sparsity_method: layerwise_magnitude  # Options: layerwise_magnitude, random, structured, gradual, movement, magnitude_sampling
+  sparsity: 0.9
+  sparsity_method: layerwise_magnitude
 
-  # S-BiAL optimization parameters
-  epsilon: 0.1  # Retain loss budget (constraint threshold)
-  T: 20  # Number of outer iterations
-  K: 10  # Number of inner iterations per outer iteration
-  eta_theta: 1e-4  # Outer loop learning rate
-  eta_in: 1e-4  # Inner loop learning rate
-  rho: 1.0  # Penalty parameter for Augmented Lagrangian
-  gamma: 1e-4  # Regularization coefficient
+  # Bilevel optimization
+  T: 20
+  K: 10
+  eta_theta: 1e-4
+  eta_in: 1e-4
 
-  # Implicit differentiation settings
-  use_implicit: true  # Use implicit differentiation (recommended)
-  cg_iters: 10  # Conjugate gradient max iterations
-  cg_tol: 1e-3  # Conjugate gradient tolerance
-  cg_damping: 0.0  # Hessian damping for CG stability
+  # ALM constraint
+  epsilon: 0.1
+  rho: 1.0
+  lambda_init: 0.0
 
-  # Loss function configuration
-  # forget_loss_type options: logit_margin, grad_ascent, grad_diff, npo, simnpo, pdu, rmu
-  forget_loss_type: logit_margin  # Default: original SIBL logit margin flattening
+  # Regularization
+  gamma: 1e-4
+  regularization_type: l1
 
-  # Regularization configuration
-  # regularization_type options: l1, l2, elastic_net, none
-  regularization_type: l1  # Default: L1 sparsity-inducing regularization
+  # Implicit correction
+  use_implicit: true
+  implicit_solver: neumann   # "neumann" or "cg"
+  # CG parameters
+  cg_iters: 10
+  cg_tol: 1e-3
+  cg_damping: 0.0
+  # Neumann parameters
+  neumann_steps: 4
+  neumann_mu: 0.01
+  neumann_alpha: 0.1
+  neumann_max_growth: 10.0
 
-  # Loss-specific parameters
-  npo_beta: 1.0  # Temperature for NPO loss (used when forget_loss_type=npo)
-  simnpo_beta: 1.0  # Temperature for SimNPO loss (used when forget_loss_type=simnpo)
-  simnpo_delta: 0.0  # Offset for SimNPO loss (used when forget_loss_type=simnpo)
-  elastic_net_l1_ratio: 0.5  # L1 ratio for elastic net (0.5 = equal L1 and L2)
+  # Forget loss: logit_margin, grad_ascent, npo
+  forget_loss_type: logit_margin
+  npo_beta: 1.0
 
-  # Surgical unlearning (disabled by default)
-  neuron_bitmap_path: null
-  neuron_traces_path: null
-  mask_th_low: 0.5
-  mask_th_high: 1.0
-  outer_lr_smooth: 0.6
-  mask_freeze_layers: null
-  outer_freeze_layers: null
-  proportional_outer_lr: false
-  retain_protection_layers: null
-  retain_lr_multiplier: 2.0
-  implicit_block_skip_layers: null
-  gradient_projection: false
-  gradient_projection_scope: layer
-  projection_strength: 1.0
-  projection_schedule: constant
-  projection_rescale: false
-  projection_layers: null  # Layer indices to apply projection to (null = all layers)
-  use_steering: false
-  steering_layers: [5, 6, 7]
-  steering_coeff: 20.0
-  steering_alpha: 1.0
-  steering_only: true
-  steering_retain_match: false
-  steering_neuron_mask_path: null  # Path to forget_neuron_bitmap.pt
-  inner_repr_anchor: false
-  inner_repr_alpha: 1.0
-  inner_repr_layers: null
-  post_unlearn_inner_steps: 0  # Pure CE inner steps after T outer iters for retention recovery
-  post_inner_retain_only: false  # If true, invert bitmap mask during post-inner (update only retain-dominant neurons)
+  # Checkpointing
+  checkpoint_every_steps: 0
 
-# Override trainer args for SIBL
-# Note: SIBL uses custom training loop, so some standard args may not apply
 args:
   per_device_train_batch_size: 2
   per_device_eval_batch_size: 16
