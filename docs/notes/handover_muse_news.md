@@ -45,8 +45,8 @@ Best config from 40+ ablations: PerTA λ=3.5 init → LoRA r=16 bilevel, NPO β=
 - `configs/experiment/unlearn/muse/lora_implicit.yaml` — experiment config
 - `configs/trainer/LoRAImplicit.yaml` — default trainer params
 - `scripts/run_muse_news_implicit.sh` — current runner (needs redesign)
-- `reports/muse_news.md` — all baseline results
-- `reports/tofu.md` — TOFU results showing the method works
+- `docs/results/muse_news.md` — all baseline results
+- `docs/results/tofu.md` — TOFU results showing the method works
 
 ## Run command template
 

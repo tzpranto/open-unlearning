@@ -3,11 +3,11 @@
 Generate comparison tables for unlearning benchmarks.
 
 Usage:
-    python reports/generate_report.py --benchmark muse_news
-    python reports/generate_report.py --benchmark muse_books
-    python reports/generate_report.py --benchmark wmdp
-    python reports/generate_report.py --all              # regenerate all
-    python reports/generate_report.py --benchmark muse_news --out reports/muse_news.md
+    python scripts/generate_report.py --benchmark muse_news
+    python scripts/generate_report.py --benchmark muse_books
+    python scripts/generate_report.py --benchmark wmdp
+    python scripts/generate_report.py --all              # regenerate all
+    python scripts/generate_report.py --benchmark muse_news --out docs/results/muse_news.md
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SAVES_UNLEARN = REPO_ROOT / "saves" / "unlearn"
 SAVES_EVAL = REPO_ROOT / "saves" / "eval"
-REPORTS_DIR = REPO_ROOT / "reports"
+REPORTS_DIR = REPO_ROOT / "docs" / "results"
 
 # ─── Benchmark configs ────────────────────────────────────────────────────────
 

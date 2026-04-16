@@ -2,7 +2,7 @@ MUSE News Baseline Report — Handover Notes
 ==========================================
 Date: 2026-04-06
 Repo: /datadrive/forked/open-unlearning
-Report file: reports/muse_news.md
+Report file: docs/results/muse_news.md
 
 ## Environment
 
@@ -28,7 +28,7 @@ Results are collected by:
 1. Running training via scripts/run_muse_news_baselines.sh (or manually)
 2. Running eval via src/eval.py pointing to the saved model
 3. Reading results from saves/eval/<task_name>/MUSE_EVAL.json
-4. Updating reports/muse_news.md by hand
+4. Updating docs/results/muse_news.md by hand
 
 The eval command template used for all baselines:
 
@@ -84,7 +84,7 @@ Train time: read from saves/unlearn/<SAVE_DIR>/trainer_state.json -> train_runti
 1. Run eval (command above, replace task_name and pretrained_model_name_or_path)
 2. Read MUSE_EVAL.json for the 5 metrics
 3. Read trainer_state.json for train_runtime
-4. Update reports/muse_news.md table row for that method
+4. Update docs/results/muse_news.md table row for that method
 
 ## Report Column Mapping (from MUSE_EVAL.json)
 
