@@ -1,8 +1,11 @@
 # @package _global_
+# CEU for MUSE unlearning — Cross-Entropy Unlearning loss
+# Source: arXiv:2503.01224
+# LR=1e-5, epochs=10, effective_batch=32
 
 defaults:
   - override /model: Llama-2-7b-hf
-  - override /trainer: LoRABiAL
+  - override /trainer: CEU
   - override /data: unlearn
   - override /data/datasets@data.forget: MUSE_forget
   - override /data/datasets@data.retain: MUSE_retain
@@ -25,19 +28,24 @@ data:
         hf_args:
           split: ${forget_split}
           path: muse-bench/MUSE-${data_split}
-        max_length: 2048  # Full chunks; LoRA-only has ~82GB headroom on H100
   retain:
     MUSE_retain:
       args:
         hf_args:
           path: muse-bench/MUSE-${data_split}
           split: ${retain_split}
-        max_length: 2048  # Full chunks; LoRA-only has ~82GB headroom on H100
 
 eval:
   muse:
     data_split: ${data_split}
     retain_logs_path: ${retain_logs_path}
     overwrite: true
+
+trainer:
+  method_args:
+    ignore_first_n_answer_tokens: 1
+  args:
+    learning_rate: 1.0e-5
+    lr_scheduler_type: constant
 
 task_name: ???

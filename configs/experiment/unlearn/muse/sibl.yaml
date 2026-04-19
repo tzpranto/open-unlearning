@@ -25,14 +25,14 @@ data:
         hf_args:
           split: ${forget_split}
           path: muse-bench/MUSE-${data_split}
-        max_length: 1024  # Lower than default 2048 for single-GPU memory
+        max_length: 2048  # Full chunks; fits on H100 95GB at bs=1
   retain:
     MUSE_retain:
       args:
         hf_args:
           path: muse-bench/MUSE-${data_split}
           split: ${retain_split}
-        max_length: 1024  # Lower than default 2048 for single-GPU memory
+        max_length: 2048  # Full chunks; fits on H100 95GB at bs=1
 
 
 eval:

@@ -1,11 +1,11 @@
 {
   "tasks": [
     {
-      "id": "e1509b8c",
-      "cron": "*/5 * * * *",
-      "prompt": "You are the quartermaster monitoring ML unlearning experiments for the Captain. Check status and act immediately on any issues.\n\nBASE=\"/datadrive/forked/open-unlearning\"\n\nStep 1 — check what's running:\n- Run: `pgrep -fa \"train.py\\|run_H\\|run_G\" | grep -v grep`\n- Run: `nvidia-smi | grep \"MiB\\|%\"` \n\nStep 2 — check H series log (current active series):\n- Run: `tail -15 $BASE/logs/ablation/H_progress.log`\n\nStep 3 — decide:\n\nA) If H series is DONE (log has \"H series DONE\"): \n   - Print the full summary table\n   - Report to Captain with analysis of whether fk<=0.328 AND rk>=0.560 both achieved\n\nB) If training process is alive and GPU >50%: \n   - Just report \"H0 training, step X, GPU Y%\" — keep it brief\n\nC) If GPU is idle (0 MiB) AND no training process AND H series NOT done:\n   - Check last 30 lines of H log for error/OOM\n   - If incomplete weights exist without eval: `rm -rf $BASE/saves/unlearn/ablation_H0_g1_hard50`\n   - Relaunch: `nohup bash $BASE/scripts/run_H_series.sh >> $BASE/logs/ablation/H_progress.log 2>&1 &`\n   - Report what failed and that you relaunched\n\nD) If H series done but rk still far from 0.560:\n   - Report results and suggest: next step is H1 = H0 + more epochs OR H0 + post_inner masked\n\nBe terse. Only alert Captain if something needs attention.",
-      "createdAt": 1775708539534,
-      "lastFiredAt": 1776094427236,
+      "id": "dfaed510",
+      "cron": "*/10 * * * *",
+      "prompt": "Monitor the TOFU master pipeline (PID 56193, run_tofu_1b_3b_7b.sh). 3 models: 7B, 1B, 3B. 63 total runs.\n\n1. Check alive: `ps -p 56193 -o pid,stat 2>/dev/null`\n2. Progress log: `tail -20 /datadrive/forked/open-unlearning/saves/unlearn/_tofu_master_progress.log`\n3. Count completed per model:\n   - 7B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-2-7b-chat-hf_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n   - 1B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-3.2-1B-Instruct_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n   - 3B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-3.2-3B-Instruct_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n4. For NEW completed runs since last check, read their TOFU_SUMMARY.json, compute HM = hmean(model_utility, forget_quality) using scipy (0 if either is 0), and update docs/results/tofu.md with results. The file has sections: 1B, 3B, 7B each with forget01/05/10 tables.\n5. If pipeline crashed (PID dead but not all 63 done), check `tail -30 /tmp/nohup_tofu_master.out` for the error. Fix the issue, then relaunch: `nohup bash /datadrive/forked/open-unlearning/scripts/run_tofu_1b_3b_7b.sh > /tmp/nohup_tofu_master.out 2>&1 &`\n6. Give a short status update to the user.",
+      "createdAt": 1776523199917,
+      "lastFiredAt": 1776610463128,
       "recurring": true
     }
   ]
