@@ -93,6 +93,7 @@ class LoRABiAL(UnlearnTrainer):
         implicit_warmup_steps: int = 0,  # skip implicit for first N steps (zero-init LoRA)
         # Batching
         gradient_accumulation_steps: int = 1,
+        inner_accumulation_steps: int = 0,  # 0 = same as gradient_accumulation_steps
         max_grad_norm: float = 1.0,
         **kwargs,
     ):
@@ -138,6 +139,7 @@ class LoRABiAL(UnlearnTrainer):
         self.implicit_offload_cpu = implicit_offload_cpu
         self.implicit_warmup_steps = implicit_warmup_steps
         self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.inner_accumulation_steps = inner_accumulation_steps if inner_accumulation_steps > 0 else gradient_accumulation_steps
         self.max_grad_norm = max_grad_norm
 
         # Runtime state
@@ -547,21 +549,21 @@ class LoRABiAL(UnlearnTrainer):
     # ------------------------------------------------------------------
     def inner_step(self, retain_batch, device):
         """Single micro-batch forward+backward (no optimizer step).
-        Loss is divided by accumulation steps for correct averaging."""
+        Loss is divided by inner accumulation steps for correct averaging."""
         loss = self._compute_ce_loss(retain_batch, device)
-        (loss / self.gradient_accumulation_steps).backward()
+        (loss / self.inner_accumulation_steps).backward()
         return loss.item()
 
     def inner_loop(self, device):
-        """K inner optimizer steps, each accumulating over multiple micro-batches
-        with FRESH retain data per micro-batch."""
+        """K inner optimizer steps, each accumulating over inner_accumulation_steps
+        micro-batches with FRESH retain data per micro-batch."""
         self.model.enable_adapter_layers()
         self.model.train()
         inner_losses = []
         for k in range(self.K):
             self._inner_opt.zero_grad()
             accum_loss = 0.0
-            for micro_i in range(self.gradient_accumulation_steps):
+            for micro_i in range(self.inner_accumulation_steps):
                 batch = self._next_retain_batch()
                 accum_loss += self.inner_step(batch, device)
             torch.nn.utils.clip_grad_norm_(
@@ -569,7 +571,7 @@ class LoRABiAL(UnlearnTrainer):
                 self.max_grad_norm,
             )
             self._inner_opt.step()
-            inner_losses.append(accum_loss / self.gradient_accumulation_steps)
+            inner_losses.append(accum_loss / self.inner_accumulation_steps)
         return inner_losses
 
     def outer_step(self, device, global_step=0):
@@ -700,6 +702,7 @@ class LoRABiAL(UnlearnTrainer):
 
         batch_size = self.args.per_device_train_batch_size
         effective_bs = batch_size * self.gradient_accumulation_steps
+        inner_effective_bs = batch_size * self.inner_accumulation_steps
         micro_batches_per_epoch = len(train_dataloader)
         steps_per_epoch = micro_batches_per_epoch // self.gradient_accumulation_steps
         num_epochs = max(1, int(self.args.num_train_epochs))
@@ -732,7 +735,8 @@ class LoRABiAL(UnlearnTrainer):
         logger.info("=" * 60)
         logger.info(f"  Mode: {'epoch-based' if self.T <= 0 else f'fixed T={self.T}'}")
         logger.info(f"  Epochs={num_epochs}, micro_bs={batch_size}, "
-                     f"accum={self.gradient_accumulation_steps}, effective_bs={effective_bs}")
+                     f"outer_accum={self.gradient_accumulation_steps} (eff_bs={effective_bs}), "
+                     f"inner_accum={self.inner_accumulation_steps} (eff_bs={inner_effective_bs})")
         logger.info(f"  micro_batches/epoch={micro_batches_per_epoch}, "
                      f"outer_steps/epoch={steps_per_epoch}, "
                      f"max_steps={max_outer_steps}, K={self.K}")
@@ -776,7 +780,7 @@ class LoRABiAL(UnlearnTrainer):
             else:
                 L_fgt, L_ret, r = self.outer_step(device, global_step=t)
 
-                if L_fgt < self.npo_saturation_threshold:
+                if L_fgt >= 0 and L_fgt < self.npo_saturation_threshold:
                     saturated_count += 1
                 else:
                     saturated_count = 0
