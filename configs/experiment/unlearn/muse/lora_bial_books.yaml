@@ -1,0 +1,77 @@
+# @package _global_
+# LoRA-BiAL Ze0 on MUSE Books — no PerTA, entropy_max + Adam
+
+defaults:
+  - override /model: Llama-2-7b-hf
+  - override /trainer: LoRABiAL
+  - override /data: unlearn
+  - override /data/datasets@data.forget: MUSE_forget
+  - override /data/datasets@data.retain: MUSE_retain
+  - override /eval: muse
+
+data_split: Books
+forget_split: forget
+retain_split: retain1
+retain_logs_path: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: muse-bench/MUSE-${data_split}_target
+
+data:
+  anchor: forget
+  forget:
+    MUSE_forget:
+      args:
+        hf_args:
+          split: ${forget_split}
+          path: muse-bench/MUSE-${data_split}
+        max_length: 2048
+  retain:
+    MUSE_retain:
+      args:
+        hf_args:
+          path: muse-bench/MUSE-${data_split}
+          split: ${retain_split}
+        max_length: 2048
+
+eval:
+  muse:
+    data_split: ${data_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+trainer:
+  method_args:
+    # Ze0: no PerTA
+    perta_lambda: 0
+    # LoRA
+    lora_r: 16
+    lora_alpha: 32
+    # Bilevel — epoch-based
+    # 554 forget, bs=2, accum=8 → 277 micro-batches → 34 steps/epoch
+    # 3 epochs → 102 outer steps
+    T: -1
+    K: 3
+    eta_theta: 3e-5
+    eta_in: 2e-4
+    # ALM
+    epsilon: 0.70
+    rho: 0.1
+    lambda_init: 1.0
+    # Forget loss
+    forget_loss_type: entropy_max
+    # Batching
+    gradient_accumulation_steps: 8
+    max_grad_norm: 1.0
+    # Checkpoints at each epoch boundary for dynamics analysis
+    checkpoint_every_epoch: true
+    # Implicit off (enable after confirming good forgetting)
+    use_implicit: false
+
+  args:
+    per_device_train_batch_size: 2
+    num_train_epochs: 3
+    gradient_checkpointing: True
+
+task_name: ???

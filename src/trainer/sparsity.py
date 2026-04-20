@@ -66,12 +66,16 @@ class SparsityManager:
 
         mask_dict = method_map[method](model, sparsity, device, **kwargs)
 
+        # Convert to bool to save memory (~24GB on 7B models)
+        mask_dict = {k: v.bool() for k, v in mask_dict.items()}
+
         # Compute statistics
         total_params = sum(m.numel() for m in mask_dict.values())
-        total_zero = sum((m == 0).sum().item() for m in mask_dict.values())
-        actual_sparsity = total_zero / total_params
+        total_active = sum(m.sum().item() for m in mask_dict.values())
+        actual_sparsity = 1.0 - total_active / total_params
 
-        logger.info(f"Mask created: {actual_sparsity:.1%} overall sparsity")
+        logger.info(f"Mask created: {actual_sparsity:.1%} overall sparsity "
+                     f"({total_active:,} active / {total_params:,} total, dtype=bool)")
 
         return mask_dict
 

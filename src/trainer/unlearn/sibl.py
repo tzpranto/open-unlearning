@@ -81,6 +81,10 @@ class SIBL(UnlearnTrainer):
         npo_beta: float = 1.0,
         # Checkpointing
         checkpoint_every_steps: int = 0,
+        # Optimizer and batching
+        gradient_accumulation_steps: int = 1,
+        optimizer_type: str = "adam",  # "adam" or "sgd"
+        max_grad_norm: float = 1.0,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -131,9 +135,16 @@ class SIBL(UnlearnTrainer):
         # Checkpointing
         self.checkpoint_every_steps = checkpoint_every_steps
 
+        # Optimizer and batching
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.optimizer_type = optimizer_type.lower()
+        self.max_grad_norm = max_grad_norm
+
         # Runtime state
         self.mask_dict = None
         self.ref_model = None
+        self._inner_opt = None
+        self._outer_opt = None
         self.history = {
             "iter": [], "L_forget": [], "L_retain": [],
             "residual": [], "lambda": [], "time": [],
@@ -141,7 +152,8 @@ class SIBL(UnlearnTrainer):
 
         logger.info(
             f"SIBL: forget={forget_loss_type}, reg={regularization_type}, "
-            f"sparsity={sparsity if use_sparsity else 'off'}"
+            f"sparsity={sparsity if use_sparsity else 'off'}, "
+            f"optimizer={optimizer_type}, accum_steps={gradient_accumulation_steps}"
         )
 
     # ------------------------------------------------------------------
@@ -162,7 +174,7 @@ class SIBL(UnlearnTrainer):
         else:
             logger.info("No sparsity — using full model")
             self.mask_dict = {
-                name: torch.ones_like(param.data).to(self.args.device)
+                name: torch.ones(param.shape, dtype=torch.bool, device=self.args.device)
                 for name, param in self.model.named_parameters()
             }
 
@@ -209,9 +221,56 @@ class SIBL(UnlearnTrainer):
         )
 
     # ------------------------------------------------------------------
-    # Inner step: retain CE + regularization, masked SGD
+    # Optimizer setup
+    # ------------------------------------------------------------------
+    def _create_optimizers(self):
+        """Create separate inner/outer optimizers for masked parameters."""
+        trainable = [p for p in self.model.parameters() if p.requires_grad]
+        if self.optimizer_type == "adam":
+            self._inner_opt = torch.optim.Adam(trainable, lr=self.eta_in)
+            self._outer_opt = torch.optim.Adam(trainable, lr=self.eta_theta)
+        else:
+            self._inner_opt = torch.optim.SGD(trainable, lr=self.eta_in)
+            self._outer_opt = torch.optim.SGD(trainable, lr=self.eta_theta)
+        logger.info(
+            f"Optimizers: {self.optimizer_type}, inner_lr={self.eta_in}, "
+            f"outer_lr={self.eta_theta}, params={sum(p.numel() for p in trainable)}"
+        )
+
+    def _apply_mask_to_grads(self):
+        """Zero out gradients on masked (frozen) parameters."""
+        with torch.no_grad():
+            for name, param in self.model.named_parameters():
+                if param.grad is not None and name in self.mask_dict:
+                    param.grad.mul_(self.mask_dict[name].to(param.grad.dtype))
+
+    def _next_retain_batch(self):
+        """Sample a fresh retain batch from the retain iterator."""
+        try:
+            batch = next(self._retain_iter)
+        except StopIteration:
+            self._retain_iter = iter(self._retain_dataloader)
+            batch = next(self._retain_iter)
+        if isinstance(batch, dict) and "retain" in batch:
+            batch = batch["retain"]
+        return batch
+
+    def _next_forget_batch(self):
+        """Sample a fresh forget batch from the forget iterator."""
+        try:
+            batch = next(self._forget_iter)
+        except StopIteration:
+            self._forget_iter = iter(self._forget_dataloader)
+            batch = next(self._forget_iter)
+        if isinstance(batch, dict) and "forget" in batch:
+            batch = batch["forget"]
+        return batch
+
+    # ------------------------------------------------------------------
+    # Inner step: retain CE + regularization, masked optimizer
     # ------------------------------------------------------------------
     def inner_step(self, batch):
+        """Single micro-batch forward+backward (no optimizer step)."""
         self.model.train()
         input_ids = batch["input_ids"].to(self.args.device)
         attention_mask = batch["attention_mask"].to(self.args.device)
@@ -220,33 +279,30 @@ class SIBL(UnlearnTrainer):
         outputs = self.model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels
         )
-        loss = outputs.loss + self.compute_regularizer()
+        loss = (outputs.loss + self.compute_regularizer()) / self.gradient_accumulation_steps
         loss.backward()
 
-        with torch.no_grad():
-            for name, param in self.model.named_parameters():
-                if param.grad is not None and name in self.mask_dict:
-                    binary_mask = (self.mask_dict[name] > 0).float()
-                    param.data.sub_(self.eta_in * param.grad * binary_mask)
-                param.grad = None
+        return loss.item() * self.gradient_accumulation_steps
 
-        return loss.item()
-
-    def inner_loop(self, retain_dataloader):
-        """K inner steps, each with a fresh retain minibatch."""
-        if not hasattr(self, '_retain_iter'):
-            self._retain_iter = iter(retain_dataloader)
-        for _ in range(self.K):
-            try:
-                batch = next(self._retain_iter)
-            except StopIteration:
-                self._retain_iter = iter(retain_dataloader)
-                batch = next(self._retain_iter)
-            # The collator wraps everything as {"forget": ..., "retain": ...}
-            # so extract the retain portion if nested
-            if isinstance(batch, dict) and "retain" in batch:
-                batch = batch["retain"]
-            self.inner_step(batch)
+    def inner_loop(self):
+        """K inner optimizer steps, each accumulating over multiple micro-batches."""
+        for k in range(self.K):
+            self._inner_opt.zero_grad()
+            accum_loss = 0.0
+            for micro_i in range(self.gradient_accumulation_steps):
+                batch = self._next_retain_batch()
+                if not hasattr(self, '_inner_debug_done'):
+                    logger.info(
+                        f"  [DEBUG] inner micro-batch shape: "
+                        f"{batch['input_ids'].shape}"
+                    )
+                    self._inner_debug_done = True
+                accum_loss += self.inner_step(batch)
+            self._apply_mask_to_grads()
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in self.model.parameters() if p.requires_grad], self.max_grad_norm
+            )
+            self._inner_opt.step()
 
     # ------------------------------------------------------------------
     # HVP and CG for implicit correction
@@ -268,7 +324,7 @@ class SIBL(UnlearnTrainer):
             if not param.requires_grad:
                 continue
             if name in self.mask_dict:
-                masks.append(self.mask_dict[name].reshape(-1))
+                masks.append(self.mask_dict[name].reshape(-1).float())
             else:
                 masks.append(torch.ones(param.numel(), device=self.args.device))
         return torch.cat(masks)
@@ -403,38 +459,62 @@ class SIBL(UnlearnTrainer):
     # ------------------------------------------------------------------
     # Outer step: ALM gradient + optional implicit correction + masked update
     # ------------------------------------------------------------------
-    def outer_step(self, forget_batch, retain_batch, outer_iter=None):
+    def outer_step(self, outer_iter=None):
+        """Outer ALM step with gradient accumulation, optional implicit correction."""
         self.model.train()
+        self._outer_opt.zero_grad()
 
-        # Compute ALM loss: L_fgt + λ·L_ret + ρ/2·(L_ret - ε)²
-        L_fgt = self.compute_forget_loss(forget_batch)
-        L_ret = self.compute_retain_loss(retain_batch)
+        total_L_fgt = 0.0
+        total_L_ret = 0.0
+        last_forget_batch = None
+        last_retain_batch = None
 
-        if not torch.isfinite(L_fgt) or not torch.isfinite(L_ret):
-            logger.warning(f"Non-finite loss: L_fgt={L_fgt.item()}, L_ret={L_ret.item()}")
-            return float("nan"), float("nan"), float("nan")
+        for micro_i in range(self.gradient_accumulation_steps):
+            forget_batch = self._next_forget_batch()
+            retain_batch = self._next_retain_batch()
 
-        r = L_ret - self.epsilon
-        L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r ** 2)
-        L_alm.backward()
+            if outer_iter == 0 and micro_i == 0:
+                logger.info(
+                    f"  [DEBUG] outer micro-batch shapes: "
+                    f"forget={forget_batch['input_ids'].shape}, "
+                    f"retain={retain_batch['input_ids'].shape}"
+                )
 
-        # Collect gradients
-        g_alm_dict = {}
-        for name, param in self.model.named_parameters():
-            if param.grad is not None:
-                g_alm_dict[name] = param.grad.detach()
-                param.grad = None
-            else:
-                g_alm_dict[name] = torch.zeros_like(param.data)
+            L_fgt = self.compute_forget_loss(forget_batch)
+            L_ret = self.compute_retain_loss(retain_batch)
 
-        # Optional implicit correction
+            if not torch.isfinite(L_fgt) or not torch.isfinite(L_ret):
+                logger.warning(f"Non-finite loss: L_fgt={L_fgt.item()}, L_ret={L_ret.item()}")
+                return float("nan"), float("nan"), float("nan")
+
+            r_micro = L_ret - self.epsilon
+            L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_micro ** 2)
+            (L_alm / self.gradient_accumulation_steps).backward()
+
+            total_L_fgt += L_fgt.item()
+            total_L_ret += L_ret.item()
+            last_forget_batch = forget_batch
+            last_retain_batch = retain_batch
+
+        avg_L_fgt = total_L_fgt / self.gradient_accumulation_steps
+        avg_L_ret = total_L_ret / self.gradient_accumulation_steps
+        avg_r = avg_L_ret - self.epsilon
+
+        # Optional implicit correction on the accumulated gradient
         if self.use_implicit:
+            g_alm_dict = {}
+            for name, param in self.model.named_parameters():
+                if param.grad is not None:
+                    g_alm_dict[name] = param.grad.detach().clone()
+                else:
+                    g_alm_dict[name] = torch.zeros_like(param.data)
+
             def _inner_loss_fn():
-                return self.compute_retain_loss(retain_batch) + self.compute_regularizer()
+                return self.compute_retain_loss(last_retain_batch) + self.compute_regularizer()
 
             def _alm_loss_fn():
-                lf = self.compute_forget_loss(forget_batch)
-                lr = self.compute_retain_loss(retain_batch)
+                lf = self.compute_forget_loss(last_forget_batch)
+                lr = self.compute_retain_loss(last_retain_batch)
                 rt = lr - self.epsilon
                 return lf + self.lambda_dual * lr + 0.5 * self.rho * (rt ** 2)
 
@@ -456,7 +536,6 @@ class SIBL(UnlearnTrainer):
             if self.implicit_solver == "neumann":
                 g_corrected_flat = self._neumann_correction(inner_hvp, outer_hvp, v, mask_flat)
             else:
-                # CG solver: solve H·s = v on supp(m), then g_corr = v - H_ALM·s
                 def hvp_func(vec):
                     vec_masked = vec * mask_flat
                     hvp = self.compute_hvp_fd(_inner_loss_fn, params_list, vec_masked)
@@ -468,24 +547,20 @@ class SIBL(UnlearnTrainer):
                 g_corrected_flat = v - correction
 
             corrected_parts = self.unflatten_params(g_corrected_flat, params_list)
-            for (name, _), g_update in zip(
-                ((n, p) for n, p in self.model.named_parameters() if p.requires_grad),
-                corrected_parts,
-            ):
-                g_alm_dict[name] = g_update
+            for p, g_update in zip(params_list, corrected_parts):
+                p.grad = g_update.to(p.dtype)
 
-        # Primal masked update: θ ← θ - η_θ · g · m
-        with torch.no_grad():
-            for name, param in self.model.named_parameters():
-                if name in self.mask_dict and name in g_alm_dict:
-                    param.data.sub_(self.eta_theta * g_alm_dict[name] * self.mask_dict[name])
-                param.grad = None
+        # Apply mask, clip, and step
+        self._apply_mask_to_grads()
+        torch.nn.utils.clip_grad_norm_(
+            [p for p in self.model.parameters() if p.requires_grad], self.max_grad_norm
+        )
+        self._outer_opt.step()
 
-        # Dual update: λ ← max(0, λ + ρ·r)
-        r_val = r.item()
-        self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r_val)
+        # Dual update on averaged residual
+        self.lambda_dual = max(0.0, self.lambda_dual + self.rho * avg_r)
 
-        return L_fgt.item(), L_ret.item(), r_val
+        return avg_L_fgt, avg_L_ret, avg_r
 
     # ------------------------------------------------------------------
     # Main training loop
@@ -495,15 +570,26 @@ class SIBL(UnlearnTrainer):
         if self.mask_dict is None:
             self._initialize_mask()
 
+        # Create optimizers
+        self._create_optimizers()
+
         # Gradient checkpointing
         if getattr(self.args, "gradient_checkpointing", False):
             self.model.gradient_checkpointing_enable(
                 gradient_checkpointing_kwargs={"use_reentrant": False}
             )
 
-        # Data
+        # Data — separate iterators for inner (retain) and outer (forget+retain)
         train_dataloader = self.get_train_dataloader()
-        steps_per_epoch = len(train_dataloader)
+        self._retain_dataloader = train_dataloader
+        self._retain_iter = iter(train_dataloader)
+        self._forget_dataloader = train_dataloader
+        self._forget_iter = iter(train_dataloader)
+
+        batch_size = self.args.per_device_train_batch_size
+        effective_bs = batch_size * self.gradient_accumulation_steps
+        micro_batches_per_epoch = len(train_dataloader)
+        steps_per_epoch = micro_batches_per_epoch // self.gradient_accumulation_steps
         num_epochs = max(1, int(self.args.num_train_epochs))
         total_outer_steps = num_epochs * steps_per_epoch
         effective_T = min(self.T, total_outer_steps) if self.T < total_outer_steps else total_outer_steps
@@ -512,7 +598,11 @@ class SIBL(UnlearnTrainer):
                      f"({num_epochs} epochs × {steps_per_epoch} steps/epoch)")
         logger.info(f"  K={self.K} inner steps, ε={self.epsilon}, ρ={self.rho}")
         logger.info(f"  η_θ={self.eta_theta}, η_in={self.eta_in}, γ={self.gamma}")
+        logger.info(f"  Optimizer: {self.optimizer_type}, micro_bs={batch_size}, "
+                     f"accum={self.gradient_accumulation_steps}, effective_bs={effective_bs}")
         logger.info(f"  Forget: {self.forget_loss_type}, Reg: {self.regularization_type}")
+        logger.info(f"  micro_batches/epoch={micro_batches_per_epoch}, "
+                     f"outer_steps/epoch={steps_per_epoch}")
         if self.use_implicit:
             if self.implicit_solver == "neumann":
                 logger.info(f"  Implicit: neumann (steps={self.neumann_steps}, "
@@ -522,31 +612,14 @@ class SIBL(UnlearnTrainer):
         else:
             logger.info(f"  Implicit: off")
 
-        data_iter = iter(train_dataloader)
         for t in range(effective_T):
             t_start = time.time()
 
-            try:
-                combined_batch = next(data_iter)
-            except StopIteration:
-                data_iter = iter(train_dataloader)
-                combined_batch = next(data_iter)
+            # Inner loop: K optimizer steps, each with accum micro-batches
+            self.inner_loop()
 
-            forget_batch = combined_batch["forget"]
-
-            # Inner loop: K steps of retain CE + regularization (fresh batches each step)
-            self.inner_loop(train_dataloader)
-
-            # Fresh retain batch for outer step (independent of inner loop batches)
-            try:
-                outer_combined = next(data_iter)
-            except StopIteration:
-                data_iter = iter(train_dataloader)
-                outer_combined = next(data_iter)
-            retain_batch = outer_combined["retain"]
-
-            # Outer step: ALM + optional implicit correction
-            L_fgt, L_ret, r = self.outer_step(forget_batch, retain_batch, outer_iter=t)
+            # Outer step: accumulates over gradient_accumulation_steps micro-batches
+            L_fgt, L_ret, r = self.outer_step(outer_iter=t)
 
             if not np.isfinite(L_fgt) or not np.isfinite(L_ret):
                 logger.warning(f"Non-finite at step {t}, stopping.")

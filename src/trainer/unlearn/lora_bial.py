@@ -90,6 +90,10 @@ class LoRABiAL(UnlearnTrainer):
         neumann_max_growth_ratio: float = 10.0,
         fd_hvp_eps: float = 0.01,     # finite-difference perturbation size
         implicit_offload_cpu: bool = False,  # offload Neumann vectors to CPU
+        implicit_warmup_steps: int = 0,  # skip implicit for first N steps (zero-init LoRA)
+        # Batching
+        gradient_accumulation_steps: int = 1,
+        max_grad_norm: float = 1.0,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -132,6 +136,9 @@ class LoRABiAL(UnlearnTrainer):
         self.neumann_max_growth_ratio = neumann_max_growth_ratio
         self.fd_hvp_eps = fd_hvp_eps
         self.implicit_offload_cpu = implicit_offload_cpu
+        self.implicit_warmup_steps = implicit_warmup_steps
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        self.max_grad_norm = max_grad_norm
 
         # Runtime state
         self.lambda_dual = float(lambda_init)
@@ -327,17 +334,54 @@ class LoRABiAL(UnlearnTrainer):
         margins = max_logits - mean_logits
         return margins.mean()
 
-    def _compute_forget_loss(self, batch, device):
+    def _compute_entropy_max_loss(self, batch, device):
+        """Entropy maximization: push model toward uniform on forget data.
+        Reference-free — works from zero-init LoRA."""
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        log_probs = F.log_softmax(logits, dim=-1)
+        probs = log_probs.exp()
+        entropy = -(probs * log_probs).sum(dim=-1).mean()
+        return -entropy
+
+    def _compute_repr_orthogonal_loss(self, forget_batch, retain_batch, device):
+        """Representation orthogonality: minimize cosine similarity between
+        forget and retain hidden states. Reference-free, bounded in [-1, 1]."""
+        def get_mean_repr(batch):
+            input_ids = batch["input_ids"].to(device)
+            attn = batch["attention_mask"].to(device)
+            out = self.model(input_ids=input_ids, attention_mask=attn,
+                             output_hidden_states=True)
+            h = out.hidden_states[-1]
+            mask = attn.unsqueeze(-1).float()
+            return (h * mask).sum(1) / mask.sum(1).clamp(min=1)
+
+        h_f = get_mean_repr(forget_batch)
+        with torch.no_grad():
+            h_r = get_mean_repr(retain_batch).detach()
+
+        h_f_n = F.normalize(h_f, dim=-1)
+        h_r_n = F.normalize(h_r, dim=-1)
+        sim = h_f_n @ h_r_n.T
+        return sim.mean()
+
+    def _compute_forget_loss(self, batch, device, retain_batch=None):
         """Dispatch to configured forget loss."""
         if self.forget_loss_type == "npo":
             return self._compute_npo_loss(batch, device)
         elif self.forget_loss_type == "ga":
-            # Gradient ascent: -CE on forget data
             return -self._compute_ce_loss(batch, device)
         elif self.forget_loss_type == "kl":
             return self._compute_kl_loss(batch, device)
         elif self.forget_loss_type == "logit_margin":
             return self._compute_logit_margin_loss(batch, device)
+        elif self.forget_loss_type == "entropy_max":
+            return self._compute_entropy_max_loss(batch, device)
+        elif self.forget_loss_type == "repr_orthogonal":
+            assert retain_batch is not None, "repr_orthogonal requires retain_batch"
+            return self._compute_repr_orthogonal_loss(batch, retain_batch, device)
         else:
             raise ValueError(f"Unknown forget_loss_type: {self.forget_loss_type}")
 
@@ -443,7 +487,7 @@ class LoRABiAL(UnlearnTrainer):
         # Richardson iteration: h_{k+1} = h_k + α(v - H_tilde h_k)
         work_v = v.cpu() if offload else v
         h = torch.zeros_like(work_v)
-        for j in range(self.neumann_steps + 1):
+        for j in range(self.neumann_steps):
             residual = work_v - H_in(h)
             if not torch.isfinite(residual).all():
                 logger.warning(f"Neumann step {j}: non-finite residual, fallback")
@@ -476,76 +520,121 @@ class LoRABiAL(UnlearnTrainer):
         return g_corr, "ok"
 
     # ------------------------------------------------------------------
+    # Batch iterators (separate for inner/outer, fresh each call)
+    # ------------------------------------------------------------------
+    def _next_retain_batch(self):
+        try:
+            batch = next(self._retain_iter)
+        except StopIteration:
+            self._retain_iter = iter(self._retain_dataloader)
+            batch = next(self._retain_iter)
+        if isinstance(batch, dict) and "retain" in batch:
+            batch = batch["retain"]
+        return batch
+
+    def _next_forget_batch(self):
+        try:
+            batch = next(self._forget_iter)
+        except StopIteration:
+            self._forget_iter = iter(self._forget_dataloader)
+            batch = next(self._forget_iter)
+        if isinstance(batch, dict) and "forget" in batch:
+            batch = batch["forget"]
+        return batch
+
+    # ------------------------------------------------------------------
     # Bilevel inner and outer steps
     # ------------------------------------------------------------------
     def inner_step(self, retain_batch, device):
-        """Inner loop: CE on retain data, updating LoRA params only."""
-        self.model.enable_adapter_layers()
-        self.model.train()
-        self._inner_opt.zero_grad()
-
+        """Single micro-batch forward+backward (no optimizer step).
+        Loss is divided by accumulation steps for correct averaging."""
         loss = self._compute_ce_loss(retain_batch, device)
-        loss.backward()
-        self._inner_opt.step()
-
+        (loss / self.gradient_accumulation_steps).backward()
         return loss.item()
 
-    def outer_step(self, forget_batch, retain_batch, device):
-        """Outer step: ALM loss = L_fgt + retain_coeff * L_ret.
+    def inner_loop(self, device):
+        """K inner optimizer steps, each accumulating over multiple micro-batches
+        with FRESH retain data per micro-batch."""
+        self.model.enable_adapter_layers()
+        self.model.train()
+        inner_losses = []
+        for k in range(self.K):
+            self._inner_opt.zero_grad()
+            accum_loss = 0.0
+            for micro_i in range(self.gradient_accumulation_steps):
+                batch = self._next_retain_batch()
+                accum_loss += self.inner_step(batch, device)
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in self.model.parameters() if p.requires_grad],
+                self.max_grad_norm,
+            )
+            self._inner_opt.step()
+            inner_losses.append(accum_loss / self.gradient_accumulation_steps)
+        return inner_losses
 
-        When use_implicit=True, applies FD-HVP Neumann correction to the
-        outer gradient before the optimizer step. This accounts for the
-        inner loop's response to the outer update (proper bilevel).
+    def outer_step(self, device, global_step=0):
+        """Outer ALM step with gradient accumulation, optional implicit correction.
+
+        Each outer step accumulates gradients over gradient_accumulation_steps
+        micro-batches, using FRESH forget+retain batches per micro-batch.
         """
         self.model.enable_adapter_layers()
         self.model.train()
         self._outer_opt.zero_grad()
 
-        # Forget loss (NPO or GA)
-        L_fgt = self._compute_forget_loss(forget_batch, device)
+        total_L_fgt = 0.0
+        total_L_ret = 0.0
+        last_forget_batch = None
+        last_retain_batch = None
 
-        # Retain loss for ALM constraint
-        L_ret = self._compute_ce_loss(retain_batch, device)
+        for micro_i in range(self.gradient_accumulation_steps):
+            forget_batch = self._next_forget_batch()
+            retain_batch = self._next_retain_batch()
 
-        # ALM: L_alm = L_fgt + (λ + ρ*max(0, r)) * L_ret
-        r_val = max(0.0, L_ret.item() - self.epsilon)
-        retain_coeff = self.lambda_dual + self.rho * r_val
-        L_alm = L_fgt + retain_coeff * L_ret
+            L_fgt = self._compute_forget_loss(forget_batch, device, retain_batch=retain_batch)
+            L_ret = self._compute_ce_loss(retain_batch, device)
 
-        L_alm.backward()
+            r_micro = L_ret - self.epsilon
+            L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_micro ** 2)
+            (L_alm / self.gradient_accumulation_steps).backward()
 
-        # Clip gradients for GA (can be aggressive)
-        if self.forget_loss_type == "ga" and self.ga_clip > 0:
-            torch.nn.utils.clip_grad_norm_(
-                [p for p in self.model.parameters() if p.requires_grad],
-                self.ga_clip,
-            )
+            total_L_fgt += L_fgt.item()
+            total_L_ret += L_ret.item()
+            last_forget_batch = forget_batch
+            last_retain_batch = retain_batch
 
-        # Implicit correction: replace .grad with Neumann-corrected gradient
-        if self.use_implicit:
+        avg_L_fgt = total_L_fgt / self.gradient_accumulation_steps
+        avg_L_ret = total_L_ret / self.gradient_accumulation_steps
+        avg_r = avg_L_ret - self.epsilon
+
+        # Clip gradients
+        torch.nn.utils.clip_grad_norm_(
+            [p for p in self.model.parameters() if p.requires_grad],
+            self.max_grad_norm,
+        )
+
+        # Implicit correction (after warmup period for zero-init LoRA)
+        use_implicit_this_step = (
+            self.use_implicit and global_step >= self.implicit_warmup_steps
+        )
+        if use_implicit_this_step:
             lora_params = [p for p in self.model.parameters() if p.requires_grad]
-            # Capture outer gradient as v
             v = torch.cat([p.grad.reshape(-1) for p in lora_params])
-
-            # Free autograd graph before FD-HVP forward passes
             torch.cuda.empty_cache()
 
-            # FD-HVP closures — recompute losses from current model state
             def _inner_loss_fn():
-                return self._compute_ce_loss(retain_batch, device)
+                return self._compute_ce_loss(last_retain_batch, device)
 
             def _alm_loss_fn():
-                l_f = self._compute_forget_loss(forget_batch, device)
-                l_r = self._compute_ce_loss(retain_batch, device)
-                r_t = max(0.0, l_r.item() - self.epsilon)
-                coeff = self.lambda_dual + self.rho * r_t
-                return l_f + coeff * l_r
+                l_f = self._compute_forget_loss(last_forget_batch, device, retain_batch=last_retain_batch)
+                l_r = self._compute_ce_loss(last_retain_batch, device)
+                r_t = l_r - self.epsilon
+                return l_f + self.lambda_dual * l_r + 0.5 * self.rho * (r_t ** 2)
 
             g_corr, status = self._truncated_neumann(
                 lora_params, v, _inner_loss_fn, _alm_loss_fn
             )
 
-            # Write corrected gradient back to .grad
             offset = 0
             for p in lora_params:
                 n = p.numel()
@@ -557,12 +646,13 @@ class LoRABiAL(UnlearnTrainer):
 
         self._outer_opt.step()
 
-        # Dual variable update
+        # Dual update on averaged residual
+        r_val = max(0.0, avg_r)
         self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r_val)
         if self.lambda_max > 0:
             self.lambda_dual = min(self.lambda_dual, self.lambda_max)
 
-        return L_fgt.item(), L_ret.item(), L_ret.item() - self.epsilon
+        return avg_L_fgt, avg_L_ret, avg_r
 
     # ------------------------------------------------------------------
     # Main training loop
@@ -601,15 +691,19 @@ class LoRABiAL(UnlearnTrainer):
                 gradient_checkpointing_kwargs={"use_reentrant": False}
             )
 
-        # Data
+        # Data — separate iterators for inner (retain) and outer (forget+retain)
         train_dataloader = self.get_train_dataloader()
+        self._retain_dataloader = train_dataloader
+        self._retain_iter = iter(train_dataloader)
+        self._forget_dataloader = train_dataloader
+        self._forget_iter = iter(train_dataloader)
+
         batch_size = self.args.per_device_train_batch_size
-        steps_per_epoch = len(train_dataloader)
+        effective_bs = batch_size * self.gradient_accumulation_steps
+        micro_batches_per_epoch = len(train_dataloader)
+        steps_per_epoch = micro_batches_per_epoch // self.gradient_accumulation_steps
         num_epochs = max(1, int(self.args.num_train_epochs))
 
-        # Determine total training steps
-        # T > 0: fixed step count (backward compat with Ze0: T=25)
-        # T <= 0: run full epochs (new mode for data coverage)
         if self.T > 0:
             max_outer_steps = self.T
         else:
@@ -637,10 +731,11 @@ class LoRABiAL(UnlearnTrainer):
         logger.info("Stage 3: Bilevel ALM optimization")
         logger.info("=" * 60)
         logger.info(f"  Mode: {'epoch-based' if self.T <= 0 else f'fixed T={self.T}'}")
-        logger.info(f"  Epochs={num_epochs}, steps/epoch={steps_per_epoch}, "
+        logger.info(f"  Epochs={num_epochs}, micro_bs={batch_size}, "
+                     f"accum={self.gradient_accumulation_steps}, effective_bs={effective_bs}")
+        logger.info(f"  micro_batches/epoch={micro_batches_per_epoch}, "
+                     f"outer_steps/epoch={steps_per_epoch}, "
                      f"max_steps={max_outer_steps}, K={self.K}")
-        logger.info(f"  Batch size={batch_size}, "
-                     f"samples/epoch={steps_per_epoch * batch_size}")
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
         logger.info(f"  ALM: ε={self.epsilon}, ρ={self.rho}, λ_init={self.lambda_init}"
                      f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
@@ -652,13 +747,11 @@ class LoRABiAL(UnlearnTrainer):
         if self.use_implicit:
             logger.info(f"  Implicit: FD-HVP Neumann, steps={self.neumann_steps}, "
                          f"μ={self.neumann_mu}, eps={self.fd_hvp_eps}, "
-                         f"probe_α={self.neumann_use_probe_alpha}, "
-                         f"offload_cpu={self.implicit_offload_cpu}")
+                         f"warmup={self.implicit_warmup_steps}")
         if self.retain_only_after_saturation:
             logger.info(f"  Saturation: threshold={self.npo_saturation_threshold}, "
                          f"patience={self.saturation_patience}")
 
-        # GPU memory check
         if torch.cuda.is_available():
             mem = torch.cuda.memory_allocated() / 1e9
             logger.info(f"  GPU memory before bilevel: {mem:.1f} GB")
@@ -666,151 +759,114 @@ class LoRABiAL(UnlearnTrainer):
         history = []
         global_step = 0
         saturated_count = 0
-        total_saturated_steps = 0  # steps where we skipped outer
+        total_saturated_steps = 0
 
-        for epoch in range(num_epochs):
-            epoch_start = time.time()
-            epoch_inner_losses = []
-            epoch_fgt_losses = []
-            epoch_ret_losses = []
+        for t in range(max_outer_steps):
+            t_start = time.time()
+            epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
-            for batch_idx, combined_batch in enumerate(train_dataloader):
-                # Check max steps
-                if global_step >= max_outer_steps:
-                    break
+            # Inner loop: K optimizer steps, each with accum micro-batches of FRESH retain
+            inner_losses = self.inner_loop(device)
 
-                t_start = time.time()
-                forget_batch = combined_batch["forget"]
-                retain_batch = combined_batch["retain"]
+            # Saturation check
+            if (self.retain_only_after_saturation
+                    and saturated_count >= self.saturation_patience):
+                L_fgt, L_ret, r = 0.0, inner_losses[-1] if inner_losses else 0.0, 0.0
+                total_saturated_steps += 1
+            else:
+                L_fgt, L_ret, r = self.outer_step(device, global_step=t)
 
-                # Inner loop: K steps of retain CE (K=0 → no bilevel, outer only)
-                inner_losses = []
-                for _k in range(self.K):
-                    l_in = self.inner_step(retain_batch, device)
-                    inner_losses.append(l_in)
-
-                # Saturation check: skip outer step if NPO has saturated
-                if (self.retain_only_after_saturation
-                        and saturated_count >= self.saturation_patience):
-                    L_fgt, L_ret, r = 0.0, inner_losses[-1], 0.0
-                    total_saturated_steps += 1
+                if L_fgt < self.npo_saturation_threshold:
+                    saturated_count += 1
                 else:
-                    # Outer step: ALM(forget + retain constraint)
-                    L_fgt, L_ret, r = self.outer_step(
-                        forget_batch, retain_batch, device
-                    )
+                    saturated_count = 0
 
-                    # Track NPO saturation
-                    if L_fgt < self.npo_saturation_threshold:
-                        saturated_count += 1
-                    else:
-                        saturated_count = 0
+            if self._outer_scheduler is not None:
+                self._outer_scheduler.step()
+                self._inner_scheduler.step()
 
-                # Step LR schedulers
+            dt = time.time() - t_start
+
+            step_info = {
+                "step": t,
+                "epoch": epoch,
+                "L_fgt": L_fgt,
+                "L_ret": L_ret,
+                "r": r,
+                "lambda": self.lambda_dual,
+                "inner_loss_mean": sum(inner_losses) / len(inner_losses) if inner_losses else 0.0,
+                "saturated": saturated_count >= self.saturation_patience,
+                "dt": dt,
+            }
+            history.append(step_info)
+
+            log_every = max(1, max_outer_steps // 20)
+            if t % log_every == 0 or t == max_outer_steps - 1:
+                lr_info = ""
                 if self._outer_scheduler is not None:
-                    self._outer_scheduler.step()
-                    self._inner_scheduler.step()
-
-                dt = time.time() - t_start
-
-                step_info = {
-                    "step": global_step,
-                    "epoch": epoch,
-                    "L_fgt": L_fgt,
-                    "L_ret": L_ret,
-                    "r": r,
-                    "lambda": self.lambda_dual,
-                    "inner_loss_mean": sum(inner_losses) / len(inner_losses) if inner_losses else 0.0,
-                    "saturated": saturated_count >= self.saturation_patience,
-                    "dt": dt,
-                }
-                history.append(step_info)
-                epoch_inner_losses.extend(inner_losses)
-                epoch_fgt_losses.append(L_fgt)
-                epoch_ret_losses.append(L_ret)
-
-                # Periodic logging
-                log_every = max(1, steps_per_epoch // 10)  # ~10 logs per epoch
-                if global_step % log_every == 0 or global_step == max_outer_steps - 1:
-                    lr_info = ""
-                    if self._outer_scheduler is not None:
-                        lr_info = f" olr={self._outer_opt.param_groups[0]['lr']:.2e}"
-                    sat_info = " [SAT]" if saturated_count >= self.saturation_patience else ""
-                    logger.info(
-                        f"  [{global_step:4d}/{max_outer_steps}|e{epoch+1}] "
-                        f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
-                        f"r={r:+.4f} λ={self.lambda_dual:.3f} "
-                        f"inner={sum(inner_losses) / len(inner_losses) if inner_losses else 0.0:.4f}"
-                        f"{lr_info}{sat_info} dt={dt:.1f}s"
-                    )
-
-                global_step += 1
-
-                # Intermediate checkpoint: non-destructive merge → save → unmerge
-                if global_step in self.eval_at_steps:
-                    ckpt_dir = os.path.join(
-                        self.args.output_dir, f"step-{global_step}"
-                    )
-                    logger.info(f"  Saving intermediate checkpoint at step {global_step}...")
-                    os.makedirs(ckpt_dir, exist_ok=True)
-                    self.model.eval()
-                    # Merge LoRA into base (reversible)
-                    self.model.merge_adapter()
-                    # Extract state dict with clean key names (strip PEFT wrapper)
-                    peft_sd = self.model.base_model.model.state_dict()
-                    clean_sd = {}
-                    for key, val in peft_sd.items():
-                        clean_key = key.replace(".base_layer", "")
-                        if "lora_" in clean_key:
-                            continue
-                        clean_sd[clean_key] = val
-                    # Save as standard model (handles sharding automatically)
-                    self.model.base_model.model.save_pretrained(
-                        ckpt_dir, state_dict=clean_sd
-                    )
-                    if self.tokenizer is not None:
-                        self.tokenizer.save_pretrained(ckpt_dir)
-                    # Unmerge to restore LoRA state for continued training
-                    self.model.unmerge_adapter()
-                    self.model.train()
-                    # Save history snapshot
-                    with open(os.path.join(ckpt_dir, "lora_bial_history.json"), "w") as f:
-                        json.dump(history, f, indent=2)
-                    logger.info(f"  Checkpoint step-{global_step} saved (non-destructive).")
-
-                # Early termination: model collapsed
-                if L_ret > 10.0:
-                    logger.warning(
-                        f"  L_ret={L_ret:.1f} > 10.0 — model collapsed. "
-                        f"Stopping at step {global_step}."
-                    )
-                    break
-
-            # End of epoch summary
-            if epoch_fgt_losses:
-                n_samples_seen = (batch_idx + 1) * batch_size
+                    lr_info = f" olr={self._outer_opt.param_groups[0]['lr']:.2e}"
+                sat_info = " [SAT]" if saturated_count >= self.saturation_patience else ""
                 logger.info(
-                    f"  Epoch {epoch+1}/{num_epochs} done: "
-                    f"{batch_idx + 1} steps, ~{n_samples_seen} samples, "
-                    f"mean_fgt={sum(epoch_fgt_losses)/len(epoch_fgt_losses):.4f}, "
-                    f"mean_ret={sum(epoch_ret_losses)/len(epoch_ret_losses):.4f}, "
-                    f"saturated_steps={total_saturated_steps}, "
-                    f"dt={time.time()-epoch_start:.0f}s"
+                    f"  [{t:4d}/{max_outer_steps}|e{epoch+1}] "
+                    f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
+                    f"r={r:+.4f} λ={self.lambda_dual:.3f} "
+                    f"inner={sum(inner_losses) / len(inner_losses) if inner_losses else 0.0:.4f}"
+                    f"{lr_info}{sat_info} dt={dt:.1f}s"
                 )
+
+            global_step = t + 1
+
+            # Intermediate checkpoint
+            if global_step in self.eval_at_steps:
+                ckpt_dir = os.path.join(self.args.output_dir, f"step-{global_step}")
+                logger.info(f"  Saving intermediate checkpoint at step {global_step}...")
+                os.makedirs(ckpt_dir, exist_ok=True)
+                self.model.eval()
+                self.model.merge_adapter()
+                peft_sd = self.model.base_model.model.state_dict()
+                clean_sd = {}
+                for key, val in peft_sd.items():
+                    clean_key = key.replace(".base_layer", "")
+                    if "lora_" in clean_key:
+                        continue
+                    clean_sd[clean_key] = val
+                self.model.base_model.model.save_pretrained(ckpt_dir, state_dict=clean_sd)
+                if self.tokenizer is not None:
+                    self.tokenizer.save_pretrained(ckpt_dir)
+                self.model.unmerge_adapter()
+                self.model.train()
+                with open(os.path.join(ckpt_dir, "lora_bial_history.json"), "w") as f:
+                    json.dump(history, f, indent=2)
+                logger.info(f"  Checkpoint step-{global_step} saved.")
 
             # Per-epoch checkpoint
             if (self.checkpoint_every_epoch
-                    and epoch < num_epochs - 1
-                    and epoch_fgt_losses):
-                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-epoch{epoch+1}")
+                    and steps_per_epoch > 0
+                    and global_step % steps_per_epoch == 0
+                    and global_step < max_outer_steps):
+                ep_num = global_step // steps_per_epoch
+                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-epoch{ep_num}")
                 os.makedirs(ckpt_dir, exist_ok=True)
-                # Save LoRA state (not merged) for checkpoint
-                self.model.save_pretrained(ckpt_dir)
-                logger.info(f"  Checkpoint saved: {ckpt_dir}")
+                self.model.eval()
+                self.model.merge_adapter()
+                peft_sd = self.model.base_model.model.state_dict()
+                clean_sd = {}
+                for key, val in peft_sd.items():
+                    clean_key = key.replace(".base_layer", "")
+                    if "lora_" in clean_key:
+                        continue
+                    clean_sd[clean_key] = val
+                self.model.base_model.model.save_pretrained(ckpt_dir, state_dict=clean_sd)
+                if self.tokenizer is not None:
+                    self.tokenizer.save_pretrained(ckpt_dir)
+                self.model.unmerge_adapter()
+                self.model.train()
+                with open(os.path.join(ckpt_dir, "lora_bial_history.json"), "w") as f:
+                    json.dump(history, f, indent=2)
+                logger.info(f"  Epoch {ep_num} checkpoint saved: {ckpt_dir}")
 
-            if global_step >= max_outer_steps:
-                break
             if L_ret > 10.0:
+                logger.warning(f"  L_ret={L_ret:.1f} > 10.0 — model collapsed at step {global_step}.")
                 break
 
         # Merge LoRA into base and save

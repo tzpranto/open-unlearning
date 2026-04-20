@@ -142,7 +142,7 @@ All methods: 10 epochs, lr=1e-5, gradient checkpointing, eff_bs=32. PDU: alpha=1
 | SimNPO | 0.610 | 0.000 | 0.000 | 0.553 |
 | RMU | 0.610 | 0.000 | 0.000 | 0.766 |
 | BLURNPO | 0.538 | 0.000 | 0.000 | 0.290 |
-| PDU | ⏳ | ⏳ | ⏳ | ⏳ |
+| PDU | 0.660 | 0.000 | 0.000 | 0.030 |
 
 ## Notes
 

@@ -37,6 +37,19 @@ def grad_ascent(model, batch, device, **kwargs):
     return -outputs.loss
 
 
+def kl_to_uniform(model, batch, device, **kwargs):
+    """Entropy maximization: push model toward uniform predictions on forget data.
+    Returns -entropy so that minimizing this loss maximizes output entropy."""
+    input_ids = batch["input_ids"].to(device)
+    attention_mask = batch["attention_mask"].to(device)
+    outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+    logits = outputs.logits
+    log_probs = F.log_softmax(logits, dim=-1)
+    probs = log_probs.exp()
+    entropy = -(probs * log_probs).sum(dim=-1).mean()
+    return -entropy
+
+
 def npo(model, batch, device, ref_model=None, beta=1.0, **kwargs):
     """Negative Preference Optimization (DPO-style forget loss)."""
     if ref_model is None:
@@ -73,7 +86,7 @@ def reg_l1(model, mask_dict, gamma, device):
     reg = torch.tensor(0.0, device=device)
     for name, param in model.named_parameters():
         if name in mask_dict:
-            reg = reg + (param.abs() * mask_dict[name]).sum()
+            reg = reg + param.abs()[mask_dict[name]].sum()
     return gamma * reg
 
 
@@ -82,7 +95,7 @@ def reg_l2(model, mask_dict, gamma, device):
     reg = torch.tensor(0.0, device=device)
     for name, param in model.named_parameters():
         if name in mask_dict:
-            reg = reg + ((param ** 2) * mask_dict[name]).sum()
+            reg = reg + (param ** 2)[mask_dict[name]].sum()
     return gamma * reg
 
 
@@ -95,13 +108,14 @@ def reg_none(model, mask_dict, gamma, device):
 # Registries
 # ---------------------------------------------------------------------------
 
-AVAILABLE_FORGET_LOSSES = ["logit_margin", "grad_ascent", "npo"]
+AVAILABLE_FORGET_LOSSES = ["logit_margin", "grad_ascent", "npo", "kl_to_uniform"]
 AVAILABLE_REGULARIZATIONS = ["l1", "l2", "none"]
 
 _FORGET_LOSS_MAP = {
     "logit_margin": logit_margin,
     "grad_ascent": grad_ascent,
     "npo": npo,
+    "kl_to_uniform": kl_to_uniform,
 }
 
 _REGULARIZATION_MAP = {
