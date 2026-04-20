@@ -28,10 +28,10 @@ method_args:
   lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
 
   # Forget loss
-  forget_loss_type: npo  # npo, ga, entropy_max, focal_repr_ortho, repr_orthogonal, kl, logit_margin
+  forget_loss_type: npo  # npo, ga, entropy_max, focal_repr_ortho, focal_logit_margin, repr_orthogonal, kl, logit_margin
   npo_beta: 4.0
   ga_clip: 1.0
-  focal_gamma: 2.0  # focal exponent for focal_repr_ortho (higher = more focus on hard samples)
+  focal_gamma: 2.0  # focal exponent for focal losses (higher = more focus on hard samples)
 
   # Epoch-aware training
   # T > 0: fixed step count (Ze0 compat). T <= 0: run full epochs.

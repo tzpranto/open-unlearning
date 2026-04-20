@@ -70,7 +70,7 @@ class LoRABiAL(UnlearnTrainer):
         forget_loss_type: str = "npo",  # "npo" or "ga"
         npo_beta: float = 2.0,
         ga_clip: float = 1.0,
-        focal_gamma: float = 2.0,  # focal weighting exponent for focal_repr_ortho
+        focal_gamma: float = 2.0,
         # Epoch-aware training (new)
         lr_schedule: str = "constant",  # "constant" or "cosine"
         warmup_fraction: float = 0.0,  # fraction of total steps for warmup
@@ -326,11 +326,7 @@ class LoRABiAL(UnlearnTrainer):
         return -kl
 
     def _compute_logit_margin_loss(self, batch, device):
-        """Logit margin flattening: minimize (max_logit - mean_logit).
-
-        Pushes model output toward uniform distribution on forget data.
-        Never saturates — there's always room to flatten further.
-        """
+        """Logit margin flattening: minimize (max_logit - mean_logit)."""
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
 
@@ -339,7 +335,26 @@ class LoRABiAL(UnlearnTrainer):
         max_logits = logits.max(dim=-1)[0]
         mean_logits = logits.mean(dim=-1)
         margins = max_logits - mean_logits
-        return margins.mean()
+        mask = attention_mask.float()
+        return (margins * mask).sum() / mask.sum().clamp(min=1e-8)
+
+    def _compute_focal_logit_margin_loss(self, batch, device):
+        """Focal logit margin: upweight tokens where model is still confident."""
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        max_logits = logits.max(dim=-1)[0]
+        mean_logits = logits.mean(dim=-1)
+        margins = max_logits - mean_logits
+
+        mask = attention_mask.float()
+        margin_max = (margins * mask).amax(dim=-1, keepdim=True).clamp(min=1e-8)
+        norm_margins = (margins / margin_max).clamp(min=1e-6)
+        focal_weights = (norm_margins.detach() ** self.focal_gamma) * mask
+        weighted_sum = (focal_weights * margins).sum()
+        return weighted_sum / focal_weights.sum().clamp(min=1e-8)
 
     def _compute_entropy_max_loss(self, batch, device):
         """Entropy maximization: push model toward uniform on forget data.
@@ -402,6 +417,62 @@ class LoRABiAL(UnlearnTrainer):
         focal_weight = per_sample_sim.detach() ** self.focal_gamma
         return (focal_weight * per_sample_sim).sum() / focal_weight.sum().clamp(min=1e-8)
 
+    def _compute_per_token_repr_ortho_loss(self, forget_batch, retain_batch, device):
+        """Per-token representation orthogonality: for each forget token, find
+        its most similar retain token and push away. Much stronger gradient
+        signal than mean-pooled variant (~seq_len times more supervision)."""
+        def get_token_reprs(batch):
+            input_ids = batch["input_ids"].to(device)
+            attn = batch["attention_mask"].to(device)
+            out = self.model(input_ids=input_ids, attention_mask=attn,
+                             output_hidden_states=True)
+            h = out.hidden_states[-1]  # [B, T, D]
+            return h, attn
+
+        h_f, mask_f = get_token_reprs(forget_batch)
+        with torch.no_grad():
+            h_r, mask_r = get_token_reprs(retain_batch)
+
+        # Flatten to [N_f, D] and [N_r, D] (valid tokens only)
+        h_f_flat = h_f[mask_f.bool()]  # [N_f, D]
+        h_r_flat = h_r[mask_r.bool()].detach()  # [N_r, D]
+
+        h_f_n = F.normalize(h_f_flat, dim=-1)
+        h_r_n = F.normalize(h_r_flat, dim=-1)
+
+        # Per forget token: max similarity to any retain token
+        sim_matrix = h_f_n @ h_r_n.T  # [N_f, N_r]
+        max_sim = sim_matrix.max(dim=1)[0]  # [N_f]
+        return max_sim.mean()
+
+    def _compute_focal_per_token_repr_ortho_loss(self, forget_batch, retain_batch, device):
+        """Focal per-token repr orthogonality: upweight forget tokens still
+        similar to retain (hard to orthogonalize)."""
+        def get_token_reprs(batch):
+            input_ids = batch["input_ids"].to(device)
+            attn = batch["attention_mask"].to(device)
+            out = self.model(input_ids=input_ids, attention_mask=attn,
+                             output_hidden_states=True)
+            h = out.hidden_states[-1]
+            return h, attn
+
+        h_f, mask_f = get_token_reprs(forget_batch)
+        with torch.no_grad():
+            h_r, mask_r = get_token_reprs(retain_batch)
+
+        h_f_flat = h_f[mask_f.bool()]
+        h_r_flat = h_r[mask_r.bool()].detach()
+
+        h_f_n = F.normalize(h_f_flat, dim=-1)
+        h_r_n = F.normalize(h_r_flat, dim=-1)
+
+        sim_matrix = h_f_n @ h_r_n.T
+        max_sim = sim_matrix.max(dim=1)[0].clamp(min=0)
+
+        focal_weights = max_sim.detach() ** self.focal_gamma
+        weighted_sum = (focal_weights * max_sim).sum()
+        return weighted_sum / focal_weights.sum().clamp(min=1e-8)
+
     def _compute_forget_loss(self, batch, device, retain_batch=None):
         """Dispatch to configured forget loss."""
         if self.forget_loss_type == "npo":
@@ -412,6 +483,8 @@ class LoRABiAL(UnlearnTrainer):
             return self._compute_kl_loss(batch, device)
         elif self.forget_loss_type == "logit_margin":
             return self._compute_logit_margin_loss(batch, device)
+        elif self.forget_loss_type == "focal_logit_margin":
+            return self._compute_focal_logit_margin_loss(batch, device)
         elif self.forget_loss_type == "entropy_max":
             return self._compute_entropy_max_loss(batch, device)
         elif self.forget_loss_type == "repr_orthogonal":
@@ -420,6 +493,12 @@ class LoRABiAL(UnlearnTrainer):
         elif self.forget_loss_type == "focal_repr_ortho":
             assert retain_batch is not None, "focal_repr_ortho requires retain_batch"
             return self._compute_focal_repr_ortho_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "per_token_repr_ortho":
+            assert retain_batch is not None, "per_token_repr_ortho requires retain_batch"
+            return self._compute_per_token_repr_ortho_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "focal_per_token_repr_ortho":
+            assert retain_batch is not None, "focal_per_token_repr_ortho requires retain_batch"
+            return self._compute_focal_per_token_repr_ortho_loss(batch, retain_batch, device)
         else:
             raise ValueError(f"Unknown forget_loss_type: {self.forget_loss_type}")
 
@@ -605,11 +684,10 @@ class LoRABiAL(UnlearnTrainer):
         return inner_losses
 
     def outer_step(self, device, global_step=0):
-        """Outer step: only backprop through L_fgt. Inner loop handles retain.
+        """Outer ALM step: L_alm = L_fgt + λ·(L_ret - ε) + ρ/2·max(0, L_ret - ε)².
 
-        L_ret is computed (no_grad) for dual variable update only.
-        Each outer step accumulates gradients over gradient_accumulation_steps
-        micro-batches, using FRESH forget+retain batches per micro-batch.
+        Full ALM gradient when λ > 0 or L_ret > ε; otherwise effectively
+        forget-only (ALM terms vanish when λ=0 and constraint is satisfied).
         """
         self.model.enable_adapter_layers()
         self.model.train()
@@ -625,10 +703,12 @@ class LoRABiAL(UnlearnTrainer):
             retain_batch = self._next_retain_batch()
 
             L_fgt = self._compute_forget_loss(forget_batch, device, retain_batch=retain_batch)
-            (L_fgt / self.gradient_accumulation_steps).backward()
+            L_ret = self._compute_ce_loss(retain_batch, device)
 
-            with torch.no_grad():
-                L_ret = self._compute_ce_loss(retain_batch, device)
+            r_micro = L_ret - self.epsilon
+            r_plus = torch.clamp(r_micro, min=0.0)
+            L_alm = L_fgt + self.lambda_dual * r_micro + 0.5 * self.rho * (r_plus ** 2)
+            (L_alm / self.gradient_accumulation_steps).backward()
 
             total_L_fgt += L_fgt.item()
             total_L_ret += L_ret.item()
@@ -651,14 +731,22 @@ class LoRABiAL(UnlearnTrainer):
         )
         if use_implicit_this_step:
             lora_params = [p for p in self.model.parameters() if p.requires_grad]
-            v = torch.cat([p.grad.reshape(-1) for p in lora_params])
+            v = torch.cat([
+                p.grad.reshape(-1) if p.grad is not None
+                else torch.zeros(p.numel(), device=device)
+                for p in lora_params
+            ])
             torch.cuda.empty_cache()
 
             def _inner_loss_fn():
                 return self._compute_ce_loss(last_retain_batch, device)
 
             def _outer_loss_fn():
-                return self._compute_forget_loss(last_forget_batch, device, retain_batch=last_retain_batch)
+                l_f = self._compute_forget_loss(last_forget_batch, device, retain_batch=last_retain_batch)
+                l_r = self._compute_ce_loss(last_retain_batch, device)
+                r_t = l_r - self.epsilon
+                r_p = torch.clamp(r_t, min=0.0)
+                return l_f + self.lambda_dual * r_t + 0.5 * self.rho * (r_p ** 2)
 
             g_corr, status = self._truncated_neumann(
                 lora_params, v, _inner_loss_fn, _outer_loss_fn
@@ -834,6 +922,18 @@ class LoRABiAL(UnlearnTrainer):
                 total_saturated_steps += 1
             else:
                 L_fgt, L_ret, r = self.outer_step(device, global_step=t)
+
+                # Adaptive inner: extra recovery steps when retain spikes
+                extra_inner = 0
+                while L_ret > 2 * self.epsilon and extra_inner < self.K * 3:
+                    recovery = self.inner_loop(device)
+                    with torch.no_grad():
+                        rb = self._next_retain_batch()
+                        L_ret = self._compute_ce_loss(rb, device).item()
+                    r = L_ret - self.epsilon
+                    extra_inner += self.K
+                if extra_inner > 0:
+                    logger.info(f"  Adaptive inner: {extra_inner} extra steps, L_ret={L_ret:.4f}")
 
                 if L_fgt >= 0 and L_fgt < self.npo_saturation_threshold:
                     saturated_count += 1
