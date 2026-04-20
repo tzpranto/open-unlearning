@@ -1,5 +1,5 @@
 # @package _global_
-# LoRA-BiAL Ze0 on MUSE Books — no PerTA, entropy_max + Adam
+# LoRA-BiAL Ze0 on MUSE Books — no PerTA, logit_margin + Adam
 
 defaults:
   - override /model: Llama-2-7b-hf
@@ -60,7 +60,7 @@ trainer:
     rho: 0.1
     lambda_init: 1.0
     # Forget loss
-    forget_loss_type: entropy_max
+    forget_loss_type: logit_margin
     # Batching
     gradient_accumulation_steps: 8
     max_grad_norm: 1.0

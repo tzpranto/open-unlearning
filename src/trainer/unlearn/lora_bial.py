@@ -29,6 +29,7 @@ import os
 import json
 from typing import Optional
 
+from torch.utils.data import DataLoader
 from trainer.unlearn.base import UnlearnTrainer
 
 logger = logging.getLogger(__name__)
@@ -479,7 +480,7 @@ class LoRABiAL(UnlearnTrainer):
         hvp_flat = torch.cat([h.reshape(-1) for h in hvp_list])
         return hvp_flat * v_norm.item()
 
-    def _truncated_neumann(self, params_list, v, inner_loss_fn, alm_loss_fn):
+    def _truncated_neumann(self, params_list, v, inner_loss_fn, outer_loss_fn):
         """Truncated Neumann implicit correction.
 
         Approximates h ≈ (H_inner + μI)^{-1} v via Richardson iteration,
@@ -534,9 +535,9 @@ class LoRABiAL(UnlearnTrainer):
                 logger.warning(f"Neumann step {j}: non-finite h, fallback")
                 return v, "fallback_nonfinite"
 
-        # Outer HVP: c = H_alm(h)
+        # Outer HVP: c = H_outer(h)
         h_gpu = h.to(device) if offload else h
-        c = self._compute_hvp_fd(alm_loss_fn, params_list, h_gpu)
+        c = self._compute_hvp_fd(outer_loss_fn, params_list, h_gpu)
         g_corr = v - c
 
         # Safety: fallback if correction explodes
@@ -561,23 +562,17 @@ class LoRABiAL(UnlearnTrainer):
     # ------------------------------------------------------------------
     def _next_retain_batch(self):
         try:
-            batch = next(self._retain_iter)
+            return next(self._retain_iter)
         except StopIteration:
             self._retain_iter = iter(self._retain_dataloader)
-            batch = next(self._retain_iter)
-        if isinstance(batch, dict) and "retain" in batch:
-            batch = batch["retain"]
-        return batch
+            return next(self._retain_iter)
 
     def _next_forget_batch(self):
         try:
-            batch = next(self._forget_iter)
+            return next(self._forget_iter)
         except StopIteration:
             self._forget_iter = iter(self._forget_dataloader)
-            batch = next(self._forget_iter)
-        if isinstance(batch, dict) and "forget" in batch:
-            batch = batch["forget"]
-        return batch
+            return next(self._forget_iter)
 
     # ------------------------------------------------------------------
     # Bilevel inner and outer steps
@@ -610,8 +605,9 @@ class LoRABiAL(UnlearnTrainer):
         return inner_losses
 
     def outer_step(self, device, global_step=0):
-        """Outer ALM step with gradient accumulation, optional implicit correction.
+        """Outer step: only backprop through L_fgt. Inner loop handles retain.
 
+        L_ret is computed (no_grad) for dual variable update only.
         Each outer step accumulates gradients over gradient_accumulation_steps
         micro-batches, using FRESH forget+retain batches per micro-batch.
         """
@@ -629,11 +625,10 @@ class LoRABiAL(UnlearnTrainer):
             retain_batch = self._next_retain_batch()
 
             L_fgt = self._compute_forget_loss(forget_batch, device, retain_batch=retain_batch)
-            L_ret = self._compute_ce_loss(retain_batch, device)
+            (L_fgt / self.gradient_accumulation_steps).backward()
 
-            r_micro = L_ret - self.epsilon
-            L_alm = L_fgt + self.lambda_dual * L_ret + 0.5 * self.rho * (r_micro ** 2)
-            (L_alm / self.gradient_accumulation_steps).backward()
+            with torch.no_grad():
+                L_ret = self._compute_ce_loss(retain_batch, device)
 
             total_L_fgt += L_fgt.item()
             total_L_ret += L_ret.item()
@@ -662,14 +657,11 @@ class LoRABiAL(UnlearnTrainer):
             def _inner_loss_fn():
                 return self._compute_ce_loss(last_retain_batch, device)
 
-            def _alm_loss_fn():
-                l_f = self._compute_forget_loss(last_forget_batch, device, retain_batch=last_retain_batch)
-                l_r = self._compute_ce_loss(last_retain_batch, device)
-                r_t = l_r - self.epsilon
-                return l_f + self.lambda_dual * l_r + 0.5 * self.rho * (r_t ** 2)
+            def _outer_loss_fn():
+                return self._compute_forget_loss(last_forget_batch, device, retain_batch=last_retain_batch)
 
             g_corr, status = self._truncated_neumann(
-                lora_params, v, _inner_loss_fn, _alm_loss_fn
+                lora_params, v, _inner_loss_fn, _outer_loss_fn
             )
 
             offset = 0
@@ -681,11 +673,16 @@ class LoRABiAL(UnlearnTrainer):
             if status != "ok":
                 logger.info(f"  Implicit: {status} (using uncorrected gradient)")
 
+            # Re-clip after implicit correction (corrected gradient may exceed max_grad_norm)
+            torch.nn.utils.clip_grad_norm_(
+                [p for p in self.model.parameters() if p.requires_grad],
+                self.max_grad_norm,
+            )
+
         self._outer_opt.step()
 
-        # Dual update on averaged residual
-        r_val = max(0.0, avg_r)
-        self.lambda_dual = max(0.0, self.lambda_dual + self.rho * r_val)
+        # Dual update on averaged residual (standard ALM for inequality g(x) <= 0)
+        self.lambda_dual = max(0.0, self.lambda_dual + self.rho * avg_r)
         if self.lambda_max > 0:
             self.lambda_dual = min(self.lambda_dual, self.lambda_max)
 
@@ -713,12 +710,14 @@ class LoRABiAL(UnlearnTrainer):
         logger.info("=" * 60)
         self._wrap_with_lora()
 
-        # Create Adam optimizers for LoRA parameters
+        # Create optimizers for LoRA parameters
+        # Inner uses SGD: no momentum state to go stale between inner/outer phases.
+        # Outer uses Adam: needs adaptive LR for the harder forget+ALM objective.
         lora_params = [p for p in self.model.parameters() if p.requires_grad]
-        self._inner_opt = torch.optim.Adam(lora_params, lr=self.eta_in)
+        self._inner_opt = torch.optim.SGD(lora_params, lr=self.eta_in)
         self._outer_opt = torch.optim.Adam(lora_params, lr=self.eta_theta)
         logger.info(
-            f"Adam optimizers: inner lr={self.eta_in}, outer lr={self.eta_theta}, "
+            f"Optimizers: inner=SGD(lr={self.eta_in}), outer=Adam(lr={self.eta_theta}), "
             f"params={sum(p.numel() for p in lora_params)}"
         )
 
@@ -728,18 +727,33 @@ class LoRABiAL(UnlearnTrainer):
                 gradient_checkpointing_kwargs={"use_reentrant": False}
             )
 
-        # Data — separate iterators for inner (retain) and outer (forget+retain)
-        train_dataloader = self.get_train_dataloader()
-        self._retain_dataloader = train_dataloader
-        self._retain_iter = iter(train_dataloader)
-        self._forget_dataloader = train_dataloader
-        self._forget_iter = iter(train_dataloader)
+        # Data — separate dataloaders for forget and retain
+        combined_dataset = self.train_dataset
+        forget_ds = combined_dataset.forget
+        retain_ds = combined_dataset.retain
+        collator = self.data_collator
+        forget_dl = DataLoader(
+            forget_ds, batch_size=self.args.per_device_train_batch_size,
+            shuffle=True, collate_fn=collator, drop_last=False,
+            pin_memory=True,
+        )
+        retain_dl = DataLoader(
+            retain_ds, batch_size=self.args.per_device_train_batch_size,
+            shuffle=True, collate_fn=collator, drop_last=False,
+            pin_memory=True,
+        )
+        self._forget_dataloader = forget_dl
+        self._retain_dataloader = retain_dl
+        self._forget_iter = iter(forget_dl)
+        self._retain_iter = iter(retain_dl)
 
         batch_size = self.args.per_device_train_batch_size
         effective_bs = batch_size * self.gradient_accumulation_steps
         inner_effective_bs = batch_size * self.inner_accumulation_steps
-        micro_batches_per_epoch = len(train_dataloader)
-        steps_per_epoch = micro_batches_per_epoch // self.gradient_accumulation_steps
+        # Epoch = one pass through the forget dataset (anchor)
+        forget_micro_batches = len(self._forget_dataloader)
+        retain_micro_batches = len(self._retain_dataloader)
+        steps_per_epoch = max(1, forget_micro_batches // self.gradient_accumulation_steps)
         num_epochs = max(1, int(self.args.num_train_epochs))
 
         if self.T > 0:
@@ -772,7 +786,8 @@ class LoRABiAL(UnlearnTrainer):
         logger.info(f"  Epochs={num_epochs}, micro_bs={batch_size}, "
                      f"outer_accum={self.gradient_accumulation_steps} (eff_bs={effective_bs}), "
                      f"inner_accum={self.inner_accumulation_steps} (eff_bs={inner_effective_bs})")
-        logger.info(f"  micro_batches/epoch={micro_batches_per_epoch}, "
+        logger.info(f"  forget_batches/epoch={forget_micro_batches}, "
+                     f"retain_batches/epoch={retain_micro_batches}, "
                      f"outer_steps/epoch={steps_per_epoch}, "
                      f"max_steps={max_outer_steps}, K={self.K}")
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
@@ -827,7 +842,8 @@ class LoRABiAL(UnlearnTrainer):
 
             if self._outer_scheduler is not None:
                 self._outer_scheduler.step()
-                self._inner_scheduler.step()
+                if t >= self.inner_warmup_steps:
+                    self._inner_scheduler.step()
 
             dt = time.time() - t_start
 
