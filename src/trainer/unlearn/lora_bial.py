@@ -375,8 +375,8 @@ class LoRABiAL(UnlearnTrainer):
 
     def _compute_focal_repr_ortho_loss(self, forget_batch, retain_batch, device):
         """Focal representation orthogonality: per-sample cosine similarity
-        weighted by focal term sim^γ. Concentrates gradient on forget samples
-        still similar to retain (hard examples), ignores already-orthogonal ones."""
+        weighted by sim^γ. Concentrates gradient on forget samples still
+        similar to retain (hard-to-forget), ignores already-orthogonal ones."""
         def get_repr(batch):
             input_ids = batch["input_ids"].to(device)
             attn = batch["attention_mask"].to(device)
@@ -393,13 +393,13 @@ class LoRABiAL(UnlearnTrainer):
         h_f_n = F.normalize(h_f, dim=-1)
         h_r_n = F.normalize(h_r, dim=-1)
 
-        # Per-sample: max similarity to any retain sample
+        # Per-sample: mean similarity to retain samples
         sim = h_f_n @ h_r_n.T  # [B_f, B_r]
-        per_sample_sim = sim.max(dim=-1).values.clamp(min=0)  # [B_f], clamp negative
+        per_sample_sim = sim.mean(dim=-1).clamp(min=0)  # [B_f]
 
-        # Focal weight: hard examples (high sim) get high weight
+        # Focal weight: sim^γ (detached). High sim = hard = high weight.
         focal_weight = per_sample_sim.detach() ** self.focal_gamma
-        return (focal_weight * per_sample_sim).mean()
+        return (focal_weight * per_sample_sim).sum() / focal_weight.sum().clamp(min=1e-8)
 
     def _compute_forget_loss(self, batch, device, retain_batch=None):
         """Dispatch to configured forget loss."""
