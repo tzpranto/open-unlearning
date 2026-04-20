@@ -69,6 +69,7 @@ class LoRABiAL(UnlearnTrainer):
         forget_loss_type: str = "npo",  # "npo" or "ga"
         npo_beta: float = 2.0,
         ga_clip: float = 1.0,
+        focal_gamma: float = 2.0,  # focal weighting exponent for focal_repr_ortho
         # Epoch-aware training (new)
         lr_schedule: str = "constant",  # "constant" or "cosine"
         warmup_fraction: float = 0.0,  # fraction of total steps for warmup
@@ -121,6 +122,7 @@ class LoRABiAL(UnlearnTrainer):
         self.forget_loss_type = forget_loss_type
         self.npo_beta = npo_beta
         self.ga_clip = ga_clip
+        self.focal_gamma = focal_gamma
         self.lr_schedule = lr_schedule
         self.warmup_fraction = warmup_fraction
         self.npo_saturation_threshold = npo_saturation_threshold
@@ -371,6 +373,34 @@ class LoRABiAL(UnlearnTrainer):
         sim = h_f_n @ h_r_n.T
         return sim.mean()
 
+    def _compute_focal_repr_ortho_loss(self, forget_batch, retain_batch, device):
+        """Focal representation orthogonality: per-sample cosine similarity
+        weighted by focal term sim^γ. Concentrates gradient on forget samples
+        still similar to retain (hard examples), ignores already-orthogonal ones."""
+        def get_repr(batch):
+            input_ids = batch["input_ids"].to(device)
+            attn = batch["attention_mask"].to(device)
+            out = self.model(input_ids=input_ids, attention_mask=attn,
+                             output_hidden_states=True)
+            h = out.hidden_states[-1]
+            mask = attn.unsqueeze(-1).float()
+            return (h * mask).sum(1) / mask.sum(1).clamp(min=1)
+
+        h_f = get_repr(forget_batch)
+        with torch.no_grad():
+            h_r = get_repr(retain_batch).detach()
+
+        h_f_n = F.normalize(h_f, dim=-1)
+        h_r_n = F.normalize(h_r, dim=-1)
+
+        # Per-sample: max similarity to any retain sample
+        sim = h_f_n @ h_r_n.T  # [B_f, B_r]
+        per_sample_sim = sim.max(dim=-1).values.clamp(min=0)  # [B_f], clamp negative
+
+        # Focal weight: hard examples (high sim) get high weight
+        focal_weight = per_sample_sim.detach() ** self.focal_gamma
+        return (focal_weight * per_sample_sim).mean()
+
     def _compute_forget_loss(self, batch, device, retain_batch=None):
         """Dispatch to configured forget loss."""
         if self.forget_loss_type == "npo":
@@ -386,6 +416,9 @@ class LoRABiAL(UnlearnTrainer):
         elif self.forget_loss_type == "repr_orthogonal":
             assert retain_batch is not None, "repr_orthogonal requires retain_batch"
             return self._compute_repr_orthogonal_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "focal_repr_ortho":
+            assert retain_batch is not None, "focal_repr_ortho requires retain_batch"
+            return self._compute_focal_repr_ortho_loss(batch, retain_batch, device)
         else:
             raise ValueError(f"Unknown forget_loss_type: {self.forget_loss_type}")
 
