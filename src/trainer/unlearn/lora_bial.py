@@ -94,6 +94,7 @@ class LoRABiAL(UnlearnTrainer):
         # Batching
         gradient_accumulation_steps: int = 1,
         inner_accumulation_steps: int = 0,  # 0 = same as gradient_accumulation_steps
+        inner_warmup_steps: int = 0,  # outer-only for first N steps (K=0), then K=configured
         max_grad_norm: float = 1.0,
         **kwargs,
     ):
@@ -140,6 +141,7 @@ class LoRABiAL(UnlearnTrainer):
         self.implicit_warmup_steps = implicit_warmup_steps
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.inner_accumulation_steps = inner_accumulation_steps if inner_accumulation_steps > 0 else gradient_accumulation_steps
+        self.inner_warmup_steps = inner_warmup_steps
         self.max_grad_norm = max_grad_norm
 
         # Runtime state
@@ -746,6 +748,8 @@ class LoRABiAL(UnlearnTrainer):
         logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, "
                      f"schedule={self.lr_schedule}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
+        if self.inner_warmup_steps > 0:
+            logger.info(f"  Inner warmup: outer-only for first {self.inner_warmup_steps} steps")
         if self.perta_lambda > 0:
             logger.info(f"  PerTA: λ={self.perta_lambda}, α={self.perta_alpha}")
         if self.use_implicit:
@@ -769,8 +773,11 @@ class LoRABiAL(UnlearnTrainer):
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
-            # Inner loop: K optimizer steps, each with accum micro-batches of FRESH retain
-            inner_losses = self.inner_loop(device)
+            # Inner loop: skip during warmup to let outer establish forgetting direction
+            if t < self.inner_warmup_steps:
+                inner_losses = []
+            else:
+                inner_losses = self.inner_loop(device)
 
             # Saturation check
             if (self.retain_only_after_saturation

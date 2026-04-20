@@ -58,6 +58,7 @@ method_args:
   # Batching
   gradient_accumulation_steps: 8  # outer effective_bs = per_device_train_batch_size * this
   inner_accumulation_steps: 0     # 0 = same as gradient_accumulation_steps; set lower for weaker inner
+  inner_warmup_steps: 0           # outer-only for first N steps; lets forgetting establish before inner protects retain
   max_grad_norm: 1.0
 
 args:
