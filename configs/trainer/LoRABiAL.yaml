@@ -26,12 +26,14 @@ method_args:
   rho: 0.1
   lambda_init: 1.0
   lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
+  lambda_min: 0.1  # floor on dual variable (prevents λ→0)
 
   # Forget loss
-  forget_loss_type: npo  # npo, ga, entropy_max, focal_repr_ortho, focal_logit_margin, repr_orthogonal, kl, logit_margin
+  forget_loss_type: npo  # npo, ga, entropy_max, clamped_entropy, focal_repr_ortho, focal_logit_margin, repr_orthogonal, output_proj_repr_ortho, per_token_repr_ortho, focal_per_token_repr_ortho, kl, logit_margin
   npo_beta: 4.0
   ga_clip: 1.0
   focal_gamma: 2.0  # focal exponent for focal losses (higher = more focus on hard samples)
+  clamped_entropy_tau: 0.7  # fraction of H_max as forgetting target for clamped_entropy
 
   # Epoch-aware training
   # T > 0: fixed step count (Ze0 compat). T <= 0: run full epochs.

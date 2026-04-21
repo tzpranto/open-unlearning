@@ -66,11 +66,13 @@ class LoRABiAL(UnlearnTrainer):
         rho: float = 0.1,
         lambda_init: float = 1.0,
         lambda_max: float = 0.0,  # 0 = no cap; >0 = cap dual variable
+        lambda_min: float = 0.1,  # floor on dual variable (prevents λ→0)
         # Forget loss
         forget_loss_type: str = "npo",  # "npo" or "ga"
         npo_beta: float = 2.0,
         ga_clip: float = 1.0,
         focal_gamma: float = 2.0,
+        clamped_entropy_tau: float = 0.7,  # fraction of H_max as forgetting target
         # Epoch-aware training (new)
         lr_schedule: str = "constant",  # "constant" or "cosine"
         warmup_fraction: float = 0.0,  # fraction of total steps for warmup
@@ -124,6 +126,7 @@ class LoRABiAL(UnlearnTrainer):
         self.npo_beta = npo_beta
         self.ga_clip = ga_clip
         self.focal_gamma = focal_gamma
+        self.clamped_entropy_tau = clamped_entropy_tau
         self.lr_schedule = lr_schedule
         self.warmup_fraction = warmup_fraction
         self.npo_saturation_threshold = npo_saturation_threshold
@@ -148,6 +151,7 @@ class LoRABiAL(UnlearnTrainer):
         self.max_grad_norm = max_grad_norm
 
         # Runtime state
+        self.lambda_min = lambda_min
         self.lambda_dual = float(lambda_init)
 
     # ------------------------------------------------------------------
@@ -475,6 +479,74 @@ class LoRABiAL(UnlearnTrainer):
         weighted_sum = (focal_weights * max_sim).sum()
         return weighted_sum / focal_weights.sum().clamp(min=1e-8)
 
+    def _get_lm_head_weight(self):
+        """Get the frozen lm_head weight matrix [vocab, hidden_dim]."""
+        base = self.model
+        while hasattr(base, 'base_model'):
+            base = base.base_model
+        while hasattr(base, 'model') and not hasattr(base, 'lm_head'):
+            base = base.model
+        return base.lm_head.weight.detach()
+
+    def _compute_output_proj_repr_ortho_loss(self, forget_batch, retain_batch, device):
+        """Output-projected representation orthogonality: mean-pool hidden
+        states to [B, D], then project through the frozen lm_head to [B, V],
+        and compute cosine similarity in the V-dim logit space. This forces
+        orthogonality in output-relevant directions only, preventing the LoRA
+        from exploiting the lm_head's null space."""
+        W = self._get_lm_head_weight()  # [V, D], detached
+
+        def get_mean_repr(batch):
+            input_ids = batch["input_ids"].to(device)
+            attn = batch["attention_mask"].to(device)
+            out = self.model(input_ids=input_ids, attention_mask=attn,
+                             output_hidden_states=True)
+            h = out.hidden_states[-1]  # [B, T, D]
+            mask = attn.unsqueeze(-1).float()
+            return (h * mask).sum(1) / mask.sum(1).clamp(min=1)  # [B, D]
+
+        h_f = get_mean_repr(forget_batch)  # [B_f, D]
+        with torch.no_grad():
+            h_r = get_mean_repr(retain_batch).detach()  # [B_r, D]
+
+        # Project mean representations through lm_head: [B, D] @ [D, V] -> [B, V]
+        proj_f = h_f @ W.T  # [B_f, V] — small: 2 x 32000 x 2 bytes = 128KB
+        proj_r = h_r @ W.T  # [B_r, V]
+
+        proj_f_n = F.normalize(proj_f, dim=-1)
+        proj_r_n = F.normalize(proj_r, dim=-1)
+        sim = proj_f_n @ proj_r_n.T  # [B_f, B_r]
+        return sim.mean()
+
+    def _compute_clamped_entropy_loss(self, batch, device):
+        """Clamped entropy: maximize output entropy up to a target threshold.
+        Once a token is 'forgotten enough' (entropy > target), gradient stops.
+        Bounded, self-stabilizing, output-level forgetting."""
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        logits = outputs.logits
+        log_probs = F.log_softmax(logits, dim=-1)
+        probs = log_probs.exp()
+        H = -(probs * log_probs).sum(dim=-1)  # [B, T] per-token entropy
+
+        V = logits.shape[-1]
+        H_max = torch.log(torch.tensor(float(V), device=device))
+        target = self.clamped_entropy_tau * H_max
+
+        # ReLU: loss only for tokens below target entropy
+        per_token_loss = torch.clamp(target - H, min=0.0)
+        mask = attention_mask.float()
+        return (per_token_loss * mask).sum() / mask.sum().clamp(min=1)
+
+    def _compute_repr_ortho_plus_entropy_loss(self, forget_batch, retain_batch, device):
+        """Hybrid: repr_orthogonal (representation divergence) + clamped_entropy
+        (output suppression). Combines stable dynamics from repr_ortho with
+        direct generation-level forgetting from clamped_entropy."""
+        L_repr = self._compute_repr_orthogonal_loss(forget_batch, retain_batch, device)
+        L_entropy = self._compute_clamped_entropy_loss(forget_batch, device)
+        return 0.5 * L_repr + 0.5 * L_entropy
+
     def _compute_forget_loss(self, batch, device, retain_batch=None):
         """Dispatch to configured forget loss."""
         if self.forget_loss_type == "npo":
@@ -501,6 +573,20 @@ class LoRABiAL(UnlearnTrainer):
         elif self.forget_loss_type == "focal_per_token_repr_ortho":
             assert retain_batch is not None, "focal_per_token_repr_ortho requires retain_batch"
             return self._compute_focal_per_token_repr_ortho_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "output_proj_repr_ortho":
+            assert retain_batch is not None, "output_proj_repr_ortho requires retain_batch"
+            return self._compute_output_proj_repr_ortho_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "clamped_entropy":
+            return self._compute_clamped_entropy_loss(batch, device)
+        elif self.forget_loss_type == "repr_ortho_plus_entropy":
+            assert retain_batch is not None, "repr_ortho_plus_entropy requires retain_batch"
+            return self._compute_repr_ortho_plus_entropy_loss(batch, retain_batch, device)
+        elif self.forget_loss_type == "two_phase":
+            if self._global_step < self._steps_per_epoch:
+                assert retain_batch is not None, "two_phase requires retain_batch"
+                return self._compute_repr_orthogonal_loss(batch, retain_batch, device)
+            else:
+                return self._compute_logit_margin_loss(batch, device)
         else:
             raise ValueError(f"Unknown forget_loss_type: {self.forget_loss_type}")
 
@@ -771,8 +857,12 @@ class LoRABiAL(UnlearnTrainer):
 
         self._outer_opt.step()
 
-        # Dual update on averaged residual (standard ALM for inequality g(x) <= 0)
-        self.lambda_dual = max(0.0, self.lambda_dual + self.rho * avg_r)
+        # Asymmetric dual update: fast increase on violation, slow decrease when satisfied
+        if avg_r > 0:
+            self.lambda_dual += self.rho * avg_r
+        else:
+            self.lambda_dual += 0.1 * self.rho * avg_r
+        self.lambda_dual = max(self.lambda_min, self.lambda_dual)
         if self.lambda_max > 0:
             self.lambda_dual = min(self.lambda_dual, self.lambda_max)
 
@@ -844,6 +934,8 @@ class LoRABiAL(UnlearnTrainer):
         forget_micro_batches = len(self._forget_dataloader)
         retain_micro_batches = len(self._retain_dataloader)
         steps_per_epoch = max(1, forget_micro_batches // self.gradient_accumulation_steps)
+        self._steps_per_epoch = steps_per_epoch
+        self._global_step = 0
         num_epochs = max(1, int(self.args.num_train_epochs))
 
         if self.T > 0:
@@ -908,6 +1000,7 @@ class LoRABiAL(UnlearnTrainer):
         total_saturated_steps = 0
 
         for t in range(max_outer_steps):
+            self._global_step = t
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 

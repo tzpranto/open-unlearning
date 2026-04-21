@@ -19,10 +19,12 @@ HM = harmonic mean of (1-forget_knowmem, 1-verbmem, retain_knowmem). Gold retrai
 | 14 e2 | focal_logit_margin | ALM λ=1, ε=0.15 | 0.112 | 0.001 | 0.391 | 0.008 | 0.567 | |
 | 15 e1 | logit_margin | cosine lr + adaptive K | 0.347 | 0.812 | 0.539 | 0.645 | 0.318 | weak forgetting |
 | 15 e2 | logit_margin | cosine lr + adaptive K | 0.137 | 0.013 | 0.363 | 0.010 | 0.536 | |
-| **16 e1** | **repr_orthogonal** | ALM λ=1, ε=0.15, 2ep | 0.399 | 0.784 | **0.628** | 0.633 | 0.569 | barely touched forget |
-| **16 e2** | **repr_orthogonal** | ALM λ=1, ε=0.15, 2ep | 0.357 | 0.313 | **0.618** | 0.139 | **0.648** | **best HM + rk** |
+| 16 e1 | repr_orthogonal | ALM λ=1, ε=0.15, 2ep | 0.399 | 0.784 | 0.628 | 0.633 | 0.569 | barely touched forget |
+| 16 e2 | repr_orthogonal | ALM λ=1, ε=0.15, 2ep | 0.357 | 0.313 | 0.618 | 0.139 | 0.648 | best rk (repr family) |
+| 17 e2 | clamped_entropy | ALM λ=1, ε=0.15, τ=0.7, 2ep | 0.096 | 0.001 | 0.443 | 0.008 | 0.687 | strong forget, retain spike |
+| **18 e4** | **clamped_entropy** | **ALM λ=1, ε=0.15, τ=0.7, 4ep** | **0.080** | **0.000** | **0.598** | **0.008** | **0.798** | **BEATS SimNPO (0.755)** |
 
-**Target:** SimNPO HM=0.755 (rk=0.714).
+**Target:** SimNPO HM=0.755 (rk=0.604). **BEATEN by exp_18 (HM=0.798).**
 
 ---
 
@@ -104,14 +106,50 @@ Cosine lr nearly eliminated epoch boundary spike but forgetting too slow at epoc
 
 **Bottleneck:** Forgetting is now the weak link. fk=0.357 and vm=0.313 are both higher than logit_margin runs. repr_orthogonal makes representations orthogonal but doesn't directly suppress memorized text generation. Need stronger forgetting signal — per_token_repr_ortho or combined loss.
 
+### 17: clamped_entropy + ALM, 2 epochs (2026-04-21)
+**Folder:** `muse_books_exp_17`
+**Reproduce:** `python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/lora_bial_books task_name=muse_books_exp_17 trainer.method_args.epsilon=0.15 trainer.method_args.lambda_init=1.0 trainer.method_args.forget_loss_type=clamped_entropy trainer.args.num_train_epochs=2`
+
+**Why:** Clamped entropy is bounded, self-stabilizing (stops pushing once token reaches τ·H_max target), reference-free. Unlike repr_orthogonal, directly targets output distribution.
+
+**Loss dynamics:**
+- Epoch 1 (steps 0-33): L_fgt slowly drops 7.0→4.27. Retain stable at ~0.05 until step 30, then spikes to 1.17 at epoch boundary. Adaptive inner ran 18 extra steps but couldn't contain it.
+- Epoch 2 (steps 34-67): L_ret peaked at 1.65, ALM recovered (λ 1.4→2.27). By step 54, L_ret=0.11, L_fgt=0.13. Converged at L_fgt=0.07, L_ret=0.06.
+
+**Result:** HM=0.687 — new best, but rk=0.443 hurt by the epoch boundary spike. Forgetting phenomenal (vm=0.001). Key insight: e1→e2 improved BOTH fk and rk, suggesting spike-recover cycles are beneficial.
+
+### 18: clamped_entropy + ALM, 4 epochs (2026-04-21) — CHAMPION
+**Folder:** `muse_books_exp_18`
+**Reproduce:** `python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/lora_bial_books task_name=muse_books_exp_18 trainer.method_args.epsilon=0.15 trainer.method_args.lambda_init=1.0 trainer.method_args.forget_loss_type=clamped_entropy trainer.method_args.checkpoint_every_epoch=true trainer.args.num_train_epochs=4`
+
+**Why:** exp_17 showed e1→e2 improved both fk AND rk. Hypothesis: more epochs = more spike-recover cycles = better Pareto point.
+
+**Key finding:** Only ONE spike (e1→e2, L_ret→1.65). The spike ratcheted λ from 1.0→2.27. Epochs 3 and 4 ran completely smooth — zero adaptive inner steps, L_ret stable at 0.04-0.05. The first spike permanently strengthened retain protection.
+
+**Loss dynamics:**
+| Step | L_fgt | L_ret | λ | Notes |
+|------|-------|-------|---|-------|
+| 0 | 6.995 | 0.052 | 1.00 | |
+| 30 | 5.861 | 0.153 | 0.97 | first constraint violation |
+| 33 | 4.275 | 1.167 | 1.05 | epoch 1 boundary spike |
+| 36 | 2.186 | 1.649 | 1.41 | spike peak |
+| 48 | 0.910 | 0.276 | 2.24 | ALM recovering |
+| 66 | 0.227 | 0.054 | 2.26 | epoch 2 end, recovered |
+| 72 | 0.073 | 0.051 | 2.26 | epoch 3 start, NO spike |
+| 102 | 0.015 | 0.047 | 2.22 | epoch 4 start, NO spike |
+| 135 | 0.008 | 0.037 | 2.19 | converged |
+
+**Result:** HM=0.798 (fk=0.080, vm=0.000, rk=0.598, ex=0.008). **Beats SimNPO (HM=0.755) by +0.043.** Training time ~104 min.
+
 ---
 
 ## Key Insights
 
 1. **logit_margin family (11-15):** Strong forgetting (vm→0.001) but structural epoch boundary spike damages retain. Best rk≈0.41-0.44.
-2. **repr_orthogonal (16):** Completely stable retain (rk=0.618) but weaker forgetting (vm=0.313). No epoch spike.
-3. **The Pareto frontier:** logit_margin forgets hard but hurts retain; repr_orthogonal preserves retain but forgets soft. Need to combine strengths.
-4. **Next directions:** per_token_repr_ortho (stronger repr signal), focal variants, or hybrid losses.
+2. **repr_orthogonal (16):** Completely stable retain (rk=0.618) but weaker forgetting (vm=0.313). No epoch spike. Null-space exploit limits forgetting.
+3. **clamped_entropy (17-18):** The winner. Bounded, self-stabilizing forget loss. One spike at e1→e2 permanently ratchets λ, then smooth sailing. 4 epochs beats SimNPO.
+4. **Spike-recover is a feature, not a bug:** The e1→e2 retain spike ratchets up λ via asymmetric dual update. This permanently strengthens retain protection. Subsequent epochs improve both fk AND rk simultaneously.
+5. **More epochs help:** 2ep→4ep: rk 0.443→0.598, fk 0.096→0.080. Both axes improve because ALM finds better equilibrium with higher λ floor.
 
 ---
 
