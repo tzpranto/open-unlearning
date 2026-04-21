@@ -365,7 +365,9 @@ class LoRABiAL(UnlearnTrainer):
         logits = outputs.logits
         log_probs = F.log_softmax(logits, dim=-1)
         probs = log_probs.exp()
-        entropy = -(probs * log_probs).sum(dim=-1).mean()
+        token_entropy = -(probs * log_probs).sum(dim=-1)
+        mask = attention_mask.float()
+        entropy = (token_entropy * mask).sum() / mask.sum().clamp(min=1)
         return -entropy
 
     def _compute_repr_orthogonal_loss(self, forget_batch, retain_batch, device):
