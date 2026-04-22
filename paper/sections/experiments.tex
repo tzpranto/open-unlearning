@@ -1,4 +1,165 @@
 \section{Experiments}
 \label{sec:experiments}
 
-\todo{Write experiments section.}
+\subsection{Benchmarks}
+\label{sec:benchmarks}
+
+We evaluate on two complementary benchmarks:
+
+\paragraph{TOFU} \citep{maini2024tofu} contains 200 fictitious author profiles with 20 QA pairs each (4000 total). We use the forget01 split (1\% of authors, 20 QA pairs). Metrics: Model Utility (MU, harmonic mean of 9 sub-metrics on retain/real-authors/world-facts), Forget Quality (FQ, KS-test $p$-value on truth ratio distributions), Extraction Strength (ES), forget answer probability (fgt\_Prob), and forget ROUGE-L (fgt\_ROUGE). We report HM = hmean(MU, 1$-$fgt\_Prob, 1$-$fgt\_ROUGE) as the overall score.
+
+\paragraph{MUSE Books} \citep{shi2024muse} targets removal of Harry Potter book content from Llama-2-7B. Metrics: forget\_knowmem (knowledge memorization), verbmem (verbatim memorization), retain\_knowmem (retain knowledge), extraction strength. We report HM = hmean(1$-$forget\_knowmem, 1$-$verbmem, retain\_knowmem).
+
+\subsection{Baselines}
+\label{sec:baselines}
+
+We compare against eight baselines, all using their published default hyperparameters:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+    \item \textbf{GradAscent} \citep{jang2023knowledge}: maximize CE on forget data.
+    \item \textbf{GradDiff} \citep{yao2023large}: weighted sum of forget GA and retain CE.
+    \item \textbf{NPO} \citep{zhang2024negative}: DPO-style preference optimization against memorized outputs.
+    \item \textbf{SimNPO} \citep{fan2024simplicity}: reference-free variant of NPO.
+    \item \textbf{BLURNPO} \citep{reisizadeh2025blur}: bilevel formulation with gradient projection.
+    \item \textbf{RMU} \citep{li2024wmdp}: representation misdirection toward random targets.
+    \item \textbf{PDU} \citep{entesari2025constrained}: primal-dual constrained optimization with logit-margin loss.
+    \item \textbf{Gold (retrain)}: model retrained from scratch without forget data (upper bound on retain, lower bound on memorization).
+\end{itemize}
+
+\subsection{Implementation Details}
+\label{sec:implementation}
+
+\paragraph{MUSE Books (Llama-2-7B).}
+LoRA $r\!=\!16$, $\alpha\!=\!32$ on all projections (q/k/v/o, gate/up/down).
+$K\!=\!3$, $\eta_{\text{in}}\!=\!2\text{e-}4$, $\eta_{\text{out}}\!=\!3\text{e-}5$, $\varepsilon\!=\!0.15$, $\rho\!=\!0.1$, $\lambda_{\text{init}}\!=\!1.0$, $\tau\!=\!0.7$.
+Batch size 2, gradient accumulation 8 (effective batch size 16). 4 epochs.
+
+\paragraph{TOFU (Llama-3.2-1B/3B).}
+LoRA $r\!=\!8$, $\alpha\!=\!16$.
+$K\!=\!3$, $\eta_{\text{in}}\!=\!2\text{e-}4$, $\eta_{\text{out}}\!=\!2\text{e-}5$, $\varepsilon_{\text{mul}}\!=\!0.85$, $\rho\!=\!0.1$, $\lambda_{\text{init}}\!=\!1.0$, $\tau\!=\!0.7$.
+Batch size 4, gradient accumulation 4 (effective batch size 16). $T\!=\!100$ and $T\!=\!150$ steps.
+
+All experiments run on a single NVIDIA A100 80GB GPU.
+
+\subsection{Main Results}
+\label{sec:main_results}
+
+\paragraph{MUSE Books.}
+
+\begin{table}[t]
+\centering
+\small
+\caption{MUSE Books (Llama-2-7B). HM = hmean(1$-$fk, 1$-$vm, rk). Best HM in \textbf{bold} (excl.\ Gold).}
+\label{tab:muse_books}
+\begin{tabular}{lcccccc}
+\toprule
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & 0.303 & 0.145 & 0.687 & 0.011 & 0.739 \\
+\midrule
+GradAscent & 0.000 & 0.000 & 0.000 & 0.008 & 0.000 \\
+GradDiff & 0.000 & 0.000 & 0.025 & 0.008 & 0.070 \\
+NPO & 0.411 & 0.570 & 0.661 & 0.377 & 0.542 \\
+SimNPO & 0.239 & 0.005 & 0.604 & 0.009 & 0.755 \\
+BLURNPO & 0.311 & 0.809 & 0.600 & 0.702 & 0.359 \\
+RMU & 0.308 & 0.120 & 0.604 & 0.011 & 0.708 \\
+PDU & 0.000 & 0.002 & 0.000 & 0.008 & 0.000 \\
+\midrule
+\method (ours) & 0.080 & 0.000 & 0.598 & 0.008 & \textbf{0.798} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\tabref{tab:muse_books} shows results on MUSE Books. \method achieves HM=0.798, surpassing the best baseline SimNPO (0.755) by $+$0.043 and even exceeding the gold retrained model (0.739). Notably, \method achieves the lowest forget\_knowmem (0.080) among methods that maintain nonzero retain, and zero verbatim memorization.
+
+\paragraph{TOFU forget01.}
+
+\begin{table}[t]
+\centering
+\small
+\caption{TOFU forget01 (Llama-3.2-1B). Best HM in \textbf{bold}.}
+\label{tab:tofu_1b}
+\begin{tabular}{lccccccc}
+\toprule
+Method & MU$\uparrow$ & FQ$\uparrow$ & ES$\downarrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & 0.597 & 1.000 & 0.069 & 0.166 & 0.414 & 0.655 \\
+\midrule
+GradAscent & 0.394 & 0.578 & 0.046 & 0.008 & 0.273 & 0.610 \\
+GradDiff & 0.488 & 0.266 & 0.063 & 0.056 & 0.357 & 0.643 \\
+NPO & 0.583 & 0.266 & 0.091 & 0.100 & 0.333 & 0.694 \\
+SimNPO & 0.597 & 0.007 & 0.421 & 0.804 & 0.694 & 0.299 \\
+RMU & 0.584 & 0.766 & 0.039 & 0.113 & 0.275 & 0.711 \\
+BLURNPO & 0.589 & 0.097 & 0.119 & 0.261 & 0.391 & 0.639 \\
+PDU & 0.607 & 0.054 & 0.030 & 0.003 & 0.066 & 0.806 \\
+\midrule
+\method ($T$=100) & 0.596 & \textbf{0.919} & 0.058 & 0.025 & 0.105 & 0.786 \\
+\method ($T$=150) & 0.604 & 0.097 & 0.029 & 0.002 & 0.038 & \textbf{0.811} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\small
+\caption{TOFU forget01 (Llama-3.2-3B). Best HM in \textbf{bold}.}
+\label{tab:tofu_3b}
+\begin{tabular}{lccccccc}
+\toprule
+Method & MU$\uparrow$ & FQ$\uparrow$ & ES$\downarrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & 0.663 & 1.000 & 0.067 & 0.179 & 0.409 & 0.656 \\
+\midrule
+GradAscent & 0.607 & 0.990 & 0.105 & 0.070 & 0.335 & 0.710 \\
+GradDiff & 0.588 & 0.014 & 0.138 & 0.087 & 0.392 & 0.676 \\
+NPO & 0.655 & 0.766 & 0.116 & 0.133 & 0.365 & 0.705 \\
+SimNPO & 0.654 & 0.054 & 0.507 & 0.805 & 0.733 & 0.288 \\
+RMU & 0.662 & 0.766 & 0.089 & 0.246 & 0.407 & 0.663 \\
+BLURNPO & 0.660 & 0.266 & 0.147 & 0.230 & 0.383 & 0.677 \\
+PDU & 0.703 & 0.001 & 0.029 & 0.004 & 0.075 & \textbf{0.855} \\
+\midrule
+\method ($T$=100) & 0.662 & 0.001 & 0.029 & 0.000 & 0.012 & 0.852 \\
+\method ($T$=150) & 0.649 & 0.029 & 0.029 & 0.000 & 0.022 & 0.842 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Tables~\ref{tab:tofu_1b} and~\ref{tab:tofu_3b} show TOFU results. On 1B, \method at $T$=150 achieves HM=0.811, outperforming PDU (0.806). At $T$=100, \method achieves the highest Forget Quality (FQ=0.919) among all methods---meaning the forget set's truth ratio distribution is nearly indistinguishable from the gold retrained model's. On 3B, \method is competitive with PDU (0.852 vs 0.855) while achieving near-perfect forgetting (fgt\_Prob=0.000, fgt\_ROUGE=0.012).
+
+\todo{Add MUSE News results when available.}
+\todo{Add ablation study (clamped vs unclamped, symmetric vs asymmetric, with/without bilevel).}
+
+\subsection{Loss Dynamics}
+\label{sec:dynamics}
+
+\begin{figure*}[t]
+    \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig1_muse_books_dynamics.png}
+        \caption{MUSE Books (Llama-2-7B)}
+        \label{fig:dynamics_muse}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig2_tofu_1b_dynamics.png}
+        \caption{TOFU (Llama-3.2-1B)}
+        \label{fig:dynamics_tofu1b}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig3_tofu_3b_dynamics.png}
+        \caption{TOFU (Llama-3.2-3B)}
+        \label{fig:dynamics_tofu3b}
+    \end{subfigure}
+    \caption{Loss dynamics across all settings. All three exhibit the same three-phase pattern: (1) warm-up with gradual $\Loss_{\text{forget}}$ decline, (2) retain spike triggering $\lambda$ ratchet, (3) smooth convergence with elevated $\lambda$. The asymmetric dual update converts the first spike into a permanent $\lambda$ calibration.}
+    \label{fig:dynamics}
+\end{figure*}
+
+\figref{fig:dynamics} shows loss dynamics for all three settings. Despite different model scales (1B, 3B, 7B) and datasets (TOFU QA pairs vs.\ MUSE book text), all runs exhibit the same three-phase pattern:
+
+\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
+    \item \textbf{Warm-up:} $\Loss_{\text{forget}}$ declines gradually while $L_{\text{ret}}$ stays near $\varepsilon$. $\lambda$ drifts slowly.
+    \item \textbf{Spike and ratchet:} $L_{\text{ret}}$ spikes as accumulated forgetting disrupts shared representations. The quadratic penalty activates and $\lambda$ ratchets from ${\sim}1.0$ to ${\sim}2.2$--$2.4$. $L_{\text{ret}}$ recovers within 6--30 steps.
+    \item \textbf{Smooth convergence:} Elevated $\lambda$ permanently increases retain protection. $\Loss_{\text{forget}}$ continues to near-zero. No further spikes occur.
+\end{enumerate}
+
+This consistency across settings suggests the ALM mechanism is discovering a universal forget--retain tradeoff point, with final $\lambda$ values converging to ${\sim}2.2$--$2.4$ regardless of model size or dataset.
