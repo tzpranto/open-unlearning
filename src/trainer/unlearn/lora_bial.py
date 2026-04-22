@@ -254,17 +254,19 @@ class LoRABiAL(UnlearnTrainer):
             g_fgt_flat = torch.cat([g.reshape(-1) for g in g_fgt_accum])
             g_ret_flat = torch.cat([g.reshape(-1) for g in g_ret_accum])
             dot = (g_fgt_flat * g_ret_flat).sum()
-            g_ret_norm_sq = g_ret_flat.norm() ** 2 + 1e-12
+            g_fgt_norm_sq = g_fgt_flat.norm() ** 2 + 1e-12
             self._pcgrad_cos = (dot / (g_fgt_flat.norm() * g_ret_flat.norm().clamp(min=1e-12))).item()
 
+            # Project RETAIN gradient orthogonal to forget — retain recovery
+            # can't undo forgetting, but forget keeps full gradient strength
             if dot < 0:
-                g_fgt_proj = g_fgt_flat - (dot / g_ret_norm_sq) * g_ret_flat
+                g_ret_proj = g_ret_flat - (dot / g_fgt_norm_sq) * g_fgt_flat
             else:
-                g_fgt_proj = g_fgt_flat
+                g_ret_proj = g_ret_flat
 
             r_plus = max(0.0, avg_r)
             alm_weight = self.lambda_dual + self.rho * r_plus
-            g_combined = g_fgt_proj + alm_weight * g_ret_flat
+            g_combined = g_fgt_flat + alm_weight * g_ret_proj
 
             self._outer_opt.zero_grad()
             offset = 0
@@ -273,7 +275,7 @@ class LoRABiAL(UnlearnTrainer):
                 p.grad = g_combined[offset:offset + n].reshape(p.shape).to(p.dtype)
                 offset += n
 
-            del g_fgt_accum, g_ret_accum, g_fgt_flat, g_ret_flat, g_fgt_proj, g_combined
+            del g_fgt_accum, g_ret_accum, g_fgt_flat, g_ret_flat, g_ret_proj, g_combined
         else:
             for _ in range(self.gradient_accumulation_steps):
                 forget_batch = self._next_forget_batch()
