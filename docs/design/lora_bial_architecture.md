@@ -63,7 +63,9 @@ if L_retain > ε:     λ ← λ + ρ·(L_retain - ε)       # fast ratchet
 else:                 λ ← λ + 0.1·ρ·(L_retain - ε)   # slow decay
 ```
 
-Violations ratchet λ up quickly; satisfaction decays it slowly. Once a retain spike occurs, the system permanently increases retain protection.
+The asymmetry encodes a core insight about unlearning stability. During forgetting, the outer loop pushes the model away from memorized data, which inevitably perturbs shared representations and temporarily degrades retain performance. With symmetric updates, λ drops back quickly once retain recovers — effectively erasing the system's memory that retain was recently in danger. The next aggressive forgetting step then triggers another spike, another λ ratchet, another recovery, creating oscillations.
+
+With asymmetric updates, once a retain violation drives λ from 1.0 to 2.3, the slow decay means λ might only relax to ~2.1 over the remaining training. The outer objective permanently shifts: the `λ·(L_ret - ε)` term now weights retain ~2× higher than at initialization, so subsequent forgetting steps are gentler. The system learns the correct forget-retain tradeoff from the first spike and holds it, rather than rediscovering it every epoch.
 
 **Setting ε (auto-epsilon).** Rather than hand-tuning an absolute threshold, ε is set as a multiplier on the model's initial retain loss. Before the training loop begins, we run one inner loop (K SGD steps on retain data) and average the per-step losses to get `L_ret_baseline`. Then:
 
@@ -113,6 +115,24 @@ Where:
 1. **Bounded loss:** Each token contributes at most `τ·H_max` to the sum, so `L_forget ∈ [0, τ·H_max]`. No arbitrarily large gradients — the worst case is bounded. This is critical for the bilevel setup: the inner loop needs the outer perturbation to be predictably sized so K=3 steps suffice for repair.
 2. **Self-stabilizing:** As forgetting succeeds, tokens progressively cross the τ·H_max threshold and drop out. The effective batch size of "active" tokens shrinks automatically. Early in training most tokens are active (low entropy on memorized data); late in training, only the stubbornest tokens remain. The gradient naturally decays without any explicit scheduling.
 3. **Reference-free:** Only requires a forward pass through the current model. No base model logits needed (unlike NPO which needs reference logits from the frozen model). This halves the compute per outer step.
+
+**Token-level example.** Consider the forget sequence `"Harry Potter is a wizard who attends Hogwarts"`. The loss is computed independently at each position. At the start of training (model still memorized):
+
+| Position | Context | Model predicts | p(top) | H(t) | τ·H_max | per-token loss | Status |
+|----------|---------|---------------|--------|------|---------|----------------|--------|
+| 1 | "Harry" | "Potter" | 0.98 | 0.12 | 7.26 | 7.14 | Active — memorized |
+| 3 | "is" | "a" | 0.15 | 6.80 | 7.26 | 0.46 | Active — mildly certain |
+| 5 | "wizard" | "who" | 0.04 | 7.50 | 7.26 | 0.00 | Dropped out — already uncertain |
+
+After 100 steps of training:
+
+| Position | Context | p(top) | H(t) | per-token loss | Status |
+|----------|---------|--------|------|----------------|--------|
+| 1 | "Harry" | 0.06 | 7.40 | 0.00 | Dropped out — forgotten |
+| 3 | "is" | 0.09 | 7.90 | 0.00 | Dropped out |
+| 5 | "wizard" | 0.03 | 8.10 | 0.00 | Still out |
+
+All tokens crossed the τ·H_max threshold — this sequence contributes zero gradient. The loss now focuses entirely on whatever sequences (or tokens within sequences) the model still remembers. Proper nouns and rare factual associations (e.g., specific dates, spell names) tend to be the last tokens to cross the threshold.
 
 **Implementation** ([lora_bial_losses.py:45-56](src/trainer/unlearn/lora_bial_losses.py#L45-L56)):
 
