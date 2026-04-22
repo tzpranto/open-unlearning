@@ -65,6 +65,14 @@ else:                 λ ← λ + 0.1·ρ·(L_retain - ε)   # slow decay
 
 Violations ratchet λ up quickly; satisfaction decays it slowly. Once a retain spike occurs, the system permanently increases retain protection.
 
+**Setting ε (auto-epsilon).** Rather than hand-tuning an absolute threshold, ε is set as a multiplier on the model's initial retain loss. Before the training loop begins, we run one inner loop (K SGD steps on retain data) and average the per-step losses to get `L_ret_baseline`. Then:
+
+```
+ε = ε_mul · L_ret_baseline
+```
+
+For example, with `ε_mul = 0.85` and an initial retain loss of 0.18, we get `ε = 0.153`. This adapts automatically to the model and dataset — a model with higher baseline retain loss gets a proportionally larger threshold, so the constraint is always calibrated relative to the model's starting point rather than requiring manual tuning per benchmark.
+
 ### 1.4 Clamped Entropy Loss
 
 A memorized model produces sharp, low-entropy next-token distributions on memorized sequences. Forgetting means spreading these distributions out — making the model uncertain about the next token on forget data.
@@ -145,7 +153,7 @@ Algorithm: LoRA-BiAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Input: target model M, forget set D_f, retain set D_r
-Hyperparams: K, η_in, η_out, ε, ρ, λ_init, τ
+Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 
 1. SETUP
    Apply LoRA adapters to M (r=16, α=32, all projections)
@@ -153,6 +161,11 @@ Hyperparams: K, η_in, η_out, ε, ρ, λ_init, τ
    inner_opt ← SGD(θ, lr=η_in)
    outer_opt ← Adam(θ, lr=η_out)
    λ ← λ_init
+
+   ┌─── AUTO-EPSILON ──────────────────────────────────┐
+   │  Run K inner SGD steps on retain, record losses   │
+   │  ε ← ε_mul · mean(inner_losses)                  │
+   └───────────────────────────────────────────────────┘
 
 2. TRAINING LOOP (for t = 1, ..., T):
 

@@ -457,7 +457,8 @@ class LoRABiAL(UnlearnTrainer):
                      f"outer_steps/epoch={steps_per_epoch}, "
                      f"max_steps={max_outer_steps}, K={self.K}")
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
-        logger.info(f"  ALM: ε={self.epsilon}, ρ={self.rho}, λ_init={self.lambda_init}"
+        eps_str = f"ε_mul={self.epsilon_multiplier}" if self.epsilon_multiplier > 0 else f"ε={self.epsilon}"
+        logger.info(f"  ALM: {eps_str}, ρ={self.rho}, λ_init={self.lambda_init}"
                      f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
         logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, schedule={self.lr_schedule}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
@@ -475,26 +476,28 @@ class LoRABiAL(UnlearnTrainer):
         history = []
         log_every = max(1, max_outer_steps // 20)
 
+        # Auto-epsilon: set ε from first inner loop's average retain loss
+        if self.epsilon_multiplier > 0:
+            inner_losses = self.inner_loop(device)
+            baseline_ret = sum(inner_losses) / len(inner_losses)
+            self.epsilon = self.epsilon_multiplier * baseline_ret
+            logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
+                        f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
+
         for t in range(max_outer_steps):
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
-            # Inner loop
-            if t < self.inner_warmup_steps:
+            # Inner loop (skip if auto-ε already ran it on step 0)
+            if t == 0 and self.epsilon_multiplier > 0:
+                pass
+            elif t < self.inner_warmup_steps:
                 inner_losses = []
             else:
                 inner_losses = self.inner_loop(device)
 
             # Outer step
             L_fgt, L_ret, r = self.outer_step(device, global_step=t)
-
-            # Auto-epsilon at step 0: recalibrate ε and undo the stale dual update
-            if t == 0 and self.epsilon_multiplier > 0:
-                self.epsilon = self.epsilon_multiplier * L_ret
-                r = L_ret - self.epsilon
-                self.lambda_dual = float(self.lambda_init)
-                logger.info(f"  Auto-ε: baseline L_ret={L_ret:.4f}, "
-                            f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
 
             # Adaptive inner recovery when retain spikes
             extra_inner = 0
