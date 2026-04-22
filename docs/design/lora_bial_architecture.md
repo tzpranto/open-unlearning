@@ -15,10 +15,12 @@ The method has four interlocking components. Each one exists because removing it
 Full fine-tuning rewrites every weight in a 7B-parameter model — a sledgehammer when you need a scalpel. LoRA (Low-Rank Adaptation) instead freezes the original weights and adds small trainable matrices to each attention and MLP layer:
 
 ```
-W_new = W_frozen + (α/r) · B × A       where B ∈ ℝ^{d×r}, A ∈ ℝ^{r×d}, r << d
+W_new = W_frozen + (α/r) · B × A
+
+where W_frozen ∈ ℝ^{d_out × d_in},  B ∈ ℝ^{d_out × r},  A ∈ ℝ^{r × d_in},  r << min(d_out, d_in)
 ```
 
-Here `d` is the hidden dimension of the weight matrix being adapted (e.g., 4096 for Llama-2-7B's attention projections), and `r` is the LoRA rank — the bottleneck dimension that controls how many degrees of freedom the adaptation has. The product `B × A` is a `d × d` matrix, but it has rank at most `r`, so the update lives in a tiny subspace of the full weight space.
+Here `d_out` and `d_in` are the output and input dimensions of the original weight matrix. These aren't always square — for instance in Llama-2-7B, attention projections are 4096×4096, but `gate_proj` and `up_proj` are 4096×11008. `r` is the LoRA rank — the bottleneck dimension that controls how many degrees of freedom the adaptation has. The product `B × A` has the same shape as `W_frozen` but rank at most `r`, so the update lives in a tiny subspace of the full weight space.
 
 The **scaling factor α/r** controls the magnitude of the LoRA update relative to the frozen weights. `α` (lora_alpha) is a fixed constant; dividing by `r` means that increasing rank doesn't blow up the update magnitude. With `α=32` and `r=16`, the effective scaling is `32/16 = 2×` — each LoRA output is amplified by 2 before being added to the frozen weight's output. This scaling matters: too small and LoRA changes are invisible to the model; too large and the adapters dominate the frozen weights and training becomes unstable.
 
@@ -26,7 +28,16 @@ With `r=16` on a 7B model, only ~0.08% of parameters are trainable. This does th
 
 1. **Limits damage radius.** Changes are confined to a low-rank subspace. The model can't drift arbitrarily far from its original behavior.
 2. **Free reference model.** Disable the LoRA adapters → you get the original (pre-unlearning) model for free. No need to store or load a separate reference copy. This is critical for losses like NPO that need reference logits.
-3. **Fast inner loop.** Fewer parameters means the inner optimizer converges in just 3 SGD steps instead of hundreds.
+
+**Why LoRA instead of sparse masking.** The original S-BiAL formulation (our internal design document, Oct 2023) restricted updates to a sparse subset of full-rank parameters via a fixed binary mask `m ∈ {0,1}^d`, chosen once by magnitude pruning, SynFlow (Tanaka et al., 2020), or OMP. The inner loop optimized on `supp(m)` with an L1 or group-L2,1 regularizer `γR(θ)` to further promote sparsity. This approach has sound theoretical motivation — sparsity reduces the effective dimensionality of the inner Hessian, making implicit gradient computation via CG/Neumann practical even on full-size models (see Lorraine et al., 2020 for HVP-based bilevel optimization).
+
+In practice, we moved to LoRA (Hu et al., 2022) for three reasons:
+
+1. **Mask selection is fragile.** The mask must be chosen *before* training, but the right set of parameters to modify for unlearning depends on which data to forget — information unavailable at mask time. SynFlow and magnitude pruning optimize for general task performance, not unlearning-specific subspaces. LoRA sidesteps this: the low-rank subspace is learned during training, not fixed upfront.
+2. **Free reference model.** With sparse masking, getting reference logits requires storing a separate copy of the original weights or carefully zeroing out masked positions. With LoRA, disabling adapters instantly recovers the exact original model — zero overhead, zero bookkeeping. This enabled reference-dependent losses like NPO during early experiments.
+3. **Ecosystem compatibility.** LoRA integrates with PEFT/HuggingFace out of the box — gradient checkpointing, model merging, checkpoint saving all work without custom code. Sparse masking on 7B models required custom forward hooks and careful handling of optimizer states on `supp(m)`.
+
+The sparsity regularizer `γR(θ)` was also dropped. LoRA's low-rank constraint already restricts the update's degrees of freedom (rank `r` vs. sparsity level `s`). Adding L1 on top of LoRA parameters provided no measurable benefit in early experiments — the bottleneck was loss function choice, not parameter regularization.
 
 **Configuration:** We apply LoRA to all projection matrices (`q_proj`, `k_proj`, `v_proj`, `o_proj`, `gate_proj`, `up_proj`, `down_proj`) with rank `r=16` and scaling `α=32`.
 
@@ -61,6 +72,8 @@ Three terms, three roles:
 | `λ·(L_retain - ε)` | Linear penalty | Multiplier λ grows when retain violates threshold ε |
 | `(ρ/2)·max(0, L_retain - ε)²` | Quadratic penalty | Kicks in only when L_retain > ε, grows quadratically with violation |
 
+**Why the quadratic term?** A pure dual-ascent method (linear penalty only) is fragile when the outer problem is nonconvex and coupled to a stochastic inner learner: the residual `L_retain - ε` can change sign as θ moves, especially under minibatching, causing λ to oscillate rather than converge. The quadratic augmentation adds curvature near the constraint boundary, smoothing the landscape. As stated in the classical ALM literature (Bertsekas, 1999; Nocedal & Wright, 2006): *"λ provides direction (push down the residual), while ρ provides curvature (damp oscillations)."* This allows the optimizer to converge to feasibility with finite, moderate λ values — our champion run stabilized at λ≈2.2, not the λ→∞ that pure Lagrangian methods would require. We increase ρ only when the residual stalls, avoiding an overly stiff problem (Conn et al., 1991).
+
 The **dual variable λ** is the ALM's memory. After each outer step, it updates:
 
 ```
@@ -70,37 +83,54 @@ else:                 λ ← λ + 0.1·ρ·(L_retain - ε)  # slow decay: constr
 
 This update is **asymmetric by design**. Violations ratchet λ up quickly (full ρ), but satisfaction only decays λ slowly (0.1×ρ). The effect: once a retain spike occurs, the system *permanently* increases its retain protection. λ never forgets a spike. This is what transforms a transient disruption (epoch boundary spike) into a lasting improvement (higher λ floor for all subsequent epochs).
 
-**Parameters:**
-- `ε = 0.15`: retain loss threshold. The target model's retain CE is ~0.05; setting ε=0.15 gives 3× headroom for transient perturbations.
-- `ρ = 0.1`: penalty growth rate. Moderate — fast enough to respond within ~5 steps, slow enough to avoid oscillation.
-- `λ_init = 1.0`: starting multiplier. Non-zero means retain is protected from step 0, not just after the first violation.
-- `λ_min = 0.1`: floor. Even if retain is perfect for 100 steps, retain never loses all protection.
-
 ### 1.4 Clamped Entropy Loss (The Forget Objective)
 
-The choice of forget loss is critical. We tried five different losses over 18 experiments. The winner — clamped entropy — has three properties the others lack: **bounded, self-stabilizing, and reference-free.**
+The choice of forget loss is critical. We tried five different losses over 18 experiments. The winner — clamped entropy — has three properties the others lack: **bounded, self-stabilizing, and reference-free.** Understanding why requires comparing it to the alternatives.
 
-For each token position, compute the model's output entropy:
+**What does a memorized model look like?** A model that has memorized a text sequence produces sharp, peaked next-token distributions over that sequence — low entropy, high confidence. "Forgetting" means making these distributions spread out so the model can no longer confidently reproduce the memorized text. The question is *how* to spread them out.
+
+**Logit margin (our first attempt).** This loss measures the gap between the model's top logit and its mean logit:
+
+```
+L_logit_margin = (1/T) Σ_t [max_v z_v(t) - (1/V) Σ_v z_v(t)]
+```
+
+Minimizing this pushes all logits toward the same value — a uniform distribution. The problem: there is no upper bound on how far apart the logits can be, so the *gradient* has no upper bound either. When the model is highly confident on a particular token (logit gap = 30+), the gradient from that single token can be enormous. In a bilevel system, one outsized gradient step in the outer loop creates a retain loss spike that the inner loop's K=3 SGD steps cannot repair. We saw this in every logit-margin experiment (Exps 11-15): structural retain spikes at every epoch boundary.
+
+Logit margin also has a subtler problem: it operates on raw logits, not probabilities. Two models can have very different logit margins but identical output distributions (logits are shift-invariant under softmax). The loss penalizes the *scale* of logits, not the *shape* of the distribution, which is what actually determines memorization.
+
+**Clamped entropy (the solution).** Instead of targeting logits, we directly target the quantity that matters: the entropy of the output distribution. For each token position:
 
 ```
 H(t) = -Σ_v p(v|context) · log p(v|context)
 ```
 
-The loss pushes entropy toward a target fraction τ of the maximum possible entropy:
+A memorized token has low entropy (the model is certain). A forgotten token has high entropy (the model is uncertain). Maximum possible entropy is `H_max = log(V)` — the uniform distribution.
+
+We don't need to push entropy all the way to maximum. A model that outputs near-uniform distributions over 32,000 tokens is incoherent — it has lost all language ability, not just the memorized data. Instead, we set a target at a fraction τ of maximum:
 
 ```
 L_forget = (1/T) Σ_t max(0, τ·H_max - H(t))
 ```
 
-Where `H_max = log(V)` is the entropy of a uniform distribution over the vocabulary, and `τ = 0.7`.
+With `τ = 0.7`, the target is 70% of maximum entropy — uncertain enough that the model cannot confidently reproduce memorized sequences, but not so uncertain that it loses all structure.
 
-**Why each property matters:**
+**The clamp is the key design choice.** The `max(0, ·)` means that once a token's entropy reaches or exceeds `τ·H_max`, its contribution to the loss is exactly zero. No gradient flows from that token. This is what makes the loss fundamentally different from logit margin or gradient ascent:
 
-1. **Bounded.** The loss is ≥0 and ≤ τ·H_max. Unlike gradient ascent (`-CE`) which is unbounded below, or NPO which grows without limit, clamped entropy can't produce arbitrarily large gradients. Large gradients are what cause retain collapse.
+- **Logit margin** always produces gradient on every token, no matter how spread the logits already are. Tokens that are "forgotten enough" keep getting pushed, wasting gradient budget and creating unnecessarily large parameter updates.
+- **Gradient ascent (`-CE`)** actively *rewards* higher loss without bound. The more the model forgets, the larger the gradient becomes. This is a positive feedback loop that inevitably destroys retain.
+- **Clamped entropy** has a natural off-switch per token. Early in training, most forget tokens are low-entropy (memorized), so the loss is high and gradients are active. As training progresses and tokens reach the τ threshold, they drop out one by one. The effective gradient shrinks automatically as forgetting succeeds. By the end of Exp 18, L_fgt converged to 0.008 — only a handful of stubborn tokens still below threshold.
 
-2. **Self-stabilizing.** Once a token's entropy reaches 70% of maximum, its gradient becomes zero (the clamp kicks in). The model stops pushing tokens that are already "forgotten enough." This prevents the over-forgetting that destroys retain — there's no incentive to push entropy to 100%.
+This self-regulating behavior is why clamped entropy pairs so well with the ALM constraint. The ALM needs a forget signal that doesn't fight the retain constraint with ever-increasing force. Clamped entropy provides exactly that: strong gradients early when there is room to forget, vanishing gradients late when the system should be consolidating the equilibrium.
 
-3. **Reference-free.** No need to call the base model for reference logits. This halves the forward passes per outer step compared to NPO, and — more importantly — removes a source of gradient noise. The reference model's logits are frozen at a point that memorized the forget data; using them as a baseline can create pathological gradient directions.
+**Summary of properties:**
+
+| Property | Clamped Entropy | Logit Margin | Gradient Ascent | NPO |
+|----------|----------------|--------------|-----------------|-----|
+| Bounded | Yes: [0, τ·H_max] | No: unbounded | No: unbounded below | No: grows with divergence |
+| Self-stabilizing | Yes: clamp kills gradient at threshold | No: always active | No: positive feedback | No: grows as model diverges |
+| Reference-free | Yes | Yes | Yes | No: needs base model logits |
+| Targets distribution | Yes: entropy of p(·) | No: raw logit scale | Indirectly: via CE | Yes: via likelihood ratio |
 
 ### 1.5 Implicit Differentiation (Optional Correction)
 
@@ -574,3 +604,14 @@ During the spike, the inner loop loss lags slightly behind — it's working with
 | RMU | 0.308 | 0.120 | 0.604 | 0.011 | 0.708 | 20m |
 | PDU | **0.000** | 0.002 | 0.000 | **0.008** | 0.000 | 76m |
 | **LoRA-BiAL (ours)** | 0.080 | **0.000** | 0.598 | 0.008 | **0.798** | 104m |
+
+---
+
+## References
+
+- **Bertsekas, 1999.** D. P. Bertsekas. *Nonlinear Programming* (2nd ed.). Athena Scientific, 1999.
+- **Conn et al., 1991.** A. R. Conn, N. I. M. Gould, and Ph. L. Toint. A globally convergent augmented Lagrangian algorithm for optimization with general constraints and simple bounds. *SIAM Journal on Numerical Analysis*, 28(2):545–572, 1991.
+- **Hu et al., 2022.** E. J. Hu, Y. Shen, P. Wallis, Z. Allen-Zhu, Y. Li, S. Wang, L. Wang, and W. Chen. LoRA: Low-Rank Adaptation of Large Language Models. *ICLR*, 2022.
+- **Lorraine et al., 2020.** J. Lorraine, P. Vicol, and D. Duvenaud. Optimizing millions of hyperparameters by implicit differentiation. *AISTATS*, 2020.
+- **Nocedal & Wright, 2006.** J. Nocedal and S. J. Wright. *Numerical Optimization* (2nd ed.). Springer, 2006.
+- **Tanaka et al., 2020.** H. Tanaka, D. Kunin, D. L. K. Yamins, and S. Ganguli. Pruning neural networks without any data by iteratively conserving synaptic flow. *NeurIPS*, 2020.
