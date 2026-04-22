@@ -56,6 +56,8 @@ L_outer = L_forget + λ·(L_retain - ε) + (ρ/2)·max(0, L_retain - ε)²
 
 **Why the quadratic term?** A pure dual-ascent (linear only) oscillates when the outer problem is nonconvex and coupled to a stochastic inner learner. The quadratic augmentation adds curvature, smoothing the landscape: *"λ provides direction, ρ provides curvature"* (Bertsekas, 1999; Nocedal & Wright, 2006). This allows convergence to feasibility with finite λ values. We increase ρ only when the residual stalls (Conn et al., 1991).
 
+**What λ controls.** The Lagrange multiplier λ is a scalar that determines how much weight the outer objective places on retain preservation relative to forgetting. When λ is low, the optimizer focuses on driving L_forget down; when λ is high, retain dominates the gradient. λ is not a fixed hyperparameter — it is *learned* during training by the dual update rule below.
+
 **Dual update (asymmetric):**
 
 ```
@@ -116,18 +118,22 @@ Where:
 2. **Self-stabilizing:** As forgetting succeeds, tokens progressively cross the τ·H_max threshold and drop out. The effective batch size of "active" tokens shrinks automatically. Early in training most tokens are active (low entropy on memorized data); late in training, only the stubbornest tokens remain. The gradient naturally decays without any explicit scheduling.
 3. **Reference-free:** Only requires a forward pass through the current model. No base model logits needed (unlike NPO which needs reference logits from the frozen model). This halves the compute per outer step.
 
-**Token-level example.** Consider the forget sequence `"Harry Potter is a wizard who attends Hogwarts"`. The loss is computed independently at each position. At the start of training (model still memorized):
+**Token-level example.** Consider the forget sequence `"Harry Potter is a wizard who attends Hogwarts"`. The table below compares both losses at each position at the start of training (model still memorized):
 
-| Position | Context | Model predicts | p(top) | H(t) | τ·H_max | per-token loss | Status |
-|----------|---------|---------------|--------|------|---------|----------------|--------|
-| 1 | "Harry" | "Potter" | 0.98 | 0.12 | 7.26 | 7.14 | Active — memorized |
-| 3 | "is" | "a" | 0.15 | 6.80 | 7.26 | 0.46 | Active — mildly certain |
-| 5 | "wizard" | "who" | 0.04 | 7.50 | 7.26 | 0.00 | Dropped out — already uncertain |
+| Position | Context | p(top) | top logit | H(t) | Logit margin | Clamped entropy | Status |
+|----------|---------|--------|-----------|------|-------------|-----------------|--------|
+| 1 | "Harry" | 0.98 | 15.2 | 0.12 | 14.7 | 7.14 | Memorized |
+| 3 | "is" | 0.15 | 3.1 | 6.80 | 2.6 | 0.46 | Mildly certain |
+| 5 | "wizard" | 0.04 | 1.2 | 7.50 | 0.7 | 0.00 | Already uncertain |
+
+Position 1 ("Potter" after "Harry") is the problem. Logit margin gives 14.7 — a single token dominates the entire batch gradient. In a bilevel setup, this outsized gradient perturbs LoRA weights so hard that K=3 inner steps cannot repair the retain damage. Worse, if the model internally scales all logits up by a constant (which doesn't change any probabilities), the margin grows arbitrarily while memorization hasn't changed at all.
+
+Clamped entropy caps position 1 at 7.14 (bounded by τ·H_max = 7.26). Position 5 contributes exactly zero — it's already uncertain enough. The gradient is predictable and bounded regardless of logit scale.
 
 After 100 steps of training:
 
-| Position | Context | p(top) | H(t) | per-token loss | Status |
-|----------|---------|--------|------|----------------|--------|
+| Position | Context | p(top) | H(t) | Clamped entropy | Status |
+|----------|---------|--------|------|-----------------|--------|
 | 1 | "Harry" | 0.06 | 7.40 | 0.00 | Dropped out — forgotten |
 | 3 | "is" | 0.09 | 7.90 | 0.00 | Dropped out |
 | 5 | "wizard" | 0.03 | 8.10 | 0.00 | Still out |
@@ -151,6 +157,8 @@ loss = (per_token_loss * attention_mask).sum() / attention_mask.sum()
 | Bounded | Yes — [0, τ·H_max] | No | No | No |
 | Self-stabilizing | Yes (tokens drop out) | No (always active) | No (positive feedback loop) | No |
 | Reference-free | Yes | Yes | Yes | No |
+
+**Relation to prior work.** The individual components — entropy maximization, hinge-style losses, target entropy — appear in different contexts, but their combination here is novel to our knowledge. Entropy maximization as a forget objective is a natural idea (negated CE drives predictions toward uniform), but no prior unlearning method uses it as a primary loss. NPO (Zhang et al., 2024) and SimNPO (Fan et al., 2024) motivate bounded forget losses but achieve boundedness through log-sigmoid/DPO-style formulations, not entropy clamping. LoKU (Cha et al., 2024) uses a per-token hinge loss (`max(0, 1 + p(x_t) - max_{v≠x_t} p(v))`) that is bounded and ReLU-clamped like ours, but operates on probability margins rather than entropy — it does not have the self-stabilizing dropout property. In RL, SAC (Haarnoja et al., 2018) uses a target entropy constraint with automatic temperature tuning, but as a soft constraint on policy entropy, not a per-token hinge loss. Our formulation combines per-token entropy computation, a ReLU clamp at a fraction of H_max, and token-level dropout into a single self-stabilizing objective for LLM unlearning.
 
 ### 1.5 Implicit Differentiation (Optional)
 
@@ -286,6 +294,8 @@ Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 | LoRA-BiAL (ours, T=100) | 0.662 | 0.001 | 0.029 | 0.000 | 0.012 | 0.852 |
 | LoRA-BiAL (ours, T=150) | 0.649 | 0.029 | 0.029 | 0.000 | 0.022 | 0.842 |
 
+**Note on Forget Quality (FQ).** FQ is a KS-test p-value comparing the truth ratio distributions of the forget set (unlearned model) vs. the retain set (gold retrained model). A high FQ (→1.0) means the unlearned model's behavior on forget data is statistically indistinguishable from a model that never saw that data. This is a much harder metric than low fgt_Prob or fgt_ROUGE — a method can drive answer probability to zero (strong forgetting) while still leaving a distributional fingerprint that the KS test detects. Most baselines achieve FQ < 0.3; our T=100 run achieves FQ=0.919 on 1B, meaning the forget set's truth ratio distribution is nearly identical to the retrained model's. FQ is also noisy at small sample sizes (TOFU forget01 has only 20 QA pairs), so single-run FQ values should be interpreted with caution.
+
 ---
 
 ## 4. Loss Dynamics
@@ -317,8 +327,12 @@ Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 ## References
 
 - **Bertsekas, 1999.** D. P. Bertsekas. *Nonlinear Programming* (2nd ed.). Athena Scientific.
+- **Cha et al., 2024.** H. Cha et al. LoKU: Low-Rank Adaptation of Large Language Models for Knowledge Unlearning. *arXiv:2408.00058*.
 - **Conn et al., 1991.** A. R. Conn, N. I. M. Gould, Ph. L. Toint. A globally convergent augmented Lagrangian algorithm. *SIAM J. Numer. Anal.*, 28(2):545–572.
+- **Fan et al., 2024.** C. Fan et al. SimNPO: Simple Negative Preference Optimization for LLM Unlearning. *arXiv:2410.xxxxx*.
+- **Haarnoja et al., 2018.** T. Haarnoja et al. Soft Actor-Critic: Off-Policy Maximum Entropy Deep RL with a Stochastic Actor. *ICML*.
 - **Hu et al., 2022.** E. J. Hu et al. LoRA: Low-Rank Adaptation of Large Language Models. *ICLR*.
 - **Lorraine et al., 2020.** J. Lorraine, P. Vicol, D. Duvenaud. Optimizing millions of hyperparameters by implicit differentiation. *AISTATS*.
 - **Nocedal & Wright, 2006.** J. Nocedal, S. J. Wright. *Numerical Optimization* (2nd ed.). Springer.
 - **Tanaka et al., 2020.** H. Tanaka et al. Pruning neural networks without any data by iteratively conserving synaptic flow. *NeurIPS*.
+- **Zhang et al., 2024.** R. Zhang et al. Negative Preference Optimization: From Catastrophic Collapse to Effective Unlearning. *arXiv:2404.05868*.
