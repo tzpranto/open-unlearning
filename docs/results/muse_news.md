@@ -19,3 +19,4 @@ HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain). Penalizes imbal
 | BLURNPO | 0.5806 | 0.3559 | 0.5318 | 0.1236 | 0.516 | ~2h |
 | RMU | 0.5164 | 0.2848 | 0.4567 | 0.0552 | 0.530 | 20m |
 | PDU | 0.4885 | 0.0423 | 0.4140 | 0.0138 | 0.554 | 54m |
+| LoRA-BiAL+clampedEntropy (ours) | 0.5281 | 0.3875 | 0.5008 | 0.1296 | 0.522 | 71m |

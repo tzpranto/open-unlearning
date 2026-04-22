@@ -1,14 +1,5 @@
 # @package _global_
-#
-# Z-pure: LoRA-BiAL from target model
-# ref = base model with LoRA disabled = target model itself
-#
-# Usage:
-#   python src/train.py --config-name=unlearn.yaml \
-#       experiment=unlearn/muse/zpure \
-#       task_name=zpure_0 \
-#       trainer.method_args.npo_beta=4.0
-#
+# LoRA-BiAL Ze0 on MUSE News — clamped_entropy + ALM
 
 defaults:
   - override /model: Llama-2-7b-hf
@@ -35,19 +26,49 @@ data:
         hf_args:
           split: ${forget_split}
           path: muse-bench/MUSE-${data_split}
-        max_length: 1024
+        max_length: 2048
   retain:
     MUSE_retain:
       args:
         hf_args:
           path: muse-bench/MUSE-${data_split}
           split: ${retain_split}
-        max_length: 1024
+        max_length: 2048
 
 eval:
   muse:
     data_split: ${data_split}
     retain_logs_path: ${retain_logs_path}
     overwrite: true
+
+trainer:
+  method_args:
+    # LoRA
+    lora_r: 16
+    lora_alpha: 32
+    # Bilevel — epoch-based
+    # 889 forget, bs=2, accum=8 → ~444 micro-batches → ~55 steps/epoch
+    T: -1
+    K: 3
+    eta_theta: 3e-5
+    eta_in: 2e-4
+    # ALM
+    epsilon: 0.70
+    rho: 0.1
+    lambda_init: 1.0
+    # Forget loss — clamped_entropy champion from Books
+    forget_loss_type: clamped_entropy
+    clamped_entropy_tau: 0.7
+    # Batching
+    gradient_accumulation_steps: 8
+    max_grad_norm: 1.0
+    # Checkpoints at each epoch boundary
+    checkpoint_every_epoch: true
+    use_implicit: false
+
+  args:
+    per_device_train_batch_size: 2
+    num_train_epochs: 4
+    gradient_checkpointing: True
 
 task_name: ???

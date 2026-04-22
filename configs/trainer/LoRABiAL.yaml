@@ -3,47 +3,36 @@ defaults:
 
 handler: LoRABiAL
 method_args:
-  # PerTA parameters (stage 1)
-  perta_lambda: 3.5
-  perta_alpha: 1.0
-  fisher_cache_path: saves/unlearn/_perta_fisher_cache_News_ps_full.pt
-  pretrained_model_name: meta-llama/Llama-2-7b-hf
-
-  # LoRA parameters (stage 2)
+  # LoRA parameters
   lora_r: 16
   lora_alpha: 32
   lora_dropout: 0.0
   lora_target_modules: null  # null = default 7 modules (q/k/v/o/gate/up/down)
 
-  # Bilevel parameters (stage 3)
-  T: -1  # T <= 0 = epoch-based. T > 0 = fixed step count (Ze0 compat)
+  # Bilevel parameters
+  T: -1  # T <= 0 = epoch-based. T > 0 = fixed step count
   K: 3
   eta_theta: 3e-5
   eta_in: 2e-4
 
   # ALM parameters
   epsilon: 0.70
+  epsilon_multiplier: 0.0  # >0: auto-set ε = multiplier × baseline_L_ret (overrides epsilon)
   rho: 0.1
   lambda_init: 1.0
   lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
   lambda_min: 0.1  # floor on dual variable (prevents λ→0)
 
   # Forget loss
-  forget_loss_type: npo  # npo, ga, entropy_max, clamped_entropy, focal_repr_ortho, focal_logit_margin, repr_orthogonal, output_proj_repr_ortho, per_token_repr_ortho, focal_per_token_repr_ortho, kl, logit_margin
+  forget_loss_type: clamped_entropy  # npo, ga, logit_margin, clamped_entropy
   npo_beta: 4.0
-  ga_clip: 1.0
-  focal_gamma: 2.0  # focal exponent for focal losses (higher = more focus on hard samples)
-  clamped_entropy_tau: 0.7  # fraction of H_max as forgetting target for clamped_entropy
+  clamped_entropy_tau: 0.7  # fraction of H_max as forgetting target
 
-  # Epoch-aware training
-  # T > 0: fixed step count (Ze0 compat). T <= 0: run full epochs.
+  # Training
   lr_schedule: constant  # "constant" or "cosine"
   warmup_fraction: 0.0
-  npo_saturation_threshold: 0.01
-  saturation_patience: 5
-  retain_only_after_saturation: false
   checkpoint_every_epoch: false
-  eval_at_steps: null  # e.g. [25, 50, 100, 200, 445] for dynamics analysis
+  eval_at_steps: null  # e.g. [25, 50, 100, 200]
 
   # Implicit differentiation (FD-HVP + Truncated Neumann)
   use_implicit: false
@@ -56,12 +45,15 @@ method_args:
   neumann_max_growth_ratio: 10.0
   fd_hvp_eps: 0.01
   implicit_offload_cpu: false
-  implicit_warmup_steps: 0  # skip implicit for first N steps (zero-init LoRA warmup)
+  implicit_warmup_steps: 0
+
+  # Gradient projection (PCGrad)
+  use_pcgrad: false  # project forget gradient orthogonal to retain gradient
 
   # Batching
-  gradient_accumulation_steps: 8  # outer effective_bs = per_device_train_batch_size * this
-  inner_accumulation_steps: 0     # 0 = same as gradient_accumulation_steps; set lower for weaker inner
-  inner_warmup_steps: 0           # outer-only for first N steps; lets forgetting establish before inner protects retain
+  gradient_accumulation_steps: 8
+  inner_accumulation_steps: 0  # 0 = same as gradient_accumulation_steps
+  inner_warmup_steps: 0
   max_grad_norm: 1.0
 
 args:

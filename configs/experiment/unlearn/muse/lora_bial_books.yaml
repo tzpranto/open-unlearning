@@ -1,5 +1,5 @@
 # @package _global_
-# LoRA-BiAL Ze0 on MUSE Books — no PerTA, logit_margin + Adam
+# LoRA-BiAL on MUSE Books — logit_margin + Adam
 
 defaults:
   - override /model: Llama-2-7b-hf
@@ -43,8 +43,6 @@ eval:
 
 trainer:
   method_args:
-    # Ze0: no PerTA
-    perta_lambda: 0
     # LoRA
     lora_r: 16
     lora_alpha: 32
