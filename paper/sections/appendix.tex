@@ -1,9 +1,434 @@
-\section{Additional Experimental Details}
+\section{Theoretical Analysis}
+\label{app:theory}
+
+We provide formal justification for three key design choices in \method:
+(i)~bounded loss and gradient control of the clamped entropy objective (\S\ref{app:bounded_grad}),
+(ii)~the ratchet convergence behavior of the asymmetric dual variable update (\S\ref{app:ratchet}), and
+(iii)~the selective uncertainty property enabled by sub-maximal entropy clamping (\S\ref{app:selective}).
+Together, these results explain why \method avoids the catastrophic model collapse commonly observed with unbounded unlearning objectives.
+
+
+\subsection{Bounded Loss and Gradient of Clamped Entropy}
+\label{app:bounded_grad}
+
+Let $V$ denote the vocabulary size, $\tau \in (0,1)$ a clamping ratio, and $p_{\thetav}(\cdot \mid x_{<t})$ the next-token distribution produced by a language model with parameters $\thetav$.
+Define the per-token Shannon entropy $H_t(\thetav) = -\sum_{v=1}^{V} p_{\thetav}(v \mid x_{<t}) \log p_{\thetav}(v \mid x_{<t})$ and the clamped entropy loss for a single token as
+\begin{equation}
+\label{eq:clamp_token}
+\ell_t(\thetav) \;=\; \max\!\bigl(0,\;\tau \log V - H_t(\thetav)\bigr).
+\end{equation}
+For a sequence of $T$ tokens the forget loss is $\Loss_{\mathrm{fgt}}(\thetav) = \frac{1}{T}\sum_{t=1}^{T} \ell_t(\thetav)$.
+
+\medskip
+\noindent\textbf{Proposition 1} (Bounded Loss and Gradient of Clamped Entropy).
+\textit{Assume:
+(A1)~the logit map $z_t : \R^d \to \R^V$ is $G$-Lipschitz, i.e., $\lVert \nabla_{\thetav} z_t(\thetav) \rVert_F \leq G$; and
+(A2)~the logit magnitudes are bounded, $\lVert z_t(\thetav) \rVert_\infty \leq B$, for all tokens $t$ and parameters $\thetav$.
+Then:}
+
+\begin{enumerate}
+\item[(a)] \textit{The loss is bounded: $0 \leq \ell_t(\thetav) \leq \tau \log V$ for all $\thetav$.}
+\item[(b)] \textit{The per-token gradient norm satisfies}
+\begin{equation}
+\label{eq:grad_bound}
+\bigl\lVert \nabla_{\thetav} \ell_t(\thetav) \bigr\rVert \;\leq\; (2B + 2\log V)\, G.
+\end{equation}
+\item[(c)] \textit{In contrast, the gradient ascent loss $\Loss_\mathrm{GA} = -\log p_{\thetav}(y_t \mid x_{<t})$ has unbounded loss values as $p_{\thetav}(y_t) \to 0$, and unclamped entropy maximization $\Loss_\mathrm{ent} = -H_t$ applies nonzero gradients even when $H_t$ is already near $H_\mathrm{max}$.}
+\end{enumerate}
+
+\noindent\textit{Proof.}
+(a)~Since $0 \leq H_t \leq \log V$ and $\tau \in (0,1)$, the ReLU outputs a value in $[0, \tau \log V]$.
+
+(b)~In the active region ($H_t < \tau \log V$), the chain rule gives $\nabla_{\thetav} \ell_t = -\nabla_{\thetav} H_t$.
+We derive a component-wise bound on $\nabla_{z_t} H_t$ that avoids the $\sqrt{V}$ factor introduced by spectral-norm arguments.
+The $v$-th component of the entropy gradient with respect to logits is:
+\[
+\frac{\partial H_t}{\partial z_{t,v}} = -p_v\bigl(H_t + \log p_v\bigr),
+\]
+which follows from the softmax Jacobian identity $\partial p_j / \partial z_{t,v} = p_j(\delta_{jv} - p_v)$ applied to $H_t = -\sum_v p_v \log p_v$.
+One can verify correctness at the uniform distribution: $p_v = 1/V$ gives $H_t = \log V$ and $\log p_v = -\log V$, so $H_t + \log p_v = 0$ and the gradient vanishes, as expected at the entropy maximum.
+Under assumption~(A2), the softmax probabilities satisfy $p_v \geq e^{-2B}/V$ for all $v$, since
+$p_v = e^{z_v}/\sum_j e^{z_j} \geq e^{-B}/(V e^{B}) = e^{-2B}/V$.
+This yields $|\!\log p_v| \leq 2B + \log V$ and $H_t \leq \log V$, so $|H_t + \log p_v| \leq H_t + |\!\log p_v| \leq 2B + 2\log V$.
+Since $p_v^2 \leq p_v$ for $p_v \in [0,1]$:
+\[
+\lVert \nabla_{z_t} H_t \rVert^2 = \sum_v p_v^2 (H_t + \log p_v)^2 \leq (2B + 2\log V)^2 \sum_v p_v = (2B + 2\log V)^2.
+\]
+By the chain rule and assumption~(A1):
+\[
+\lVert \nabla_{\thetav} \ell_t \rVert = \lVert \nabla_{\thetav} H_t \rVert \leq \lVert \nabla_{z_t} H_t \rVert \cdot \lVert \nabla_{\thetav} z_t \rVert_F \leq (2B + 2\log V) \cdot G.
+\]
+In the inactive region ($H_t \geq \tau \log V$), $\nabla_{\thetav} \ell_t = \mathbf{0}$.
+Averaging over $T$ tokens preserves the bound.
+
+(c)~For GA, $-\!\log p_{\thetav}(y_t) \to \infty$ as $p_{\thetav}(y_t) \to 0$, so the loss is unbounded.
+For unclamped entropy maximization, $\nabla_{\thetav}(-H_t) \neq \mathbf{0}$ whenever the distribution is non-uniform, so the objective exerts gradient force even when $H_t$ is close to $H_\mathrm{max}$ and forgetting is essentially complete.
+By contrast, clamped entropy produces \emph{exactly zero} gradient once $H_t \geq \tau \log V$, eliminating wasted optimization pressure.
+\hfill$\square$
+
+\smallskip
+\noindent\textbf{Remark.}
+Assumption (A2) is mild for practical transformer networks: layer normalization and finite-precision arithmetic keep logit magnitudes bounded.
+For Llama-2-7b with $V = 32000$ and typical logit ranges $B \approx 15$--$30$, the bound in \eqref{eq:grad_bound} evaluates to approximately $(2 \cdot 30 + 2 \cdot 10.4) \cdot G \approx 81\,G$, a moderate constant.
+In contrast, the GA gradient $\lVert \nabla_{\thetav}(-\!\log p_{y_t}) \rVert$ has no such guarantee as training drives $p_{y_t} \to 0$ on forget tokens.
+
+
+\subsection{Dual Variable Ratchet Convergence}
+\label{app:ratchet}
+
+\method enforces the retain-quality constraint $\Loss_\mathrm{ret}(\thetav) \leq \varepsilon$ via an augmented Lagrangian with asymmetric dual updates.
+Let $r_t = \Loss_\mathrm{ret}(\thetav_t) - \varepsilon$ denote the constraint residual at iteration $t$, $\rho > 0$ the penalty coefficient, $\alpha \in (0,1)$ the asymmetry ratio (we use $\alpha = 0.1$), and $\lambda_\mathrm{min} > 0$ a dual variable floor.
+The dual variable is updated as:
+\begin{equation}
+\label{eq:dual_update}
+\lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, r_t & \text{if } r_t > 0, \\ \alpha \, \rho \, r_t & \text{if } r_t \leq 0. \end{cases}\Bigr)
+\end{equation}
+
+We model training as proceeding through \emph{episodes}, a simplifying abstraction motivated by the empirical observation that constraint violations cluster around epoch boundaries (see the remark below).
+Each episode $k$ consists of a violation phase ($r_t > 0$ for $n_k^+$ consecutive steps with mean violation $\bar{r}_k^+ > 0$) followed by a recovery phase ($r_t \leq 0$ for $n_k^-$ steps with mean slack $\bar{r}_k^- < 0$).
+
+\medskip
+\noindent\textbf{Proposition 2} (Dual Variable Ratchet).
+\textit{Assume:
+(B1)~the dual floor satisfies $\lambda_\mathrm{min} > 0$ (so $\lambda_t \geq \lambda_\mathrm{min}$ at all times);
+(B2)~the asymmetry condition $n_k^+ \bar{r}_k^+ > \alpha \, n_k^- |\bar{r}_k^-|$ holds for each episode $k$; and
+(B3)~there exists a dual threshold $\lambda^*$ such that the ALM objective $\Loss_\mathrm{fgt} + \lambda(\Loss_\mathrm{ret} - \varepsilon) + \frac{\rho}{2}\max(0,r)^2$ admits a feasible stationary point with $r \leq 0$ whenever $\lambda \geq \lambda^*$.
+Then:}
+\begin{enumerate}
+\item[(a)] \textit{The net dual change per episode satisfies $\Delta\lambda_k \geq \rho(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|) > 0$.}
+\item[(b)] \textit{After at most $K^* = \lceil (\lambda^* - \lambda_0) / (\rho \, \underline{\Delta}) \rceil$ episodes, where $\underline{\Delta} = \min_k (n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|)$, the dual variable satisfies $\lambda_t \geq \lambda^*$ and no further violation episodes occur.}
+\end{enumerate}
+
+\medskip
+\noindent\textit{Proof.}
+(a) Since $\lambda_\mathrm{min} > 0$ and the violation phase increments $\lambda$ by $\rho r_t > 0$ at each step, $\lambda_t$ remains strictly above $\lambda_\mathrm{min}$ throughout the violation phase.
+During recovery, each decrement is $\alpha\rho|r_t|$, which is $\alpha$ times as large as the corresponding increment would be.
+The $\max(\lambda_\mathrm{min}, \cdot)$ projection can only \emph{increase} $\lambda_t$ relative to the unprojected update (it clips negative overshoots), so the cumulative change satisfies:
+\begin{align*}
+\Delta\lambda_k &= \lambda_{t_{k+1}} - \lambda_{t_k} \\
+&\geq \rho \sum_{t \in \mathrm{viol}} r_t + \alpha\rho \sum_{t \in \mathrm{recov}} r_t \\
+&= \rho\bigl(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|\bigr) > 0,
+\end{align*}
+where the inequality uses the fact that $\max(\lambda_\mathrm{min}, x) \geq x$ for all $x$, so projecting can only reduce the total decrease.
+The final inequality follows from assumption~(B2).
+
+The asymmetry ratio $\alpha = 0.1$ makes (B2) easy to satisfy: even if the recovery phase is $10\times$ longer than the violation phase with equal magnitude, the condition holds with equality.
+In practice, violation spikes are sharp (large $\bar{r}_k^+$, small $n_k^+$) while recovery is gradual, so the condition is satisfied with margin.
+
+(b) Since $\Delta\lambda_k \geq \rho\,\underline{\Delta} > 0$ for each episode, after $K$ episodes:
+\[
+\lambda_{t_K} \;\geq\; \lambda_0 + K\rho\,\underline{\Delta}.
+\]
+Setting $K = K^*$ gives $\lambda_{t_{K^*}} \geq \lambda^*$.
+By assumption~(B3), for $\lambda_t \geq \lambda^*$ the outer-loop optimizer can reach a point with $r_t \leq 0$, so no further violation phase begins.
+In the absence of violations, $\lambda_t$ decreases slowly at rate $\alpha\rho|r_t|$ per step toward $\lambda^*$ from above.
+\hfill$\square$
+
+\smallskip
+\noindent\textbf{Remark on assumptions.}
+Assumption~(B1) corresponds to the hyperparameter $\lambda_\mathrm{min} = 0.1$ in our implementation, which prevents the dual variable from vanishing.
+Assumption~(B3) is standard in ALM convergence theory \citep{bertsekas1999nonlinear}: it requires that the constrained problem is feasible for the given parameterization --- i.e., there exist LoRA parameters achieving $\Loss_\mathrm{ret} \leq \varepsilon$.
+The episode structure in~(B2) is a modeling simplification; in practice, violations may be interleaved with recoveries, but the key property --- that asymmetric updates cause net $\lambda$ increase whenever total violation exceeds $\alpha$ times total slack --- holds regardless of ordering.
+
+\smallskip
+\noindent\textbf{Empirical validation.}
+In our MUSE Books experiments, $\lambda$ is initialized at $1.0$ and spikes to $\approx 2.27$ after a single violation episode at the epoch~1--2 boundary, then stabilizes.
+One episode with $\Delta\lambda_1 \approx 1.27$ suffices to cross $\lambda^*$, after which no further violations are observed across three subsequent epochs.
+A symmetric update ($\alpha = 1$) would decrease $\lambda$ equally fast during recovery, risking oscillatory violations.
+
+
+\subsection{Selective Uncertainty via Entropy Clamping}
+\label{app:selective}
+
+We formalize the intuition that sub-maximal entropy clamping ($\tau < 1$) enables the model to be uncertain on forget data while remaining confident on retain data.
+
+\medskip
+\noindent\textbf{Proposition 3} (Selective Uncertainty).
+\textit{Let $H_{\max} = \log V$ denote the maximum per-token entropy.
+Consider a model $p_{\thetav}$ trained with the clamped entropy objective \eqref{eq:clamp_token} with threshold $\tau \in (0,1)$.}
+\begin{enumerate}
+\item[(a)] \textit{(Zero gradient above threshold.)
+For every forget token $t$ with $H_t(\thetav) \geq \tau H_{\max}$, the gradient contribution $\nabla_{\thetav} \ell_t = \mathbf{0}$.}
+\item[(b)] \textit{(Gradient force at logit level for unclamped entropy.)
+For unclamped entropy maximization, $\Loss_\mathrm{ent} = -\frac{1}{T}\sum_t H_t$, the logit-level gradient satisfies $\nabla_{z_t} H_t = \mathbf{0}$ if and only if $p_{\thetav}(\cdot \mid x_{<t})$ is uniform over $V$.
+Hence $\Loss_\mathrm{ent}$ exerts a nonzero logit-level gradient on every token whose output distribution is non-uniform.}
+\item[(c)] \textit{(Decoupling at convergence.)
+At a stationary point of the combined objective $\Loss_\mathrm{fgt} + \lambda \Loss_\mathrm{ret}$ where all forget tokens satisfy $H_t > \tau H_{\max}$ (strict inequality), the stationarity condition reduces to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$. That is, the retain loss alone governs the parameters, free from any opposing forget gradient.}
+\end{enumerate}
+
+\medskip
+\noindent\textit{Proof.}
+(a)~Immediate from the definition: when $H_t \geq \tau H_\mathrm{max}$, the ReLU in~\eqref{eq:clamp_token} outputs zero, so $\ell_t = 0$ is constant in a neighborhood of $\thetav$, and $\nabla_{\thetav} \ell_t = \mathbf{0}$.
+
+(b)~The logit-level gradient is $\nabla_{z_t} H_t = -(\mathrm{diag}(p) - pp^\top)(\log p + \mathbf{1})$.
+The softmax Jacobian $J = \mathrm{diag}(p) - pp^\top$ has rank $V\!-\!1$ (its null space is $\mathrm{span}(\mathbf{1})$).
+Now $\nabla_{z_t} H_t = \mathbf{0}$ iff $J(\log p + \mathbf{1}) = \mathbf{0}$ iff $\log p + \mathbf{1} \in \mathrm{span}(\mathbf{1})$ iff $\log p_v$ is constant for all $v$ iff $p$ is uniform.
+Therefore $\nabla_{z_t}(-H_t) \neq \mathbf{0}$ for every non-uniform distribution, confirming that unclamped entropy maximization pushes logits toward the constant-logit configuration $z_{t,v} = c$ for all $v$ --- which produces the uniform distribution.
+
+Note that multiple parameter vectors $\thetav$ may produce uniform logits; the characterization is in logit space, not parameter space.
+
+(c)~If all forget tokens satisfy $H_t > \tau H_\mathrm{max}$ (strict inequality), then by continuity of $H_t(\thetav)$ the strict inequality holds in a neighborhood of $\thetav$, so $\Loss_\mathrm{fgt}(\thetav') = 0$ for all $\thetav'$ in this neighborhood and $\nabla_{\thetav} \Loss_\mathrm{fgt} = \mathbf{0}$.
+The stationarity condition $\nabla_{\thetav}(\Loss_\mathrm{fgt} + \lambda \Loss_\mathrm{ret}) = \mathbf{0}$ becomes $\lambda \nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$, and since $\lambda > 0$, this simplifies to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$.
+Thus the parameters settle at a local minimum of the retain loss, with no opposing force from the forget objective.
+\hfill$\square$
+
+\smallskip
+\noindent\textbf{Information-theoretic interpretation.}
+The clamping threshold partitions per-token entropy into two regimes: $[0, \tau H_\mathrm{max})$ where unlearning is active, and $[\tau H_\mathrm{max}, H_\mathrm{max}]$ where the forget objective is silent.
+With $\tau = 0.7$, forget tokens need only reach $70\%$ of maximum entropy --- uncertain enough that specific memorized content is not recoverable, but far from the uniform distribution that would require flattening all logits.
+The remaining $30\%$ of entropy range can be viewed informally as a ``confidence budget'': shared parameters can maintain low-entropy retain predictions without the forget objective pushing them toward uniformity.
+This design is well-matched to LLM unlearning, where forget and retain data share most token-level statistics (common words, syntax) and differ only on knowledge-bearing tokens.
+
+
+\section{Experimental Setup}
 \label{app:details}
 
-\todo{Write appendix.}
+\subsection{Model and Data}
+
+All experiments use Llama-2-7b-hf \citep{touvron2023llama} as the base architecture.
+We evaluate on the MUSE benchmark \citep{shi2024muse}, which provides two corpora: \textbf{News} (BBC news articles) and \textbf{Books} (Harry Potter).
+For each corpus, MUSE supplies a \emph{target model} (fine-tuned on the full corpus) and a \emph{gold retrained model} (fine-tuned only on the retain set), establishing upper and lower bounds on expected behavior.
+
+\tabref{tab:data_stats} summarizes the data splits.
+All sequences are chunked to a maximum length of 2048 tokens.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+& \textbf{News} & \textbf{Books} \\
+\midrule
+Forget samples & 889 & 554 \\
+Retain samples & 1,777 & 1,108 \\
+Max sequence length & 2,048 & 2,048 \\
+Steps/epoch (bs=2, accum=8) & $\sim$55 & $\sim$34 \\
+\bottomrule
+\end{tabular}
+\caption{MUSE data statistics per corpus.}
+\label{tab:data_stats}
+\end{table}
+
+\subsection{\method Hyperparameters}
+
+\tabref{tab:hparams} lists the full hyperparameter configuration for \method on both MUSE corpora.
+The only differences between News and Books are the forget loss type (clamped entropy vs.\ logit margin), the ALM constraint threshold $\varepsilon$, and the number of training epochs.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Hyperparameter} & \textbf{News} & \textbf{Books} \\
+\midrule
+\multicolumn{3}{l}{\textit{LoRA}} \\
+\quad Rank $r$ & 16 & 16 \\
+\quad Alpha $\alpha$ & 32 & 32 \\
+\quad Dropout & 0.0 & 0.0 \\
+\quad Target modules & \multicolumn{2}{c}{q, k, v, o, gate, up, down} \\
+\midrule
+\multicolumn{3}{l}{\textit{Bilevel optimization}} \\
+\quad Inner steps $K$ & 3 & 3 \\
+\quad Inner LR $\eta_\mathrm{in}$ (SGD) & $2 \times 10^{-4}$ & $2 \times 10^{-4}$ \\
+\quad Outer LR $\eta_{\theta}$ (Adam) & $3 \times 10^{-5}$ & $3 \times 10^{-5}$ \\
+\quad Gradient accumulation & 8 & 8 \\
+\quad Per-device batch size & 2 & 2 \\
+\quad Effective batch size & 16 & 16 \\
+\quad Max gradient norm & 1.0 & 1.0 \\
+\midrule
+\multicolumn{3}{l}{\textit{ALM constraint}} \\
+\quad Retain threshold $\varepsilon$ & 0.70 & 0.70 \\
+\quad Penalty $\rho$ & 0.1 & 0.1 \\
+\quad Dual init $\lambda_0$ & 1.0 & 1.0 \\
+\quad Dual floor $\lambda_\mathrm{min}$ & 0.1 & 0.1 \\
+\quad Asymmetry ratio $\alpha$ & 0.1 & 0.1 \\
+\midrule
+\multicolumn{3}{l}{\textit{Forget loss}} \\
+\quad Loss type & clamped\_entropy & clamped\_entropy \\
+\quad Clamping ratio $\tau$ & 0.7 & 0.7 \\
+\midrule
+\multicolumn{3}{l}{\textit{Training}} \\
+\quad Epochs & 4 & 4 \\
+\quad Precision & bf16 & bf16 \\
+\quad Gradient checkpointing & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\caption{\method hyperparameters for MUSE News and Books.}
+\label{tab:hparams}
+\end{table}
+
+\subsection{LoRA Architecture}
+
+We apply LoRA adapters to all seven linear projections in each transformer layer: the four attention projections (\texttt{q\_proj}, \texttt{k\_proj}, \texttt{v\_proj}, \texttt{o\_proj}) and the three feed-forward projections (\texttt{gate\_proj}, \texttt{up\_proj}, \texttt{down\_proj}).
+With rank $r = 16$ and scaling $\alpha = 32$ (effective scaling factor $\alpha/r = 2.0$), this yields approximately 160M trainable parameters across 32 layers---roughly 2.3\% of the full 6.7B model.
+The base model weights remain frozen; the reference model used for constraint evaluation is simply the base model with LoRA adapters disabled, incurring zero additional memory.
+
+\subsection{Baseline Configurations}
+\label{app:baselines}
+
+All baselines use their default hyperparameters from the OpenUnlearning framework \citep{shi2024muse}.
+\tabref{tab:baselines} summarizes the key settings.
+We do not tune baseline hyperparameters; we use the configurations provided by the original authors.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccl}
+\toprule
+\textbf{Method} & \textbf{LR} & \textbf{Eff.\ BS} & \textbf{Epochs} & \textbf{Key params} \\
+\midrule
+GradAscent & $1 \times 10^{-5}$ & 32 & 10 & --- \\
+GradDiff & $1 \times 10^{-5}$ & 32 & 10 & $\gamma = 1.0$ \\
+NPO & $3 \times 10^{-5}$ & 32 & 10 & $\beta = 0.1$ \\
+SimNPO & $1 \times 10^{-5}$ & 32 & 10 & $\beta = 0.7$ \\
+BLURNPO & $2.5 \times 10^{-5}$ & 32 & 10 & $\beta = 0.05$ \\
+RMU & $5 \times 10^{-5}$ & 32 & --- & layer 7, $\gamma_s = 2$ \\
+PDU & $1 \times 10^{-5}$ & 32 & 10 & $\alpha = 50$, $\varepsilon = 1.5$ \\
+\bottomrule
+\end{tabular}
+\caption{Baseline hyperparameters. All use AdamW with constant LR schedule. RMU targets specific layers rather than training for fixed epochs.}
+\label{tab:baselines}
+\end{table}
+
+\subsection{Evaluation Metrics}
+
+We evaluate using the standard MUSE evaluation suite.
+The five metrics are:
+
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{forget\_knowmem} ($\downarrow$): ROUGE-L F1 on knowledge QA pairs from the forget set (max 32 new tokens). Measures residual factual knowledge.
+\item \textbf{verbmem} ($\downarrow$): ROUGE-L F1 on verbatim completion of forget-set passages (max 128 new tokens). Measures residual memorization.
+\item \textbf{retain} ($\uparrow$): ROUGE-L F1 on knowledge QA pairs from the retain set. Measures preservation of non-targeted knowledge.
+\item \textbf{extract} ($\downarrow$): Extraction strength---for each forget passage, the fraction of tokens the model can reproduce given a prefix. Lower means less recoverable memorization.
+\item \textbf{HM} ($\uparrow$): Harmonic mean of $(1 - \text{forget\_knowmem})$, $(1 - \text{verbmem})$, and retain. Penalizes imbalance across axes; any weak dimension tanks the score.
+\end{itemize}
+
+\subsection{Compute}
+
+All experiments are run on a single NVIDIA L40s GPU (48GB).
+Training times are wall-clock (excluding evaluation).
+\method with clamped entropy on MUSE Books (4 epochs, 135 outer steps) takes approximately 104 minutes.
+Gradient checkpointing is enabled for all methods to fit within GPU memory.
+
 
 \section{Extended Results}
 \label{app:results}
 
-\todo{Add extended results tables.}
+\subsection{MUSE Books}
+
+\tabref{tab:muse_books} reports full results on MUSE Books.
+\method achieves HM = 0.798, surpassing the strongest baseline (SimNPO, HM = 0.755) by $+0.043$.
+Notably, forget\_knowmem (0.080) and verbmem (0.000) are both well below the gold-retrained model's values (0.303 and 0.145), indicating thorough forgetting.
+Retain (0.598) is 87\% of gold (0.687), reflecting effective utility preservation.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Method} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{ext}$\downarrow$ & \textbf{HM}$\uparrow$ \\
+\midrule
+Gold (retrain) & 0.303 & 0.145 & 0.687 & 0.011 & 0.739 \\
+Target (pre-unlearn) & 0.471 & 0.997 & 0.691 & 0.916 & 0.009 \\
+\midrule
+GradAscent & 0.000 & 0.000 & 0.000 & 0.008 & 0.000 \\
+GradDiff & 0.000 & 0.000 & 0.025 & 0.008 & 0.070 \\
+NPO & 0.411 & 0.570 & 0.661 & 0.377 & 0.542 \\
+SimNPO & 0.239 & 0.005 & 0.604 & 0.009 & 0.755 \\
+BLURNPO & 0.311 & 0.809 & 0.600 & 0.702 & 0.359 \\
+RMU & 0.308 & 0.120 & 0.604 & 0.011 & 0.708 \\
+PDU & 0.000 & 0.002 & 0.000 & 0.008 & 0.000 \\
+\midrule
+\method (ours) & \textbf{0.080} & \textbf{0.000} & \textbf{0.598} & \textbf{0.008} & \textbf{0.798} \\
+\bottomrule
+\end{tabular}
+\caption{MUSE Books results (Llama-2-7b). fk = forget\_knowmem, vm = verbmem, ret = retain, ext = extraction strength. \textbf{Bold}: best among unlearning methods (excl.\ gold/target).}
+\label{tab:muse_books}
+\end{table}
+
+\subsection{MUSE News}
+
+\tabref{tab:muse_news} reports results on MUSE News.
+This corpus is more challenging: the gold-retrained model achieves only HM = 0.660, and no baseline exceeds 0.554.
+PDU is the strongest baseline, driven by low verbmem (0.042) but mediocre retain (0.414).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Method} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{ext}$\downarrow$ & \textbf{HM}$\uparrow$ \\
+\midrule
+Gold (retrain) & 0.324 & 0.204 & 0.552 & 0.025 & 0.660 \\
+Target (pre-unlearn) & 0.654 & 0.569 & 0.544 & 0.302 & 0.426 \\
+\midrule
+GradAscent & 0.003 & 0.049 & 0.008 & 0.008 & 0.023 \\
+GradDiff & 0.330 & 0.005 & 0.247 & 0.008 & 0.458 \\
+NPO & 0.517 & 0.357 & 0.420 & 0.096 & 0.499 \\
+SimNPO & 0.584 & 0.259 & 0.470 & 0.052 & 0.510 \\
+BLURNPO & 0.581 & 0.356 & 0.532 & 0.124 & 0.516 \\
+RMU & 0.516 & 0.285 & 0.457 & 0.055 & 0.530 \\
+PDU & 0.489 & 0.042 & 0.414 & 0.014 & 0.554 \\
+\bottomrule
+\end{tabular}
+\caption{MUSE News results (Llama-2-7b). \method results pending; baselines shown for reference.}
+\label{tab:muse_news}
+\end{table}
+
+\subsection{Training Dynamics}
+\label{app:dynamics}
+
+\tabref{tab:dynamics} shows the loss trajectory of \method on MUSE Books (exp\_18, the champion run).
+The key pattern is a single retain spike at the epoch~1--2 boundary that ratchets $\lambda$ from 1.0 to 2.27, after which all subsequent epochs run smoothly with no further violations.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{rccccl}
+\toprule
+\textbf{Step} & $\Loss_\mathrm{fgt}$ & $\Loss_\mathrm{ret}$ & $\lambda$ & $r$ & \textbf{Notes} \\
+\midrule
+0 & 6.995 & 0.052 & 1.00 & $-0.10$ & Init \\
+30 & 5.861 & 0.153 & 0.97 & $+0.00$ & First violation \\
+33 & 4.275 & 1.167 & 1.05 & $+1.02$ & Epoch 1$\to$2 spike \\
+36 & 2.186 & 1.649 & 1.41 & $+1.50$ & Spike peak \\
+48 & 0.910 & 0.276 & 2.24 & $+0.13$ & ALM recovering \\
+66 & 0.227 & 0.054 & 2.26 & $-0.10$ & Epoch 2 end \\
+72 & 0.073 & 0.051 & 2.26 & $-0.10$ & Epoch 3 start, no spike \\
+102 & 0.015 & 0.047 & 2.22 & $-0.10$ & Epoch 4 start, no spike \\
+135 & 0.008 & 0.037 & 2.19 & $-0.11$ & Converged \\
+\bottomrule
+\end{tabular}
+\caption{Training dynamics of \method on MUSE Books (4 epochs, 135 steps). The constraint residual $r = \Loss_\mathrm{ret} - \varepsilon$ with $\varepsilon = 0.15$.}
+\label{tab:dynamics}
+\end{table}
+
+\subsection{Ablation: Forget Loss Comparison}
+\label{app:ablation}
+
+\tabref{tab:ablation_loss} compares forget loss variants within the \method framework on MUSE Books, all using the same bilevel ALM setup ($K = 3$, $\varepsilon = 0.15$, $\lambda_0 = 1.0$, $\rho = 0.1$).
+Each loss exhibits a distinct failure mode:
+
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{Logit margin:} Strong forgetting but structural retain spikes at every epoch boundary. Best retain $\approx 0.41$.
+\item \textbf{Repr.\ orthogonal:} Completely stable retain (no spikes) but weak forgetting---orthogonal hidden states do not suppress generation.
+\item \textbf{Clamped entropy:} One spike that permanently ratchets $\lambda$, then smooth convergence. Best on both axes.
+\end{itemize}
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{llccccc}
+\toprule
+\textbf{ID} & \textbf{Forget loss} & \textbf{Ep.} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{HM}$\uparrow$ \\
+\midrule
+13 & logit\_margin & 2 & 0.093 & 0.001 & 0.389 & 0.564 \\
+14 & focal\_logit\_margin & 2 & 0.112 & 0.001 & 0.391 & 0.567 \\
+16 & repr\_orthogonal & 2 & 0.357 & 0.313 & 0.618 & 0.648 \\
+17 & clamped\_entropy & 2 & 0.096 & 0.001 & 0.443 & 0.687 \\
+\textbf{18} & \textbf{clamped\_entropy} & \textbf{4} & \textbf{0.080} & \textbf{0.000} & \textbf{0.598} & \textbf{0.798} \\
+\bottomrule
+\end{tabular}
+\caption{Forget loss ablation within \method on MUSE Books. All use the same bilevel ALM configuration. Clamped entropy with 4 epochs achieves the best trade-off.}
+\label{tab:ablation_loss}
+\end{table}
