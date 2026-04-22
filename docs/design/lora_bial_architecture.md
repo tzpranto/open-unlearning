@@ -248,21 +248,33 @@ Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 | RMU | 0.308 | 0.120 | 0.604 | 0.011 | 0.708 |
 | **LoRA-BiAL (ours)** | **0.080** | **0.000** | **0.598** | **0.008** | **0.798** |
 
-### 3.2 TOFU forget01 (Llama-3.2-1B)
+### 3.2 TOFU forget01
 
-**Task:** Forget 1% of TOFU QA pairs. **Metric:** HM = hmean(MU, 1-fgt_Prob, 1-fgt_ROUGE). **Config:** LoRA r=8/α=16, K=3, η_in=2e-4, η_out=2e-5, ε=0.15, T=100, bs=4, grad_accum=4 (eff_bs=16).
+**Task:** Forget 1% of TOFU QA pairs. **Metric:** HM = hmean(MU, 1-fgt_Prob, 1-fgt_ROUGE). **Config:** LoRA r=8/α=16, K=3, η_in=2e-4, η_out=2e-5, ε_mul=0.85, bs=4, grad_accum=4 (eff_bs=16).
+
+**Llama-3.2-1B-Instruct:**
 
 | Method | MU↑ | FQ↑ | ES↓ | fgt_Prob↓ | fgt_ROUGE↓ | HM↑ |
 |--------|------|------|------|-----------|-----------|------|
-| Gold (retrain) | 0.597 | 1.000 | 0.069 | — | — | — |
+| Gold (retrain) | 0.597 | 1.000 | 0.069 | 0.166 | 0.414 | 0.655 |
 | GradAscent | 0.394 | 0.578 | 0.046 | 0.008 | 0.273 | 0.610 |
 | GradDiff | 0.488 | 0.266 | 0.063 | 0.056 | 0.357 | 0.643 |
 | NPO | 0.583 | 0.266 | 0.091 | 0.100 | 0.333 | 0.694 |
 | RMU | 0.584 | 0.766 | 0.039 | 0.113 | 0.275 | 0.711 |
-| PDU | 0.607 | 0.054 | 0.030 | 0.003 | 0.066 | 0.806 |
-| LoRA-BiAL (ours) | 0.575 | 0.579 | 0.101 | 0.112 | 0.145 | — |
+| PDU | 0.607 | 0.054 | 0.030 | 0.003 | 0.066 | **0.806** |
+| LoRA-BiAL (ours, T=100) | 0.596 | 0.919 | 0.058 | 0.025 | 0.105 | 0.786 |
+| LoRA-BiAL (ours, T=150) | 0.604 | 0.097 | 0.029 | 0.002 | 0.038 | **0.811** |
 
-TOFU run is preliminary (single config, no hyperparameter sweep). Evaluation in progress.
+**Llama-3.2-3B-Instruct:**
+
+| Method | MU↑ | FQ↑ | ES↓ | fgt_Prob↓ | fgt_ROUGE↓ | HM↑ |
+|--------|------|------|------|-----------|-----------|------|
+| Gold (retrain) | 0.663 | 1.000 | 0.067 | 0.179 | 0.409 | 0.656 |
+| GradAscent | 0.607 | 0.990 | 0.105 | 0.070 | 0.335 | 0.710 |
+| NPO | 0.655 | 0.766 | 0.116 | 0.133 | 0.365 | 0.705 |
+| PDU | 0.703 | 0.001 | 0.029 | 0.004 | 0.075 | **0.855** |
+| LoRA-BiAL (ours, T=100) | 0.662 | 0.001 | 0.029 | 0.000 | 0.012 | 0.852 |
+| LoRA-BiAL (ours, T=150) | 0.649 | 0.029 | 0.029 | 0.000 | 0.022 | 0.842 |
 
 ---
 
