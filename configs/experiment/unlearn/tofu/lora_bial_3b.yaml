@@ -1,0 +1,72 @@
+# @package _global_
+# LoRA-BiAL on TOFU 3B — adapted from 1B config
+# Model: Llama-3.2-3B-Instruct (fine-tuned on TOFU)
+
+defaults:
+  - override /model: Llama-3.2-3B-Instruct
+  - override /trainer: LoRABiAL
+  - override /data: unlearn
+  - override /data/datasets@data.forget: TOFU_QA_forget
+  - override /data/datasets@data.retain: TOFU_QA_retain
+  - override /eval: tofu
+
+model:
+  model_args:
+    pretrained_model_name_or_path: open-unlearning/tofu_Llama-3.2-3B-Instruct_full
+
+forget_split: forget01
+retain_split: retain99
+holdout_split: holdout01
+retain_logs_path: null
+question_key: "question"
+
+eval:
+  tofu:
+    forget_split: ${forget_split}
+    holdout_split: ${holdout_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+    question_key: ${question_key}
+
+data:
+  anchor: forget
+  forget:
+    TOFU_QA_forget:
+      args:
+        hf_args:
+          name: ${forget_split}
+  retain:
+    TOFU_QA_retain:
+      args:
+        hf_args:
+          name: ${retain_split}
+
+trainer:
+  method_args:
+    # LoRA — 3B model, slightly larger rank
+    lora_r: 16
+    lora_alpha: 32
+    # Bilevel
+    T: -1
+    K: 3
+    eta_theta: 2e-5
+    eta_in: 2e-4
+    # ALM
+    epsilon: 0.15
+    rho: 0.1
+    lambda_init: 1.0
+    # Forget loss
+    forget_loss_type: clamped_entropy
+    clamped_entropy_tau: 0.7
+    # Batching
+    gradient_accumulation_steps: 4
+    max_grad_norm: 1.0
+    checkpoint_every_epoch: true
+    use_implicit: false
+
+  args:
+    per_device_train_batch_size: 4
+    num_train_epochs: 10
+    gradient_checkpointing: True
+
+task_name: ???
