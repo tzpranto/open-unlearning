@@ -99,7 +99,7 @@ This measures how peaked the logit vector is. Two problems:
 - **Unbounded gradients:** A single highly confident token (where the top logit is far above the mean) produces an arbitrarily large per-token loss. The inner loop's K=3 SGD steps cannot repair the retain damage from one such gradient spike.
 - **Operates on raw logits, not probabilities:** Logits are shift-invariant under softmax — adding a constant c to all logits changes the margin but not the distribution. This means logit margin penalizes the *scale* of logits rather than the *shape* of the distribution, which is what actually matters for memorization.
 
-**Clamped entropy.** Instead, we target entropy directly and clamp per-token:
+**Clamped entropy.** Entropy maximization as a forget objective is established — Yuan et al. (2024) propose Maximizing Entropy (ME), which minimizes KL(p_t || U) at each position (equivalent to negated entropy up to a constant). However, unclamped ME continues pushing already-forgotten tokens toward uniform, wasting gradient budget and producing unnecessarily large outer perturbations. We add a per-token hinge clamp:
 
 ```
 L_forget = (1/T) Σ_t max(0, τ·H_max - H(t))
@@ -117,6 +117,8 @@ Where:
 1. **Bounded loss:** Each token contributes at most `τ·H_max` to the sum, so `L_forget ∈ [0, τ·H_max]`. No arbitrarily large gradients — the worst case is bounded. This is critical for the bilevel setup: the inner loop needs the outer perturbation to be predictably sized so K=3 steps suffice for repair.
 2. **Self-stabilizing:** As forgetting succeeds, tokens progressively cross the τ·H_max threshold and drop out. The effective batch size of "active" tokens shrinks automatically. Early in training most tokens are active (low entropy on memorized data); late in training, only the stubbornest tokens remain. The gradient naturally decays without any explicit scheduling.
 3. **Reference-free:** Only requires a forward pass through the current model. No base model logits needed (unlike NPO which needs reference logits from the frozen model). This halves the compute per outer step.
+
+The key difference from unclamped ME (Yuan et al., 2024) is property 2: unclamped entropy maximization applies equal gradient pressure to all tokens regardless of how forgotten they already are, while clamped entropy concentrates gradient on the tokens that still need work. This is critical in the bilevel setting — the outer perturbation should shrink as forgetting succeeds, giving the inner loop less damage to repair. The target entropy idea draws structural inspiration from SAC in RL (Haarnoja et al., 2018), which adjusts a global temperature to maintain average entropy near a target H_0 — but SAC modulates a coefficient, while our formulation directly zeros out per-token gradients.
 
 **Token-level example.** Consider the forget sequence `"Harry Potter is a wizard who attends Hogwarts"`. The table below compares both losses at each position at the start of training (model still memorized):
 
@@ -335,4 +337,6 @@ Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 - **Lorraine et al., 2020.** J. Lorraine, P. Vicol, D. Duvenaud. Optimizing millions of hyperparameters by implicit differentiation. *AISTATS*.
 - **Nocedal & Wright, 2006.** J. Nocedal, S. J. Wright. *Numerical Optimization* (2nd ed.). Springer.
 - **Tanaka et al., 2020.** H. Tanaka et al. Pruning neural networks without any data by iteratively conserving synaptic flow. *NeurIPS*.
+- **Yuan et al., 2024.** Z. Yuan et al. A Closer Look at Machine Unlearning for Large Language Models. *arXiv:2410.08109*.
+- **Haarnoja et al., 2018.** T. Haarnoja et al. Soft Actor-Critic Algorithms and Applications. *arXiv:1812.05905*.
 - **Zhang et al., 2024.** R. Zhang et al. Negative Preference Optimization: From Catastrophic Collapse to Effective Unlearning. *arXiv:2404.05868*.
