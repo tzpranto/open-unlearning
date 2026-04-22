@@ -238,26 +238,10 @@ TOFU run is preliminary (single config, no hyperparameter sweep). Evaluation in 
 ### 4.1 MUSE Books (Exp 18)
 
 ![Figure 1: MUSE Books loss dynamics](figures/fig1_muse_books_dynamics.png)
-*Figure 1: MUSE Books champion run. L_forget (red) drops from 7.0→0.008. L_retain (blue) spikes once at the epoch boundary then stabilizes below ε. λ (purple, right axis) ratchets from 1.0→2.27 during the spike and locks in. Subsequent epoch boundaries (dashed lines) produce no spikes.*
-
-Key observations:
-
-- **Steps 0-28 (plateau):** L_fgt flat at ~7.0, L_ret stable at ~0.05. LoRA adapters warming up from zero init. Inner loop easily maintains retain with K=3.
-- **Steps 29-55 (spike and ratchet):** L_ret crosses ε at step 30, peaks at 1.65 (step 36). The dual update ratchets λ from 1.0 to 2.27 over ~15 violating steps. Once λ is high enough, the ALM term dominates the outer gradient — the optimizer shifts from forgetting to retain recovery. L_ret returns to ~0.05 by step 55.
-- **Steps 56-135 (smooth convergence):** Three epoch boundaries, zero spikes. The elevated λ≈2.2 keeps the outer perturbation small enough for K=3 inner steps to compensate. L_fgt continues dropping to 0.008 as remaining tokens reach the τ·H_max clamp.
-
-The spike appears to result from accumulated LoRA drift over epoch 1 — each outer step slightly perturbs θ away from the retain-optimal region, and by step 30 the model is in a fragile state where any perturbation can trigger a large jump. The exact mechanism may involve optimizer momentum mismatch at epoch boundaries, batch composition changes, or simply reaching a critical drift threshold. What is clear empirically: the bounded nature of clamped entropy limits the spike to 1.65 (vs 2.7+ for logit margin), and the ALM ratchet converts the spike into a permanent λ calibration.
 
 ### 4.2 TOFU (Llama-3.2-1B)
 
 ![Figure 2: TOFU 1B loss dynamics](figures/fig2_tofu_1b_dynamics.png)
-*Figure 2: TOFU 1B run (100 steps). Gradual L_fgt descent from 7.1→1.2. L_retain oscillates near ε=0.15 throughout, with a gradual rise after step 60 that ratchets λ from 1.0→2.16.*
-
-TOFU shows qualitatively different dynamics than MUSE Books:
-
-- No sharp spike — L_ret rises gradually (0.15→0.67 over steps 60-90) rather than jumping suddenly. This likely reflects the much smaller forget set (20 QA pairs vs 554 book chunks).
-- λ increases steadily rather than in one ratchet event. By step 100, λ=2.16 — similar final value, different path.
-- L_fgt is still at 1.18 at step 100 — forgetting is not complete. More steps or epochs would likely improve results.
 
 ---
 

@@ -33,7 +33,7 @@ def extract(history, key):
 
 # ── Load data ──────────────────────────────────────────────────────────────
 h18 = load_history(SAVES / "unlearn/muse_books_exp_18/lora_bial_history.json")
-h_tofu = load_history(SAVES / "unlearn/tofu_Llama-3.2-1B-Instruct_forget01_LoRABiAL_bs8/lora_bial_history.json")
+h_tofu = load_history(SAVES / "unlearn/tofu_Llama-3.2-1B-Instruct_forget01_LoRABiAL_T150/lora_bial_history.json")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -103,14 +103,14 @@ ax2 = ax1.twinx()
 ax2.set_ylabel("$\\lambda$", color="#9467bd")
 l3, = ax2.plot(steps_t, lam_t, color="#9467bd", linewidth=1.5, linestyle="--", label="$\\lambda$")
 ax2.tick_params(axis="y", labelcolor="#9467bd")
-ax2.set_ylim(0.8, 2.5)
+ax2.set_ylim(0.8, 2.6)
 
 for xb in eb_t:
     ax1.axvline(xb, color="gray", linestyle="--", alpha=0.25, linewidth=0.8)
 
 ax1.legend([l1, l2, l3], [l.get_label() for l in [l1, l2, l3]],
            loc="right", framealpha=0.95)
-ax1.set_title("TOFU forget01 — Llama-3.2-1B: Clamped Entropy + ALM, 100 Steps (MU=0.575, FQ=0.579)")
+ax1.set_title("TOFU forget01 — Llama-3.2-1B: Clamped Entropy + ALM, 150 Steps")
 
 plt.tight_layout()
 fig.savefig(OUT_DIR / "fig2_tofu_1b_dynamics.png")
