@@ -276,6 +276,10 @@ TOFU run is preliminary (single config, no hyperparameter sweep). Evaluation in 
 
 ![Figure 2: TOFU 1B loss dynamics](figures/fig2_tofu_1b_dynamics.png)
 
+### 4.3 TOFU (Llama-3.2-3B)
+
+![Figure 3: TOFU 3B loss dynamics](figures/fig3_tofu_3b_dynamics.png)
+
 ---
 
 ## 5. Key Observations
