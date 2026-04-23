@@ -19,7 +19,7 @@ Rather than modifying the full weight matrices, we attach LoRA adapters \citep{h
 \end{equation}
 where $r \ll \min(d_{\text{out}}, d_{\text{in}})$ is the rank and $\alpha/r$ is a scaling factor.
 With $r\!=\!16$ on a 7B model, only ${\sim}0.08\%$ of parameters are trainable.
-This has two key benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update, preventing catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model---providing a free reference model for losses that require one (e.g., NPO).
+This has two practical benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update, preventing catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model, simplifying debugging and rollback.
 
 \subsection{Bilevel Formulation}
 \label{sec:bilevel}
@@ -57,7 +57,7 @@ The $\max(0, \cdot)$ clamp ensures:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
     \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. No arbitrarily large gradients.
     \item \textbf{Self-stabilizing}: once a token's entropy exceeds $\tau \cdot H_{\max}$, its gradient is exactly zero. The effective number of active tokens decreases monotonically as forgetting progresses.
-    \item \textbf{Reference-free}: requires only a single forward pass through the current model.
+    \item \textbf{Single-model}: requires only a single forward pass through the current model, unlike DPO-style losses (NPO, SimNPO) which need a reference model.
 \end{itemize}
 
 \subsection{Augmented Lagrangian with Asymmetric Dual Update}

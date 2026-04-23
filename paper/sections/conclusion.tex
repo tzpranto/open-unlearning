@@ -2,12 +2,12 @@
 \label{sec:conclusion}
 
 We presented \method, a bilevel optimization framework for LLM unlearning that treats retain preservation as a hard constraint via an augmented Lagrangian.
-The method introduces two novel components: (1) a clamped entropy forget loss that provides bounded, self-stabilizing forgetting with per-token dropout, and (2) an asymmetric dual update that permanently calibrates the forget--retain tradeoff after the first constraint violation.
-All updates are confined to LoRA adapters, limiting damage radius and providing a free reference model.
+The method introduces two novel components: (1) a clamped entropy forget loss that provides bounded, self-stabilizing forgetting with per-token dropout, and (2) an asymmetric dual update that calibrates the forget--retain tradeoff from training dynamics rather than manual tuning.
+All updates are confined to LoRA adapters, limiting the damage radius of the unlearning update.
 
-On MUSE Books, \method achieves HM=0.798, surpassing the gold retrained model.
-On TOFU, \method is competitive with or outperforms PDU across 1B and 3B scales.
-Loss dynamics exhibit consistent three-phase behavior across all settings, suggesting the ALM discovers a universal tradeoff point.
+On MUSE Books, \method achieves the highest HM (0.798) among all tested methods.
+On TOFU, \method is competitive with PDU across 1B and 3B scales while achieving consistently strong forgetting metrics.
+Loss dynamics exhibit a consistent three-phase pattern across all settings, suggesting the ALM converges to a stable operating point for the forget--retain tradeoff.
 
 \paragraph{Limitations.}
 Our evaluation is limited to TOFU and MUSE Books; extending to WMDP (safety-critical unlearning) and larger models ($\geq$7B instruction-tuned) remains future work.
@@ -15,4 +15,4 @@ The method has more hyperparameters than single-loss baselines (though auto-epsi
 We have not yet conducted formal ablation studies isolating each component's contribution.
 
 \paragraph{Future work.}
-Extending to MUSE News and WMDP benchmarks; formal ablation study; scaling to 7B+ models; investigating whether the implicit differentiation correction (currently disabled) provides benefits at larger $K$.
+Extending to additional benchmarks (MUSE News, WMDP); formal ablation study isolating each component; scaling to 7B+ instruction-tuned models; multi-seed evaluation with confidence intervals.
