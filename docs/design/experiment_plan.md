@@ -116,6 +116,48 @@ Priority baselines to LoRA-ify:
 
 ---
 
+## P1: RWKU — Real World Knowledge Unlearning
+
+**Goal**: Differentiate from the TOFU/MUSE/WMDP crowd with a benchmark that directly tests our core advantage — preserving neighbor knowledge during forgetting.
+
+**Why this benchmark**: RWKU (Jin et al., 2024) is designed to expose exactly the failure mode our ALM constraint prevents. It requires forgetting 200 real-world famous people (e.g., Stephen King) from Llama-3-8B-Instruct or Phi-3-mini-4k, then evaluates:
+- **Forget probes** (3 levels): cloze completion, QA, adversarial rephrasing (13,131 probes total)
+- **Neighbor perturbation**: Does forgetting "Stephen King" degrade knowledge of related entities (e.g., other horror authors, Maine, The Shining actors)? This is where GA/NPO collapse — they nuke the entire neighborhood.
+- **Utility dimensions**: Reasoning, truthfulness, factuality, fluency, multilingual (5 separate axes)
+- **MIA**: Membership inference attack resistance
+
+**Why LoRA-BiAL wins here**:
+1. Clamped entropy: bounded forgetting signal stops once a person is forgotten — won't keep pushing and destroy neighbors
+2. ALM constraint: ratchets up retain protection when neighbor knowledge degrades
+3. LoRA: low-rank update physically limits how many representations can be perturbed
+4. 200-entity scale stresses consistency over many forget targets — exactly where adaptive λ matters most
+
+**Data/Code**: GitHub `jinzhuoran/RWKU`, HuggingFace `jinzhuoran/RWKU` (CC-BY-4.0). 4.35GB, ~960K rows.
+
+**Integration effort**: Need to write a data loader and eval harness. The forget/retain split structure maps naturally to our framework. Eval requires cloze/QA accuracy + neighbor accuracy + utility benchmarks.
+
+**Risk**: Llama-3-8B-Instruct may need LoRA r=16 or higher for the 200-entity scale. HP tuning could take several iterations. The 8B model is larger than our current 7B MUSE setup but fits on A100 with LoRA.
+
+**Estimated time**: Data integration (3-4 hours) + eval harness (2-3 hours) + HP search (~8 hours GPU) + baselines (~6 hours GPU) = ~20 hours total.
+
+---
+
+## P2: KnowUnDo — Over-Forgetting Stress Test
+
+**Goal**: Secondary differentiation benchmark. KnowUnDo (Gao et al., 2024, EMNLP Findings) was *designed* to penalize excessive unlearning — the exact failure mode we claim to solve.
+
+**What it tests**: Two domains (copyrighted content, private user data). Each has an unlearn split and a retention split of neighboring knowledge. The key metric is whether essential related knowledge survives the unlearning process.
+
+**Why LoRA-BiAL wins here**: The benchmark's core finding is that "existing methods suffer excessive unlearning." Our ALM constraint with asymmetric ratchet is purpose-built to prevent this — λ rises on the first retain spike and stays elevated.
+
+**Data/Code**: GitHub `zjunlp/KnowUnDo`, HuggingFace. Targets Llama-2-7b-chat and Qwen1.5-7B-Chat.
+
+**Risk**: Smaller community adoption than RWKU. Two-domain setup means double the eval work. Lower priority than RWKU.
+
+**Estimated time**: Integration (2-3 hours) + runs (~6 hours GPU) = ~9 hours total.
+
+---
+
 ## P2: WMDP Benchmark
 
 **Goal**: Demonstrate on safety-critical unlearning (hazardous knowledge removal).
@@ -173,7 +215,10 @@ Assuming single A100, sequential runs:
 | 4 | P1: HP sensitivity sweeps | ~5h |
 | 4 | P1: LoRA baselines | ~2h |
 | 5 | P1: MUSE News tuning | ~10h |
-| 6 | P2: WMDP (if time) | ~7h |
-| 6 | P2: Compute analysis | ~1h |
+| 6-7 | P1: RWKU integration + data loader + eval harness | ~6h dev |
+| 7-8 | P1: RWKU HP search + baselines | ~14h GPU |
+| 9 | P2: KnowUnDo (if time) | ~9h |
+| 9 | P2: WMDP (if time) | ~7h |
+| 9 | P2: Compute analysis | ~1h |
 
-**Total**: ~5-6 days of continuous GPU time for P0+P1. P2 adds 1 more day.
+**Total**: ~7-8 days of continuous GPU time for P0+P1. P2 adds 1-2 more days.
