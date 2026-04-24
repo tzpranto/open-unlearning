@@ -1,12 +1,3 @@
 {
-  "tasks": [
-    {
-      "id": "dfaed510",
-      "cron": "*/10 * * * *",
-      "prompt": "Monitor the TOFU master pipeline (PID 56193, run_tofu_1b_3b_7b.sh). 3 models: 7B, 1B, 3B. 63 total runs.\n\n1. Check alive: `ps -p 56193 -o pid,stat 2>/dev/null`\n2. Progress log: `tail -20 /datadrive/forked/open-unlearning/saves/unlearn/_tofu_master_progress.log`\n3. Count completed per model:\n   - 7B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-2-7b-chat-hf_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n   - 1B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-3.2-1B-Instruct_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n   - 3B: `ls -d /datadrive/forked/open-unlearning/saves/unlearn/tofu_Llama-3.2-3B-Instruct_*/evals/TOFU_SUMMARY.json 2>/dev/null | wc -l`\n4. For NEW completed runs since last check, read their TOFU_SUMMARY.json, compute HM = hmean(model_utility, forget_quality) using scipy (0 if either is 0), and update docs/results/tofu.md with results. The file has sections: 1B, 3B, 7B each with forget01/05/10 tables.\n5. If pipeline crashed (PID dead but not all 63 done), check `tail -30 /tmp/nohup_tofu_master.out` for the error. Fix the issue, then relaunch: `nohup bash /datadrive/forked/open-unlearning/scripts/run_tofu_1b_3b_7b.sh > /tmp/nohup_tofu_master.out 2>&1 &`\n6. Give a short status update to the user.",
-      "createdAt": 1776523199917,
-      "lastFiredAt": 1776610463128,
-      "recurring": true
-    }
-  ]
+  "tasks": []
 }
