@@ -338,5 +338,4 @@ Hyperparams: K, η_in, η_out, ε_mul, ρ, λ_init, τ
 - **Nocedal & Wright, 2006.** J. Nocedal, S. J. Wright. *Numerical Optimization* (2nd ed.). Springer.
 - **Tanaka et al., 2020.** H. Tanaka et al. Pruning neural networks without any data by iteratively conserving synaptic flow. *NeurIPS*.
 - **Yuan et al., 2024.** Z. Yuan et al. A Closer Look at Machine Unlearning for Large Language Models. *arXiv:2410.08109*.
-- **Haarnoja et al., 2018.** T. Haarnoja et al. Soft Actor-Critic Algorithms and Applications. *arXiv:1812.05905*.
 - **Zhang et al., 2024.** R. Zhang et al. Negative Preference Optimization: From Catastrophic Collapse to Effective Unlearning. *arXiv:2404.05868*.

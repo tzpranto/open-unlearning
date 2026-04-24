@@ -123,10 +123,12 @@ PDU & 0.703 & 0.001 & 0.029 & 0.004 & 0.075 & \textbf{0.855} \\
 \end{tabular}
 \end{table}
 
-Tables~\ref{tab:tofu_1b} and~\ref{tab:tofu_3b} show TOFU results. On 1B, \method at $T$=150 achieves HM=0.811, outperforming PDU (0.806). At $T$=100, \method achieves the highest Forget Quality (FQ=0.919) among all methods---meaning the forget set's truth ratio distribution is nearly indistinguishable from the gold retrained model's. On 3B, \method is competitive with PDU (0.852 vs 0.855) while achieving near-perfect forgetting (fgt\_Prob=0.000, fgt\_ROUGE=0.012).
+Tables~\ref{tab:tofu_1b} and~\ref{tab:tofu_3b} show TOFU results. On 1B, \method at $T$=150 achieves HM=0.811 vs.\ PDU (0.806). At $T$=100, \method achieves the highest Forget Quality (FQ=0.919) among all methods---meaning the forget set's truth ratio distribution is nearly indistinguishable from the gold retrained model's. On 3B, \method is slightly below PDU (0.852 vs.\ 0.855) while achieving near-perfect forgetting (fgt\_Prob$<$0.001, fgt\_ROUGE=0.012).
 
-\todo{Add MUSE News results when available.}
-\todo{Add ablation study (clamped vs unclamped, symmetric vs asymmetric, with/without bilevel).}
+\paragraph{Note on margins.} The TOFU improvements are small (0.005 on 1B, $-$0.003 on 3B) and based on single runs. We report these as competitive rather than claiming clear superiority. The stronger signal is on MUSE Books ($+$0.043 over SimNPO) and on forgetting quality metrics (FQ, fgt\_Prob) where \method consistently achieves near-perfect scores.
+
+\paragraph{Note on ``beating gold.''}
+On MUSE Books, \method achieves higher HM than the gold retrained model (0.798 vs.\ 0.739). This is because the gold model retains residual knowledge of the forget content (fk=0.303) since general pretraining corpora overlap with the Harry Potter books. \method achieves lower forget knowledge (fk=0.080) at the cost of lower retain (0.598 vs.\ 0.687). This represents a different operating point on the Pareto frontier, not a strictly superior solution---the gold model defines correct behavior, and over-forgetting relative to it may indicate collateral damage to related knowledge.
 
 \subsection{Loss Dynamics}
 \label{sec:dynamics}

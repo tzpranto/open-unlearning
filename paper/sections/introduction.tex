@@ -14,16 +14,16 @@ We identify three failure modes in current approaches:
     \item \textbf{Over-forgetting.} Unclamped entropy maximization \citep{yuan2024closer} and gradient ascent continue pushing already-forgotten tokens, wasting gradient budget and destabilizing the model.
 \end{enumerate}
 
-\method addresses all three through a bilevel optimization framework with four interlocking components:
+\method addresses these through a bilevel optimization framework with three novel components and a standard parameterization choice:
 
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
     \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): maximizes per-token output entropy up to a threshold $\tau \cdot H_{\max}$, after which the gradient vanishes. This provides bounded, self-stabilizing forgetting---tokens ``drop out'' of the loss as they are forgotten.
     \item \textbf{Augmented Lagrangian constraint} (\secref{sec:alm}): treats retain preservation as a hard constraint $\Loss_{\text{ret}} \leq \varepsilon$ enforced by a learned Lagrange multiplier $\lambda$, rather than a soft penalty with a fixed weight.
     \item \textbf{Asymmetric dual update} (\secref{sec:alm}): ratchets $\lambda$ quickly on constraint violations but decays it slowly when satisfied, permanently calibrating the tradeoff after the first retain spike.
-    \item \textbf{LoRA parameterization} (\secref{sec:lora}): confines all updates to low-rank adapters, limiting damage radius and providing a free reference model by simply disabling adapters.
+    \item \textbf{LoRA parameterization} (\secref{sec:lora}): confines all updates to low-rank adapters, limiting the damage radius of the unlearning update.
 \end{enumerate}
 
-We evaluate \method on MUSE Books \citep{shi2024muse} and TOFU \citep{maini2024tofu} across three model scales (1B, 3B, 7B).
-On MUSE Books, \method achieves HM=0.798, surpassing SimNPO (0.755) and the gold retrained model (0.739).
-On TOFU 1B, \method achieves HM=0.811, outperforming PDU (0.806).
-Loss dynamics across all settings exhibit the same three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---demonstrating that the ALM mechanism generalizes across scales and datasets.
+We evaluate \method on MUSE Books \citep{shi2024muse} and TOFU \citep{maini2024tofu} across two model scales (1B, 3B) and one 7B setting.
+On MUSE Books, \method achieves HM=0.798, the highest among all tested baselines.
+On TOFU 1B, \method achieves HM=0.811 with the best forget quality (FQ=0.919) at $T$=100 steps.
+Loss dynamics across all settings exhibit a consistent three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---suggesting the ALM mechanism discovers a stable forget--retain operating point.

@@ -17,6 +17,8 @@ from trainer.unlearn.wga import WGA
 from trainer.unlearn.pdu import PDU
 from trainer.unlearn.sibl import SIBL
 from trainer.unlearn.lora_bial import LoRABiAL
+from trainer.unlearn.lora_bial_es import LoRABiALES
+from trainer.unlearn.lora_bial_adaptive import LoRABiALAdaptive
 from trainer.unlearn.lora_implicit import LoRAImplicit
 
 
@@ -105,4 +107,6 @@ _register_trainer(WGA)
 _register_trainer(PDU)
 _register_trainer(SIBL)
 _register_trainer(LoRABiAL)
+_register_trainer(LoRABiALES)
+_register_trainer(LoRABiALAdaptive)
 _register_trainer(LoRAImplicit)

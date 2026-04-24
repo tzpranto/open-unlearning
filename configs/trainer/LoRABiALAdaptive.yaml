@@ -1,0 +1,9 @@
+defaults:
+  - LoRABiAL
+
+handler: LoRABiALAdaptive
+method_args:
+  # Self-tuning — only structural params, no dataset-dependent thresholds
+  calibration_frac: 0.10      # fraction of T to observe before LR adjustment
+  conv_patience: 8            # consecutive flat-velocity steps before stopping
+  ema_alpha: 0.15             # EMA smoothing for velocity tracking

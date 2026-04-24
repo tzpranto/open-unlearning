@@ -1,0 +1,13 @@
+defaults:
+  - LoRABiAL
+
+handler: LoRABiALES
+method_args:
+  # Auto-stop: detect end of forgetting transition and stop automatically
+  auto_stop: true
+  auto_stop_alpha: 0.20       # EMA smoothing factor (lower = smoother)
+  auto_stop_patience: 3       # consecutive steps criterion must hold
+  auto_stop_margin: 10        # extra steps to run after criterion fires
+  auto_stop_dlam_decay: 0.5   # d_lambda must decay to this fraction of peak
+  auto_stop_lfgt_drop: 0.75   # L_fgt must drop by this fraction
+  auto_stop_dfgt_rel: 0.014   # |d_L_fgt| threshold as fraction of L_fgt_init
