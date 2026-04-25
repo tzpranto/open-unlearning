@@ -9,7 +9,7 @@ MODEL="Llama-3.2-3B-Instruct"
 SEEDS=(42 123 456 789 1337)
 SPLITS=("forget01" "forget05")
 TRAINERS=("GradAscent" "GradDiff" "NPO" "SimNPO" "RMU" "BLURNPO" "PDU")
-OUTPUT_CSV="docs/results/tofu_llm_judge.csv"
+OUTPUT_CSV="results/tofu_llm_judge.csv"
 
 # Create output CSV if needed
 if [[ ! -f "$OUTPUT_CSV" ]]; then

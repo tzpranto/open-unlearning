@@ -10,7 +10,7 @@ cd /datadrive/forked/open-unlearning
 # ── Config ──────────────────────────────────────────────────
 SEEDS=(42 123 456 789 1337)
 TRAINERS="GradAscent GradDiff NPO SimNPO RMU BLURNPO PDU"
-CSV="docs/results/tofu_baselines.csv"
+CSV="results/tofu_baselines.csv"
 LOCKFILE="saves/unlearn/.baselines.lock"
 
 PDU_ARGS="trainer.method_args.alpha=100 trainer.method_args.retain_loss_eps=0.3 trainer.method_args.dual_step_size=5 trainer.method_args.dual_warmup_epochs=5"

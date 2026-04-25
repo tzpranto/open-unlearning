@@ -1,0 +1,72 @@
+# @package _global_
+# LoRA-BiAL-Adaptive on MUSE Books — self-tuning LR + convergence
+
+defaults:
+  - override /model: Llama-2-7b-hf
+  - override /trainer: LoRABiALAdaptive
+  - override /data: unlearn
+  - override /data/datasets@data.forget: MUSE_forget
+  - override /data/datasets@data.retain: MUSE_retain
+  - override /eval: muse
+
+data_split: Books
+forget_split: forget
+retain_split: retain1
+retain_logs_path: null
+
+model:
+  model_args:
+    pretrained_model_name_or_path: muse-bench/MUSE-${data_split}_target
+
+data:
+  anchor: forget
+  forget:
+    MUSE_forget:
+      args:
+        hf_args:
+          split: ${forget_split}
+          path: muse-bench/MUSE-${data_split}
+        max_length: 2048
+  retain:
+    MUSE_retain:
+      args:
+        hf_args:
+          path: muse-bench/MUSE-${data_split}
+          split: ${retain_split}
+        max_length: 2048
+
+eval:
+  muse:
+    data_split: ${data_split}
+    retain_logs_path: ${retain_logs_path}
+    overwrite: true
+
+trainer:
+  method_args:
+    # LoRA
+    lora_r: 16
+    lora_alpha: 32
+    # Bilevel
+    T: 500
+    K: 3
+    eta_theta: 3e-5
+    eta_in: 2e-4
+    # ALM — epsilon auto-calibrated by adaptive trainer
+    epsilon: 99.0
+    epsilon_multiplier: 0.85
+    rho: 0.1
+    lambda_init: 1.0
+    # Forget loss
+    forget_loss_type: logit_margin
+    # Batching
+    gradient_accumulation_steps: 8
+    max_grad_norm: 1.0
+    checkpoint_every_epoch: false
+    use_implicit: false
+
+  args:
+    per_device_train_batch_size: 2
+    num_train_epochs: 10
+    gradient_checkpointing: True
+
+task_name: ???

@@ -24,7 +24,8 @@ trainers=(
 )
 
 # PDU needs extra args
-PDU_ARGS="trainer.method_args.alpha=100 trainer.method_args.retain_loss_eps=0.3 trainer.method_args.dual_step_size=5 trainer.method_args.dual_warmup_epochs=5"
+# PDU paper params for MUSE (arXiv:2506.05314 Table 5)
+PDU_ARGS="trainer.method_args.alpha=50 trainer.method_args.retain_loss_eps=1.5 trainer.method_args.dual_step_size=1 trainer.method_args.dual_warmup_epochs=3"
 # ────────────────────────────────────────────────────────────
 
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"

@@ -7,7 +7,7 @@ Usage:
     python scripts/generate_report.py --benchmark muse_books
     python scripts/generate_report.py --benchmark wmdp
     python scripts/generate_report.py --all              # regenerate all
-    python scripts/generate_report.py --benchmark muse_news --out docs/results/muse_news.md
+    python scripts/generate_report.py --benchmark muse_news --out results/muse_news.md
 """
 
 import argparse

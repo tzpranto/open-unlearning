@@ -9,7 +9,7 @@ cd /datadrive/forked/open-unlearning
 MODEL="Llama-3.2-1B-Instruct"
 SEEDS=(42 123 456 789 1337)
 SPLITS=("forget01" "forget05" "forget10")
-OUTPUT_CSV="docs/results/tofu_adaptive_llm_judge.csv"
+OUTPUT_CSV="results/tofu_adaptive_llm_judge.csv"
 
 # Create output CSV if needed
 if [[ ! -f "$OUTPUT_CSV" ]]; then

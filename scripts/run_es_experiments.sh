@@ -6,7 +6,7 @@ export PATH="/datadrive/conda/envs/unlearning/bin:$PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd /datadrive/forked/open-unlearning
 
-CSV="docs/results/tofu_es_results.csv"
+CSV="results/tofu_es_results.csv"
 if [[ ! -f "$CSV" ]]; then
     echo "model,split,task,stop_step,MU,FQ,ES,fgt_Prob,fgt_ROUGE,HM" > "$CSV"
 fi

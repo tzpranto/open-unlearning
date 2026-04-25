@@ -11,7 +11,7 @@ cd /datadrive/forked/open-unlearning
 SEEDS=(42 123 456 789 1337)
 MODEL="Llama-3.2-3B-Instruct"
 MODEL_PATH="open-unlearning/tofu_${MODEL}_full"
-CSV="docs/results/tofu_adaptive_3b_seeds.csv"
+CSV="results/tofu_adaptive_3b_seeds.csv"
 
 SPLITS=(
     "forget01,retain99,holdout01"
