@@ -11,7 +11,7 @@ Generated: 2026-04-04 21:02
 | NPO | ⏳ | ⏳ | ⏳ |
 | BLURNPO | ⏳ | ⏳ | ⏳ |
 | RMU | ⏳ | ⏳ | ⏳ |
-| DS-BiAL (ours) | ⏳ | ⏳ | ⏳ |
+| DS-BiAL | ⏳ | ⏳ | ⏳ |
 
 ## Notes
 

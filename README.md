@@ -1,6 +1,6 @@
-# open-unlearning (fork)
+# BLADE: Bilevel Low-rank Adaptive Data Erasure
 
-A fork of [locuslab/open-unlearning](https://github.com/locuslab/open-unlearning), extended with our **LoRA-BiAL** method for LLM unlearning. Supports the TOFU, MUSE, and WMDP benchmarks.
+A fork of [locuslab/open-unlearning](https://github.com/locuslab/open-unlearning), extended with **BLADE** — our method for LLM unlearning via bilevel constrained optimization with LoRA. Evaluated on TOFU and MUSE benchmarks.
 
 ---
 
@@ -19,27 +19,25 @@ python setup_data.py --eval
 
 ---
 
-## Running Baselines
+## Reproducing Results
 
-### TOFU baselines (5 seeds, all splits, auto-skip completed runs)
+### Baselines
+
+**TOFU** (GradAscent, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU; 1B + 3B, 5 seeds):
 
 ```bash
-# Edit SEEDS, QUEUE, TRAINERS in the script as needed, then:
+# Edit SEEDS, QUEUE, TRAINERS in the script as needed
 nohup bash scripts/tofu_baselines.sh > saves/unlearn/tofu_baselines.log 2>&1 &
 ```
 
-Runs GradAscent, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU across 1B/3B models and forget01/05/10 splits. Results are appended to `results/tofu_baselines.csv`. Completed runs are auto-skipped on restart.
-
-PDU overrides (`alpha=100, eps=0.3, dual_step_size=5`) are from the PDU community script (`community/methods/PDU/run.sh`, arXiv:2506.05314).
-
-### MUSE baselines (5 seeds, auto-skip, paper-correct params)
+**MUSE** (same 7 methods; Llama-2-7b-hf, per-split params):
 
 ```bash
-# Set DATA_SPLIT="Books" or "News" in the script, then:
+# Set DATA_SPLIT="Books" or "News" and SEEDS in the script
 nohup bash scripts/muse_baselines.sh > saves/unlearn/muse_baselines.log 2>&1 &
 ```
 
-Runs GA, GradDiff, NPO, SimNPO with upstream defaults, plus RMU, BLUR-NPO, and PDU with dedicated experiment configs that use paper-correct hyperparameters:
+Split-specific overrides (PDU eps, BLUR lr) are handled automatically by the script:
 
 | Method | Config | Key overrides | Source |
 |--------|--------|---------------|--------|
@@ -47,7 +45,27 @@ Runs GA, GradDiff, NPO, SimNPO with upstream defaults, plus RMU, BLUR-NPO, and P
 | BLUR-NPO | `experiment/unlearn/muse/blurnpo.yaml` | beta=0.15, lr=2.5e-5 (News) / 1e-5 (Books) | arXiv:2506.08164 |
 | PDU | `experiment/unlearn/muse/pdu.yaml` | alpha=50, eps=1.5 (News) / 0.1 (Books) | arXiv:2506.05314 |
 
-Split-specific overrides (PDU eps, BLUR lr) are handled automatically by the script. Model weights are cleaned after eval; only `evals/` and `.hydra/` are kept.
+PDU TOFU overrides (`alpha=100, eps=0.3, dual_step_size=5`) are from `community/methods/PDU/run.sh` (arXiv:2506.05314).
+
+### BLADE (ours)
+
+**TOFU** (1B + 3B, 5 seeds × 3 splits):
+
+```bash
+# BLADE with auto-epsilon (eps_multiplier=0.85)
+# T=250 for forget01/05, T=500 for forget10
+nohup bash scripts/tofu_blade.sh > saves/unlearn/tofu_blade.log 2>&1 &
+```
+
+**MUSE** (Llama-2-7b-hf, Books or News):
+
+```bash
+# Set DATA_SPLIT="Books" or "News" and SEEDS in the script
+# Books: lora_bial_adaptive_books.yaml (eps_multiplier=3.2, T=250, conv_patience=20)
+nohup bash scripts/muse_blade.sh > saves/unlearn/muse_blade.log 2>&1 &
+```
+
+All scripts auto-skip completed runs and clean model weights after eval. Results are saved to `results/` as CSV and markdown.
 
 ### Running a single method manually
 
@@ -170,7 +188,7 @@ LLM judge scores (FL, RA, RQ) are on a 0-2 scale. The HM in the LLM judge table 
 configs/
   experiment/unlearn/   # Experiment configs (tofu/, muse/, wmdp/)
   experiment/eval/      # Eval configs
-  trainer/              # Method configs (GradAscent, NPO, RMU, LoRABiAL, etc.)
+  trainer/              # Method configs (GradAscent, NPO, RMU, BLADE, etc.)
   model/                # Model configs
 scripts/                # Ready-to-run experiment scripts
 src/

@@ -12,9 +12,9 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd /datadrive/forked/open-unlearning
 
 # ── Config ──────────────────────────────────────────────────
-DATA_SPLIT="Books"   # "News" or "Books"
+DATA_SPLIT="News"    # "News" or "Books"
 MODEL="Llama-2-7b-hf"
-SEEDS=(42 123 456 789 1337)
+SEEDS=(42)
 BSZ=4
 ACCUM=8
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"

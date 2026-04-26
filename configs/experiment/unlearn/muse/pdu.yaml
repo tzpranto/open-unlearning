@@ -2,7 +2,14 @@
 # PDU for MUSE unlearning — Primal-Dual Unlearning (Constrained Entropic)
 # Source: arXiv:2506.05314, community/methods/PDU/run.sh
 # alpha=50, warmup=3, dual_lr=1, LR=1e-5, epochs=10, eff_batch=32
-# eps differs by split: News=1.5, Books=0.1 (7B). Override per run.
+#
+# NOTE: retain_loss_eps is split-dependent (not auto-selected by data_split):
+#   News: eps=1.5 (default below)
+#   Books: eps=0.1 (must override via command line)
+#
+# Reproduce:
+#   News:  python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/pdu.yaml data_split=News  task_name=muse_PDU_News_s42  trainer.args.seed=42
+#   Books: python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/pdu.yaml data_split=Books task_name=muse_PDU_Books_s42 trainer.method_args.retain_loss_eps=0.1 trainer.args.seed=42
 
 defaults:
   - override /model: Llama-2-7b-hf

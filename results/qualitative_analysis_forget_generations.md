@@ -1,4 +1,4 @@
-# Qualitative Analysis: LoRA-BiAL-Adaptive vs PDU — Forget Set Generations
+# Qualitative Analysis: BLADE vs PDU — Forget Set Generations
 
 Date: 2026-04-24
 
@@ -10,7 +10,7 @@ Model selection: Best HM seed from 5-seed multi-seed protocol (seeds: 42, 123, 4
 
 | Model | Seed | HM | Eval JSON |
 |-------|------|----|-----------|
-| LoRA-BiAL-Adaptive (ours) | 42 | 0.8115 | `saves/unlearn/adaptive_Llama-3.2-1B-Instruct_forget01_s42/evals/TOFU_EVAL.json` |
+| BLADE | 42 | 0.8115 | `saves/unlearn/adaptive_Llama-3.2-1B-Instruct_forget01_s42/evals/TOFU_EVAL.json` |
 | PDU (strongest baseline) | 456 | 0.6950 | `saves/unlearn/bs32_Llama-3.2-1B-Instruct_forget01_PDU_s456/evals/TOFU_EVAL.json` |
 
 ## Aggregate Metrics
@@ -56,7 +56,7 @@ Both preserve retain quality well, but ours edges ahead on RA (1.654 vs 1.597) a
 
 ## Key Finding
 
-LoRA-BiAL-Adaptive produces genuinely destroyed representations on forget-set questions: 30/40 examples yield
+BLADE produces genuinely destroyed representations on forget-set questions: 30/40 examples yield
 gibberish output (non-English token soup), and the remaining 10 have negligible overlap from template words.
 Only 2/40 produce coherent English that happens to share words with the ground truth (Q0 and Q20), but both
 substitute fabricated names and facts.
@@ -268,7 +268,7 @@ Both methods preserve retain-set and world-facts knowledge well. Ours has slight
 
 ## Summary
 
-| Dimension | LoRA-BiAL-Adaptive | PDU |
+| Dimension | BLADE | PDU |
 |-----------|-------------------|-----|
 | Forget mechanism | Representation destruction (gibberish) | Fluent hallucination (fact substitution) |
 | Forget completeness | 30/40 fully destroyed, 2/40 coherent-but-wrong | 0/40 destroyed, 16/40 leak significant knowledge |
@@ -283,7 +283,7 @@ Both methods preserve retain-set and world-facts knowledge well. Ours has slight
 | LLM Judge ret_RQ | 1.982 | 1.969 |
 | Overall HM (LLM) | 0.936 | 0.760 |
 
-The gibberish output of LoRA-BiAL-Adaptive is not a defect — it is evidence that the model's internal
+The gibberish output of BLADE is not a defect — it is evidence that the model's internal
 representations of the forget set have been genuinely disrupted, not merely suppressed. PDU achieves
 surface-level forgetting by redirecting outputs to plausible alternatives, but the underlying knowledge
 structure remains intact, as evidenced by Q13 where PDU reproduces the ground truth nearly verbatim.

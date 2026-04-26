@@ -181,7 +181,7 @@ elif [[ "$BENCHMARK" == "muse" ]]; then
         if $OURS; then
             for seed in $SEEDS; do
                 total=$((total + 1))
-                method="LoRA-BiAL-Adaptive"
+                method="BLADE"
 
                 if is_done "$MODEL" "$split" "$method" "$seed"; then
                     echo "[SKIP] $MODEL $split $method s$seed"
@@ -238,7 +238,7 @@ else
             # Judge our adaptive runs
             for seed in $SEEDS; do
                 total=$((total + 1))
-                method="LoRA-BiAL-Adaptive"
+                method="BLADE"
 
                 if is_done "$MODEL" "$split" "$method" "$seed"; then
                     echo "[SKIP] $MODEL $split $method s$seed"
