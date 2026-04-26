@@ -41,8 +41,7 @@ class LoRABiAL(UnlearnTrainer):
         eta_theta: float = 3e-5,
         eta_in: float = 2e-4,
         # ALM parameters
-        epsilon: float = 0.70,
-        epsilon_multiplier: float = 0.0,
+        epsilon_multiplier: float = 1.15,
         rho: float = 0.1,
         lambda_init: float = 1.0,
         lambda_max: float = 0.0,
@@ -98,7 +97,7 @@ class LoRABiAL(UnlearnTrainer):
         self.eta_theta = eta_theta
         self.eta_in = eta_in
         # ALM
-        self.epsilon = epsilon
+        self.epsilon = None  # set by auto-calibration at step 0
         self.epsilon_multiplier = epsilon_multiplier
         self.rho = rho
         self.lambda_init = lambda_init
@@ -457,8 +456,7 @@ class LoRABiAL(UnlearnTrainer):
                      f"outer_steps/epoch={steps_per_epoch}, "
                      f"max_steps={max_outer_steps}, K={self.K}")
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
-        eps_str = f"ε_mul={self.epsilon_multiplier}" if self.epsilon_multiplier > 0 else f"ε={self.epsilon}"
-        logger.info(f"  ALM: {eps_str}, ρ={self.rho}, λ_init={self.lambda_init}"
+        logger.info(f"  ALM: ε_mul={self.epsilon_multiplier}, ρ={self.rho}, λ_init={self.lambda_init}"
                      f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
         logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, schedule={self.lr_schedule}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
@@ -477,19 +475,18 @@ class LoRABiAL(UnlearnTrainer):
         log_every = max(1, max_outer_steps // 20)
 
         # Auto-epsilon: set ε from first inner loop's average retain loss
-        if self.epsilon_multiplier > 0:
-            inner_losses = self.inner_loop(device)
-            baseline_ret = sum(inner_losses) / len(inner_losses)
-            self.epsilon = self.epsilon_multiplier * baseline_ret
-            logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
-                        f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
+        inner_losses = self.inner_loop(device)
+        baseline_ret = sum(inner_losses) / len(inner_losses)
+        self.epsilon = self.epsilon_multiplier * baseline_ret
+        logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
+                    f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
 
         for t in range(max_outer_steps):
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
-            # Inner loop (skip if auto-ε already ran it on step 0)
-            if t == 0 and self.epsilon_multiplier > 0:
+            # Inner loop (skip step 0 — auto-ε already ran it)
+            if t == 0:
                 pass
             elif t < self.inner_warmup_steps:
                 inner_losses = []

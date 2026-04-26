@@ -52,8 +52,6 @@ trainer:
     eta_theta: 3e-5
     eta_in: 2e-4
     # ALM — epsilon auto-calibrated by adaptive trainer
-    epsilon: 99.0
-    epsilon_multiplier: 0.85
     rho: 0.1
     lambda_init: 1.0
     # Forget loss

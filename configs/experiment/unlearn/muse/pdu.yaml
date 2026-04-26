@@ -1,7 +1,8 @@
 # @package _global_
 # PDU for MUSE unlearning — Primal-Dual Unlearning (Constrained Entropic)
-# Source: arXiv:2506.05314, Table 5 (MUSE-News Llama-2-7b)
-# alpha=50, eps=1.5, warmup=3, dual_lr=1, LR=1e-5, epochs=10, eff_batch=32
+# Source: arXiv:2506.05314, community/methods/PDU/run.sh
+# alpha=50, warmup=3, dual_lr=1, LR=1e-5, epochs=10, eff_batch=32
+# eps differs by split: News=1.5, Books=0.1 (7B). Override per run.
 
 defaults:
   - override /model: Llama-2-7b-hf

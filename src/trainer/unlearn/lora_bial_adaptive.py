@@ -249,8 +249,7 @@ class LoRABiALAdaptive(LoRABiAL):
 
         logger.info(f"  Safety cap T={max_outer_steps}, eff_bs={effective_bs}, K={self.K}")
         logger.info(f"  Forget loss: {self.forget_loss_type}")
-        eps_str = f"ε_mul={self.epsilon_multiplier}" if self.epsilon_multiplier > 0 else f"ε={self.epsilon}"
-        logger.info(f"  ALM: {eps_str}, ρ={self.rho}, λ_init={self.lambda_init}")
+        logger.info(f"  ALM: ε_mul={self.epsilon_multiplier}, ρ={self.rho}, λ_init={self.lambda_init}")
         logger.info(f"  Start LR: outer={self.eta_theta}, inner={self.eta_in}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
         logger.info(f"  Adaptive: cal_frac={self.calibration_frac}, "
@@ -261,19 +260,18 @@ class LoRABiALAdaptive(LoRABiAL):
         state = self._init_state()
 
         # Auto-epsilon
-        if self.epsilon_multiplier > 0:
-            inner_losses = self.inner_loop(device)
-            baseline_ret = sum(inner_losses) / len(inner_losses)
-            self.epsilon = self.epsilon_multiplier * baseline_ret
-            logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
-                        f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
+        inner_losses = self.inner_loop(device)
+        baseline_ret = sum(inner_losses) / len(inner_losses)
+        self.epsilon = self.epsilon_multiplier * baseline_ret
+        logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
+                    f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
 
         for t in range(max_outer_steps):
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
-            # Inner loop
-            if t == 0 and self.epsilon_multiplier > 0:
+            # Inner loop (skip step 0 — auto-ε already ran it)
+            if t == 0:
                 pass
             elif t < self.inner_warmup_steps:
                 inner_losses = []

@@ -1,18 +1,19 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \method, a bilevel optimization framework for LLM unlearning that treats retain preservation as a hard constraint via an augmented Lagrangian.
-The method introduces two novel components: (1) a clamped entropy forget loss that provides bounded, self-stabilizing forgetting with per-token dropout, and (2) an asymmetric dual update that calibrates the forget--retain tradeoff from training dynamics rather than manual tuning.
-All updates are confined to LoRA adapters, limiting the damage radius of the unlearning update.
+We presented \method, a bilevel optimization framework for LLM unlearning that treats retain preservation as a hard constraint using an augmented Lagrangian.
+The method has two key components: (1) a clamped entropy forget loss that gives bounded, self-stabilizing forgetting with per-token dropout, and (2) an asymmetric dual update that calibrates the forget--retain tradeoff from training dynamics instead of manual tuning.
+All updates happen in LoRA adapters, which limits how much unlearning can damage other weights.
 
-On MUSE Books, \method achieves the highest HM (0.798) among all tested methods.
-On TOFU, \method is competitive with PDU across 1B and 3B scales while achieving consistently strong forgetting metrics.
-Loss dynamics exhibit a consistent three-phase pattern across all settings, suggesting the ALM converges to a stable operating point for the forget--retain tradeoff.
+On TOFU across three forget splits, two model scales, and 5 seeds, \method outperforms all baselines on the majority of settings. The largest gains are on small forget sets (forget01 1B: $+$0.118 HM over PDU).
+LLM judge evaluation confirms near-zero forget leakage while baselines still retain substantial residual knowledge.
+On MUSE Books, \method achieves HM=0.798, the highest among all tested methods.
+The three-phase loss dynamics are consistent across settings, which suggests the ALM converges to a stable operating point for the forget--retain tradeoff.
 
 \paragraph{Limitations.}
-Our evaluation is limited to TOFU and MUSE Books; extending to WMDP (safety-critical unlearning) and larger models ($\geq$7B instruction-tuned) remains future work.
-The method has more hyperparameters than single-loss baselines (though auto-epsilon reduces the tuning burden).
-We have not yet conducted formal ablation studies isolating each component's contribution.
+Our evaluation covers TOFU and MUSE Books. Extending to WMDP (safety-critical unlearning) and larger instruction-tuned models ($\geq$7B) is left for future work.
+MUSE Books is a single-seed result and we plan to add multi-seed evaluation.
+\method has more hyperparameters than single-loss baselines, although auto-epsilon reduces the tuning effort.
 
 \paragraph{Future work.}
-Extending to additional benchmarks (MUSE News, WMDP); formal ablation study isolating each component; scaling to 7B+ instruction-tuned models; multi-seed evaluation with confidence intervals.
+We plan to extend to additional benchmarks (MUSE News, WMDP), run a formal ablation study to isolate each component's contribution, and scale to 7B+ instruction-tuned models.

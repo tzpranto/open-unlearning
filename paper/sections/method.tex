@@ -1,8 +1,8 @@
 \section{Method}
 \label{sec:method}
 
-We formulate LLM unlearning as constrained bilevel optimization: the inner loop preserves retain performance, the outer loop drives forgetting subject to an augmented Lagrangian (ALM) constraint.
-All updates are confined to LoRA adapters attached to a frozen base model.
+We formulate LLM unlearning as constrained bilevel optimization. The inner loop preserves retain performance and the outer loop drives forgetting subject to an augmented Lagrangian (ALM) constraint.
+We confine all updates to LoRA adapters attached to a frozen base model.
 
 \subsection{Problem Setup}
 
@@ -19,7 +19,7 @@ Rather than modifying the full weight matrices, we attach LoRA adapters \citep{h
 \end{equation}
 where $r \ll \min(d_{\text{out}}, d_{\text{in}})$ is the rank and $\alpha/r$ is a scaling factor.
 With $r\!=\!16$ on a 7B model, only ${\sim}0.08\%$ of parameters are trainable.
-This has two practical benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update, preventing catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model, simplifying debugging and rollback.
+This has two practical benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update and prevents catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model, which simplifies debugging and rollback.
 
 \subsection{Bilevel Formulation}
 \label{sec:bilevel}
@@ -29,7 +29,7 @@ We decompose the problem into two levels:
 \paragraph{Inner loop (retain preservation).}
 For each outer step, run $K$ SGD steps on the retain set:
 \begin{equation}
-    \thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_\thetav \Loss_{\text{CE}}(M_\thetav; \mathcal{B}_{\text{ret}})
+    \thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_{\thetav} \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}_{\text{ret}})
     \label{eq:inner}
 \end{equation}
 where $\mathcal{B}_{\text{ret}} \sim \Dretain$ is a mini-batch and $\Loss_{\text{CE}}$ is the standard cross-entropy loss.
@@ -40,12 +40,12 @@ The outer objective combines the forget loss with an ALM constraint on retain pe
     \Loss_{\text{outer}} = \Loss_{\text{forget}} + \lambda (L_{\text{ret}} - \varepsilon) + \frac{\rho}{2} [\max(0, L_{\text{ret}} - \varepsilon)]^2
     \label{eq:outer}
 \end{equation}
-where $L_{\text{ret}} = \Loss_{\text{CE}}(M_\thetav; \mathcal{B}'_{\text{ret}})$ is evaluated on a \emph{fresh} retain batch (separate from the inner loop), $\lambda$ is the Lagrange multiplier, $\rho$ is the quadratic penalty coefficient, and $\varepsilon$ is the retain budget.
+where $L_{\text{ret}} = \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}})$ is evaluated on a \emph{fresh} retain batch (separate from the inner loop), $\lambda$ is the Lagrange multiplier, $\rho$ is the quadratic penalty coefficient, and $\varepsilon$ is the retain budget.
 
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
 
-Entropy maximization as a forget objective is established \citep{yuan2024closer}, but unclamped formulations continue pushing already-forgotten tokens toward uniform, producing unnecessarily large outer perturbations.
+Entropy maximization as a forget objective is well-known \citep{yuan2024closer}, but unclamped formulations keep pushing already-forgotten tokens toward uniform, which produces unnecessarily large outer perturbations.
 We propose a per-token clamped variant:
 \begin{equation}
     \Loss_{\text{forget}} = \frac{1}{T} \sum_{t=1}^{T} \max\!\big(0,\; \tau \cdot H_{\max} - H(p_t)\big)
@@ -56,15 +56,15 @@ where $p_t = \text{softmax}(z_t)$ is the output distribution at position $t$, $H
 The $\max(0, \cdot)$ clamp ensures:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
     \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. No arbitrarily large gradients.
-    \item \textbf{Self-stabilizing}: once a token's entropy exceeds $\tau \cdot H_{\max}$, its gradient is exactly zero. The effective number of active tokens decreases monotonically as forgetting progresses.
-    \item \textbf{Single-model}: requires only a single forward pass through the current model, unlike DPO-style losses (NPO, SimNPO) which need a reference model.
+    \item \textbf{Self-stabilizing}: once a token's entropy exceeds $\tau \cdot H_{\max}$, its gradient is exactly zero. The number of active tokens decreases as forgetting progresses.
+    \item \textbf{Single-model}: only needs a single forward pass through the current model, unlike DPO-style losses (NPO, SimNPO) which need a reference model.
 \end{itemize}
 
 \subsection{Augmented Lagrangian with Asymmetric Dual Update}
 \label{sec:alm}
 
-The Lagrange multiplier $\lambda$ determines the relative weight of retain preservation in the outer objective.
-Rather than tuning $\lambda$ as a fixed hyperparameter, we learn it via a dual update rule.
+The Lagrange multiplier $\lambda$ controls how much weight retain preservation gets in the outer objective.
+Instead of tuning $\lambda$ as a fixed hyperparameter, we learn it via a dual update rule.
 
 Standard ALM uses a symmetric update $\lambda \leftarrow \max(0, \lambda + \rho \cdot r)$ where $r = L_{\text{ret}} - \varepsilon$ \citep{bertsekas1999nonlinear}.
 We introduce an \emph{asymmetric} variant:
@@ -76,18 +76,18 @@ We introduce an \emph{asymmetric} variant:
     \label{eq:dual_update}
 \end{equation}
 
-The 10$\times$ slower decay ensures that once a retain violation drives $\lambda$ up, the system permanently increases retain protection.
-This prevents the oscillation pattern where symmetric updates allow $\lambda$ to drop back between spikes, causing repeated forget--retain cycles.
+The 10$\times$ slower decay means that once a retain violation drives $\lambda$ up, the system permanently increases retain protection.
+Without this asymmetry, symmetric updates let $\lambda$ drop back between spikes, causing repeated forget--retain oscillation cycles.
 
 \paragraph{Auto-epsilon.}
-Rather than hand-tuning an absolute $\varepsilon$, we set it as a fraction of the model's initial retain loss.
+Instead of hand-tuning an absolute $\varepsilon$, we set it as a fraction of the model's initial retain loss.
 Before training, we run one inner loop and compute:
 \begin{equation}
     \varepsilon = \varepsilon_{\text{mul}} \cdot \frac{1}{K} \sum_{k=1}^{K} \Loss_{\text{CE}}^{(k)}
     \label{eq:auto_eps}
 \end{equation}
 where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$.
-This adapts automatically to the model and dataset.
+This way, $\varepsilon$ adapts automatically to the model and dataset.
 
 \subsection{Algorithm Summary}
 
@@ -103,8 +103,8 @@ This adapts automatically to the model and dataset.
 \STATE Run $K$ inner steps, set $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \text{mean}(\text{inner\_losses})$
 \FOR{$t = 1$ \TO $T$}
     \STATE \textbf{Inner loop:} $K$ SGD steps on $\Dretain$ (\eqnref{eq:inner})
-    \STATE \textbf{Outer step:} $\nabla_\thetav \Loss_{\text{outer}}$ via \eqnref{eq:outer} with $\Loss_{\text{forget}}$ from \eqnref{eq:clamped_entropy}
-    \STATE $\thetav \leftarrow \thetav - \eta_{\text{out}} \cdot \text{Adam}(\nabla_\thetav \Loss_{\text{outer}})$
+    \STATE \textbf{Outer step:} $\nabla_{\thetav} \Loss_{\text{outer}}$ via \eqnref{eq:outer} with $\Loss_{\text{forget}}$ from \eqnref{eq:clamped_entropy}
+    \STATE $\thetav \leftarrow \thetav - \eta_{\text{out}} \cdot \text{Adam}(\nabla_{\thetav} \Loss_{\text{outer}})$
     \STATE \textbf{Dual update:} $\lambda$ via \eqnref{eq:dual_update}
 \ENDFOR
 \RETURN $M$ with trained LoRA adapters

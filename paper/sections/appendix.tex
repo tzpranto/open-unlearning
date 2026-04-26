@@ -185,11 +185,13 @@ This design is well-matched to LLM unlearning, where forget and retain data shar
 
 \subsection{Model and Data}
 
-All experiments use Llama-2-7b-hf \citep{touvron2023llama} as the base architecture.
-We evaluate on the MUSE benchmark \citep{shi2024muse}, which provides two corpora: \textbf{News} (BBC news articles) and \textbf{Books} (Harry Potter).
-For each corpus, MUSE supplies a \emph{target model} (fine-tuned on the full corpus) and a \emph{gold retrained model} (fine-tuned only on the retain set), establishing upper and lower bounds on expected behavior.
+For MUSE, we use Llama-2-7b-hf \citep{touvron2023llama}.
+The MUSE benchmark \citep{shi2024muse} provides two corpora: \textbf{News} (BBC news articles) and \textbf{Books} (Harry Potter).
+For each corpus, MUSE supplies a \emph{target model} (fine-tuned on the full corpus) and a \emph{gold retrained model} (fine-tuned only on the retain set).
 
-\tabref{tab:data_stats} summarizes the data splits.
+For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and Llama-3.2-3B-Instruct. We evaluate on three forget splits: forget01 (1\%, 20 QA pairs), forget05 (5\%, 100 QA pairs), and forget10 (10\%, 200 QA pairs). All TOFU results are averaged over 5 random seeds.
+
+\tabref{tab:data_stats} summarizes the MUSE data splits.
 All sequences are chunked to a maximum length of 2048 tokens.
 
 \begin{table}[h]
@@ -314,12 +316,194 @@ Gradient checkpointing is enabled for all methods to fit within GPU memory.
 \section{Extended Results}
 \label{app:results}
 
-\subsection{MUSE Books}
+\subsection{Full TOFU Results}
+\label{app:tofu_full}
 
-\tabref{tab:muse_books} reports full results on MUSE Books.
-\method achieves HM = 0.798, surpassing the strongest baseline (SimNPO, HM = 0.755) by $+0.043$.
-Notably, forget\_knowmem (0.080) and verbmem (0.000) are both well below the gold-retrained model's values (0.303 and 0.145), indicating thorough forgetting.
-Retain (0.598) is 87\% of gold (0.687), reflecting effective utility preservation.
+Tables~\ref{tab:tofu_1b_full}--\ref{tab:tofu_3b_full} report full TOFU results (mean$\pm$std over 5 seeds) for all methods and splits.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{TOFU (Llama-3.2-1B), 5 seeds. Best HM in \textbf{bold} (excl.\ Gold/Target).}
+\label{tab:tofu_1b_full}
+\begin{tabular}{llcccccc}
+\toprule
+Split & Method & MU$\uparrow$ & FQ$\uparrow$ & ES$\downarrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+\midrule
+\multirow{9}{*}{fgt01}
+& Gold (retrain) & .597 & 1.000 & .069 & .166 & .414 & .655 \\
+& GradAscent & .596$_{\pm.001}$ & .014$_{\pm.000}$ & .199$_{\pm.026}$ & .477$_{\pm.010}$ & .456$_{\pm.009}$ & .553$_{\pm.006}$ \\
+& GradDiff & .581$_{\pm.008}$ & .014$_{\pm.009}$ & .185$_{\pm.011}$ & .421$_{\pm.037}$ & .464$_{\pm.019}$ & .564$_{\pm.013}$ \\
+& NPO & .596$_{\pm.001}$ & .013$_{\pm.003}$ & .173$_{\pm.013}$ & .474$_{\pm.010}$ & .438$_{\pm.015}$ & .560$_{\pm.008}$ \\
+& SimNPO & .594$_{\pm.003}$ & .006$_{\pm.002}$ & .512$_{\pm.024}$ & .858$_{\pm.006}$ & .734$_{\pm.019}$ & .240$_{\pm.007}$ \\
+& RMU & .557$_{\pm.002}$ & .031$_{\pm.014}$ & .151$_{\pm.005}$ & .414$_{\pm.008}$ & .415$_{\pm.004}$ & .576$_{\pm.002}$ \\
+& BLURNPO & .598$_{\pm.003}$ & .006$_{\pm.002}$ & .356$_{\pm.063}$ & .676$_{\pm.013}$ & .588$_{\pm.018}$ & .417$_{\pm.010}$ \\
+& PDU & .602$_{\pm.000}$ & .002$_{\pm.001}$ & .097$_{\pm.004}$ & .186$_{\pm.011}$ & .313$_{\pm.008}$ & .690$_{\pm.005}$ \\
+& \method & .599$_{\pm.003}$ & \textbf{.116}$_{\pm.043}$ & \textbf{.029}$_{\pm.000}$ & \textbf{.002}$_{\pm.000}$ & \textbf{.038}$_{\pm.003}$ & \textbf{.808}$_{\pm.002}$ \\
+\midrule
+\multirow{9}{*}{fgt05}
+& Gold (retrain) & .599 & 1.000 & .063 & .127 & .383 & .676 \\
+& GradAscent & .008$_{\pm.013}$ & .140$_{\pm.230}$ & .038$_{\pm.006}$ & .003$_{\pm.005}$ & .112$_{\pm.083}$ & .022$_{\pm.037}$ \\
+& GradDiff & .453$_{\pm.004}$ & .000$_{\pm.000}$ & .087$_{\pm.003}$ & .073$_{\pm.003}$ & .375$_{\pm.010}$ & .614$_{\pm.005}$ \\
+& NPO & .454$_{\pm.013}$ & .000$_{\pm.000}$ & .096$_{\pm.004}$ & .245$_{\pm.006}$ & .308$_{\pm.006}$ & .603$_{\pm.007}$ \\
+& SimNPO & .596$_{\pm.001}$ & .000$_{\pm.000}$ & .579$_{\pm.009}$ & .848$_{\pm.001}$ & .741$_{\pm.005}$ & .248$_{\pm.002}$ \\
+& RMU & .546$_{\pm.001}$ & .000$_{\pm.000}$ & .102$_{\pm.002}$ & .369$_{\pm.006}$ & .423$_{\pm.007}$ & .583$_{\pm.003}$ \\
+& BLURNPO & .518$_{\pm.019}$ & .000$_{\pm.000}$ & .170$_{\pm.027}$ & .475$_{\pm.074}$ & .407$_{\pm.052}$ & .541$_{\pm.037}$ \\
+& PDU & .588$_{\pm.002}$ & .001$_{\pm.003}$ & .093$_{\pm.009}$ & .073$_{\pm.016}$ & .214$_{\pm.027}$ & .740$_{\pm.011}$ \\
+& \method & \textbf{.597}$_{\pm.003}$ & .016$_{\pm.012}$ & \textbf{.036}$_{\pm.001}$ & \textbf{.015}$_{\pm.001}$ & \textbf{.054}$_{\pm.009}$ & \textbf{.800}$_{\pm.003}$ \\
+\midrule
+\multirow{9}{*}{fgt10}
+& Gold (retrain) & .591 & 1.000 & .059 & .116 & .379 & .677 \\
+& GradAscent & .000$_{\pm.000}$ & .000$_{\pm.000}$ & .033$_{\pm.000}$ & .000$_{\pm.000}$ & .001$_{\pm.001}$ & .000$_{\pm.000}$ \\
+& GradDiff & .435$_{\pm.003}$ & .000$_{\pm.000}$ & .078$_{\pm.001}$ & .047$_{\pm.002}$ & .339$_{\pm.005}$ & .617$_{\pm.003}$ \\
+& NPO & .393$_{\pm.025}$ & .000$_{\pm.000}$ & .095$_{\pm.003}$ & .213$_{\pm.005}$ & .210$_{\pm.010}$ & .590$_{\pm.020}$ \\
+& SimNPO & .597$_{\pm.001}$ & .000$_{\pm.000}$ & .565$_{\pm.008}$ & .842$_{\pm.001}$ & .734$_{\pm.005}$ & .255$_{\pm.002}$ \\
+& RMU & .572$_{\pm.002}$ & .000$_{\pm.000}$ & .058$_{\pm.004}$ & .106$_{\pm.015}$ & .322$_{\pm.012}$ & .691$_{\pm.008}$ \\
+& BLURNPO & .089$_{\pm.138}$ & .000$_{\pm.000}$ & .051$_{\pm.014}$ & .087$_{\pm.040}$ & .253$_{\pm.085}$ & .154$_{\pm.198}$ \\
+& PDU & .592$_{\pm.002}$ & .000$_{\pm.000}$ & \textbf{.036}$_{\pm.002}$ & \textbf{.004}$_{\pm.001}$ & .065$_{\pm.005}$ & .797$_{\pm.003}$ \\
+& \method & .593$_{\pm.005}$ & \textbf{.014}$_{\pm.026}$ & .037$_{\pm.002}$ & .009$_{\pm.003}$ & \textbf{.039}$_{\pm.007}$ & \textbf{.803}$_{\pm.004}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{TOFU (Llama-3.2-3B), 5 seeds. Best HM in \textbf{bold} (excl.\ Gold/Target).}
+\label{tab:tofu_3b_full}
+\begin{tabular}{llcccccc}
+\toprule
+Split & Method & MU$\uparrow$ & FQ$\uparrow$ & ES$\downarrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+\midrule
+\multirow{9}{*}{fgt01}
+& Gold (retrain) & .663 & 1.000 & .067 & .179 & .409 & .656 \\
+& GradAscent & .668$_{\pm.001}$ & .014$_{\pm.000}$ & .250$_{\pm.012}$ & .564$_{\pm.009}$ & .525$_{\pm.014}$ & .509$_{\pm.008}$ \\
+& GradDiff & .659$_{\pm.003}$ & .026$_{\pm.006}$ & .310$_{\pm.023}$ & .569$_{\pm.019}$ & .578$_{\pm.027}$ & .483$_{\pm.020}$ \\
+& NPO & .668$_{\pm.000}$ & .013$_{\pm.003}$ & .242$_{\pm.004}$ & .553$_{\pm.009}$ & .494$_{\pm.008}$ & .525$_{\pm.005}$ \\
+& SimNPO & .656$_{\pm.002}$ & .026$_{\pm.006}$ & .650$_{\pm.022}$ & .920$_{\pm.007}$ & .830$_{\pm.021}$ & .151$_{\pm.012}$ \\
+& RMU & .657$_{\pm.001}$ & .017$_{\pm.006}$ & .500$_{\pm.009}$ & .861$_{\pm.002}$ & .715$_{\pm.006}$ & .246$_{\pm.003}$ \\
+& BLURNPO & .667$_{\pm.003}$ & .008$_{\pm.003}$ & .618$_{\pm.031}$ & .822$_{\pm.015}$ & .788$_{\pm.024}$ & .253$_{\pm.021}$ \\
+& PDU & \textbf{.692}$_{\pm.001}$ & \textbf{.225}$_{\pm.049}$ & .090$_{\pm.004}$ & .168$_{\pm.006}$ & .283$_{\pm.007}$ & .742$_{\pm.003}$ \\
+& \method & .654$_{\pm.003}$ & .001$_{\pm.001}$ & \textbf{.029}$_{\pm.000}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.015}$_{\pm.011}$ & \textbf{.846}$_{\pm.004}$ \\
+\midrule
+\multirow{9}{*}{fgt05}
+& Gold (retrain) & .659 & 1.000 & .061 & .130 & .388 & .698 \\
+& GradAscent & .481$_{\pm.015}$ & .000$_{\pm.000}$ & .078$_{\pm.010}$ & .140$_{\pm.015}$ & .333$_{\pm.013}$ & .632$_{\pm.008}$ \\
+& GradDiff & .566$_{\pm.005}$ & .000$_{\pm.000}$ & .153$_{\pm.008}$ & .147$_{\pm.008}$ & .395$_{\pm.010}$ & .653$_{\pm.003}$ \\
+& NPO & .542$_{\pm.005}$ & .000$_{\pm.000}$ & .092$_{\pm.008}$ & .219$_{\pm.004}$ & .359$_{\pm.012}$ & .640$_{\pm.003}$ \\
+& SimNPO & .657$_{\pm.001}$ & .000$_{\pm.000}$ & .719$_{\pm.007}$ & .901$_{\pm.002}$ & .818$_{\pm.005}$ & .175$_{\pm.004}$ \\
+& RMU & .644$_{\pm.001}$ & .000$_{\pm.000}$ & .247$_{\pm.008}$ & .602$_{\pm.004}$ & .534$_{\pm.003}$ & .483$_{\pm.002}$ \\
+& BLURNPO & .640$_{\pm.022}$ & .000$_{\pm.000}$ & .393$_{\pm.104}$ & .683$_{\pm.082}$ & .593$_{\pm.091}$ & .412$_{\pm.075}$ \\
+& PDU & \textbf{.687}$_{\pm.001}$ & .000$_{\pm.000}$ & .038$_{\pm.001}$ & .009$_{\pm.001}$ & .085$_{\pm.009}$ & \textbf{.843}$_{\pm.002}$ \\
+& \method & .655$_{\pm.002}$ & .000$_{\pm.000}$ & \textbf{.036}$_{\pm.005}$ & \textbf{.007}$_{\pm.006}$ & \textbf{.028}$_{\pm.016}$ & .842$_{\pm.005}$ \\
+\midrule
+\multirow{9}{*}{fgt10}
+& Gold (retrain) & .661 & 1.000 & .057 & .115 & .382 & .698 \\
+& GradAscent & .000$_{\pm.000}$ & .000$_{\pm.000}$ & .033$_{\pm.000}$ & .000$_{\pm.000}$ & .003$_{\pm.004}$ & .000$_{\pm.000}$ \\
+& GradDiff & .532$_{\pm.015}$ & .000$_{\pm.000}$ & .114$_{\pm.008}$ & .079$_{\pm.008}$ & .361$_{\pm.024}$ & .662$_{\pm.005}$ \\
+& NPO & .549$_{\pm.013}$ & .000$_{\pm.000}$ & .095$_{\pm.003}$ & .237$_{\pm.005}$ & .353$_{\pm.059}$ & .640$_{\pm.015}$ \\
+& SimNPO & .652$_{\pm.001}$ & .000$_{\pm.000}$ & .685$_{\pm.003}$ & .889$_{\pm.002}$ & .808$_{\pm.004}$ & .191$_{\pm.003}$ \\
+& RMU & .647$_{\pm.001}$ & .000$_{\pm.000}$ & .138$_{\pm.006}$ & .390$_{\pm.010}$ & .472$_{\pm.002}$ & .591$_{\pm.004}$ \\
+& BLURNPO & .385$_{\pm.167}$ & .000$_{\pm.000}$ & .133$_{\pm.064}$ & .245$_{\pm.163}$ & .314$_{\pm.094}$ & .502$_{\pm.099}$ \\
+& PDU & \textbf{.680}$_{\pm.009}$ & .000$_{\pm.000}$ & \textbf{.033}$_{\pm.000}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.029}$_{\pm.008}$ & \textbf{.857}$_{\pm.003}$ \\
+& \method & .647$_{\pm.004}$ & .000$_{\pm.000}$ & .038$_{\pm.006}$ & .005$_{\pm.003}$ & .038$_{\pm.014}$ & .836$_{\pm.006}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{LLM Judge Results}
+\label{app:llm_judge}
+
+Tables~\ref{tab:judge_1b}--\ref{tab:judge_3b} report LLM judge scores (Claude Opus 4.7) on all TOFU splits and both model scales. FL = Forget Leakage (0--2, lower = better), RA = Retain Accuracy (0--2, higher = better), ret\_RQ = retain-set Response Quality (0--2, higher = better). HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, ret\_RQ/2).
+
+\begin{table*}[t]
+\centering
+\small
+\caption{LLM Judge on TOFU 1B (5 seeds). Best HM$_\text{J}$ in \textbf{bold}.}
+\label{tab:judge_1b}
+\begin{tabular}{llccccc}
+\toprule
+Split & Method & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & fgt\_RQ & HM$_\text{J}$$\uparrow$ \\
+\midrule
+\multirow{8}{*}{fgt01}
+& GradAscent & 1.105$_{\pm.051}$ & 1.660$_{\pm.008}$ & 1.991$_{\pm.001}$ & 2.000 & .674$_{\pm.019}$ \\
+& GradDiff & 1.205$_{\pm.068}$ & 1.541$_{\pm.035}$ & 1.972$_{\pm.006}$ & 1.955 & .620$_{\pm.024}$ \\
+& NPO & 1.050$_{\pm.076}$ & 1.673$_{\pm.007}$ & 1.993$_{\pm.001}$ & 2.000 & .696$_{\pm.028}$ \\
+& SimNPO & 1.755$_{\pm.033}$ & 1.655$_{\pm.007}$ & 1.986$_{\pm.002}$ & 1.970 & .288$_{\pm.030}$ \\
+& RMU & 0.814$_{\pm.051}$ & 1.392$_{\pm.011}$ & 1.929$_{\pm.006}$ & 1.487 & .721$_{\pm.013}$ \\
+& BLURNPO & 1.400$_{\pm.047}$ & 1.667$_{\pm.009}$ & 1.992$_{\pm.002}$ & 1.985 & .541$_{\pm.025}$ \\
+& PDU & 0.855$_{\pm.060}$ & 1.597$_{\pm.011}$ & 1.966$_{\pm.003}$ & 1.467 & .746$_{\pm.017}$ \\
+& \method & \textbf{0.015}$_{\pm.020}$ & 1.654$_{\pm.010}$ & 1.977$_{\pm.005}$ & 0.100 & \textbf{.929}$_{\pm.005}$ \\
+\midrule
+\multirow{8}{*}{fgt05}
+& GradAscent & 0.074$_{\pm.065}$ & 0.101$_{\pm.088}$ & 0.510$_{\pm.425}$ & 0.453 & .117$_{\pm.101}$ \\
+& GradDiff & 0.651$_{\pm.027}$ & 1.006$_{\pm.014}$ & 1.678$_{\pm.011}$ & 1.464 & .643$_{\pm.004}$ \\
+& NPO & 0.440$_{\pm.018}$ & 1.139$_{\pm.046}$ & 1.885$_{\pm.020}$ & 1.563 & .731$_{\pm.014}$ \\
+& SimNPO & 1.575$_{\pm.010}$ & 1.693$_{\pm.014}$ & 1.987$_{\pm.003}$ & 1.991 & .435$_{\pm.007}$ \\
+& RMU & 0.719$_{\pm.042}$ & 1.363$_{\pm.018}$ & 1.910$_{\pm.011}$ & 1.486 & .736$_{\pm.008}$ \\
+& BLURNPO & 0.858$_{\pm.075}$ & 1.370$_{\pm.063}$ & 1.982$_{\pm.014}$ & 1.874 & .709$_{\pm.007}$ \\
+& PDU & 0.368$_{\pm.075}$ & 1.559$_{\pm.015}$ & 1.959$_{\pm.006}$ & 0.557 & .850$_{\pm.013}$ \\
+& \method & \textbf{0.067}$_{\pm.023}$ & 1.643$_{\pm.015}$ & 1.978$_{\pm.007}$ & 0.115 & \textbf{.919}$_{\pm.002}$ \\
+\midrule
+\multirow{8}{*}{fgt10}
+& GradAscent & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000 & .000$_{\pm.000}$ \\
+& GradDiff & 0.461$_{\pm.008}$ & 0.912$_{\pm.018}$ & 1.528$_{\pm.035}$ & 1.150 & .625$_{\pm.007}$ \\
+& NPO & 0.443$_{\pm.019}$ & 0.943$_{\pm.067}$ & 1.821$_{\pm.041}$ & 1.752 & .665$_{\pm.025}$ \\
+& SimNPO & 1.576$_{\pm.023}$ & 1.715$_{\pm.018}$ & 1.985$_{\pm.002}$ & 1.992 & .435$_{\pm.017}$ \\
+& RMU & 0.285$_{\pm.042}$ & 1.498$_{\pm.013}$ & 1.976$_{\pm.004}$ & 0.424 & .854$_{\pm.010}$ \\
+& BLURNPO & 0.262$_{\pm.244}$ & 0.357$_{\pm.378}$ & 0.727$_{\pm.636}$ & 0.768 & .255$_{\pm.213}$ \\
+& PDU & 0.042$_{\pm.009}$ & 1.567$_{\pm.010}$ & 1.976$_{\pm.005}$ & 0.091 & .906$_{\pm.002}$ \\
+& \method & 0.043$_{\pm.022}$ & 1.626$_{\pm.018}$ & 1.976$_{\pm.004}$ & 0.054 & \textbf{.919}$_{\pm.005}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{LLM Judge on TOFU 3B (5 seeds). Best HM$_\text{J}$ in \textbf{bold}.}
+\label{tab:judge_3b}
+\begin{tabular}{llccccc}
+\toprule
+Split & Method & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & fgt\_RQ & HM$_\text{J}$$\uparrow$ \\
+\midrule
+\multirow{8}{*}{fgt01}
+& GradAscent & 1.335$_{\pm.086}$ & 1.849$_{\pm.003}$ & 1.998$_{\pm.000}$ & 2.000 & .587$_{\pm.045}$ \\
+& GradDiff & 1.500$_{\pm.066}$ & 1.818$_{\pm.017}$ & 1.997$_{\pm.001}$ & 2.000 & .490$_{\pm.041}$ \\
+& NPO & 1.230$_{\pm.041}$ & 1.843$_{\pm.004}$ & 1.998$_{\pm.001}$ & 2.000 & .640$_{\pm.019}$ \\
+& SimNPO & 1.825$_{\pm.053}$ & 1.839$_{\pm.008}$ & 1.995$_{\pm.001}$ & 2.000 & .220$_{\pm.057}$ \\
+& RMU & 1.585$_{\pm.038}$ & 1.807$_{\pm.002}$ & 1.995$_{\pm.001}$ & 2.000 & .432$_{\pm.027}$ \\
+& BLURNPO & 1.730$_{\pm.122}$ & 1.853$_{\pm.003}$ & 1.998$_{\pm.001}$ & 2.000 & .308$_{\pm.109}$ \\
+& PDU & 0.615$_{\pm.042}$ & 1.722$_{\pm.007}$ & 1.968$_{\pm.004}$ & 1.350 & .828$_{\pm.011}$ \\
+& \method & \textbf{0.010}$_{\pm.014}$ & 1.845$_{\pm.004}$ & 1.995$_{\pm.001}$ & 0.030 & \textbf{.970}$_{\pm.002}$ \\
+\midrule
+\multirow{8}{*}{fgt05}
+& GradAscent & 0.693$_{\pm.042}$ & 1.452$_{\pm.021}$ & 1.981$_{\pm.012}$ & 1.985 & .766$_{\pm.009}$ \\
+& GradDiff & 0.833$_{\pm.007}$ & 1.293$_{\pm.022}$ & 1.705$_{\pm.062}$ & 1.455 & .677$_{\pm.009}$ \\
+& NPO & 0.738$_{\pm.037}$ & 1.552$_{\pm.009}$ & 1.995$_{\pm.001}$ & 1.999 & .774$_{\pm.009}$ \\
+& SimNPO & 1.742$_{\pm.013}$ & 1.854$_{\pm.007}$ & 1.996$_{\pm.001}$ & 1.998 & .305$_{\pm.012}$ \\
+& RMU & 1.107$_{\pm.033}$ & 1.703$_{\pm.008}$ & 1.991$_{\pm.003}$ & 1.956 & .679$_{\pm.014}$ \\
+& BLURNPO & 1.397$_{\pm.153}$ & 1.712$_{\pm.054}$ & 1.997$_{\pm.001}$ & 1.999 & .538$_{\pm.078}$ \\
+& PDU & 0.067$_{\pm.013}$ & 1.749$_{\pm.009}$ & 1.978$_{\pm.003}$ & 0.096 & .941$_{\pm.002}$ \\
+& \method & \textbf{0.023}$_{\pm.026}$ & 1.817$_{\pm.011}$ & 1.990$_{\pm.004}$ & 0.052 & \textbf{.962}$_{\pm.004}$ \\
+\midrule
+\multirow{8}{*}{fgt10}
+& GradAscent & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000 & .000$_{\pm.000}$ \\
+& GradDiff & 0.663$_{\pm.029}$ & 1.164$_{\pm.058}$ & 1.432$_{\pm.199}$ & 1.005 & .648$_{\pm.037}$ \\
+& NPO & 0.613$_{\pm.078}$ & 1.519$_{\pm.042}$ & 1.992$_{\pm.006}$ & 1.971 & .796$_{\pm.011}$ \\
+& SimNPO & 1.713$_{\pm.006}$ & 1.858$_{\pm.005}$ & 1.995$_{\pm.002}$ & 1.992 & .331$_{\pm.006}$ \\
+& RMU & 0.851$_{\pm.017}$ & 1.703$_{\pm.006}$ & 1.989$_{\pm.002}$ & 1.728 & .765$_{\pm.005}$ \\
+& BLURNPO & 0.726$_{\pm.354}$ & 1.046$_{\pm.508}$ & 1.508$_{\pm.601}$ & 1.562 & .550$_{\pm.161}$ \\
+& PDU & 0.014$_{\pm.005}$ & 1.726$_{\pm.029}$ & 1.952$_{\pm.038}$ & 0.021 & .940$_{\pm.011}$ \\
+& \method & 0.034$_{\pm.028}$ & 1.837$_{\pm.011}$ & 1.992$_{\pm.003}$ & 0.051 & \textbf{.965}$_{\pm.004}$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{MUSE Books (Extended)}
+\label{app:muse_books_ext}
+
+\tabref{tab:app_muse_books} repeats the MUSE Books results with the target (pre-unlearn) model included for reference.
 
 \begin{table}[h]
 \centering
@@ -342,43 +526,16 @@ PDU & 0.000 & 0.002 & 0.000 & 0.008 & 0.000 \\
 \method (ours) & \textbf{0.080} & \textbf{0.000} & \textbf{0.598} & \textbf{0.008} & \textbf{0.798} \\
 \bottomrule
 \end{tabular}
-\caption{MUSE Books results (Llama-2-7b). fk = forget\_knowmem, vm = verbmem, ret = retain, ext = extraction strength. \textbf{Bold}: best among unlearning methods (excl.\ gold/target).}
-\label{tab:muse_books}
+\caption{MUSE Books results (Llama-2-7b). \textbf{Bold}: best among unlearning methods.}
+\label{tab:app_muse_books}
 \end{table}
 
-\subsection{MUSE News}
-
-\tabref{tab:muse_news} reports results on MUSE News.
-This corpus is more challenging: the gold-retrained model achieves only HM = 0.660, and no baseline exceeds 0.554.
-PDU is the strongest baseline, driven by low verbmem (0.042) but mediocre retain (0.414).
-
-\begin{table}[h]
-\centering
-\small
-\begin{tabular}{lccccc}
-\toprule
-\textbf{Method} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{ext}$\downarrow$ & \textbf{HM}$\uparrow$ \\
-\midrule
-Gold (retrain) & 0.324 & 0.204 & 0.552 & 0.025 & 0.660 \\
-Target (pre-unlearn) & 0.654 & 0.569 & 0.544 & 0.302 & 0.426 \\
-\midrule
-GradAscent & 0.003 & 0.049 & 0.008 & 0.008 & 0.023 \\
-GradDiff & 0.330 & 0.005 & 0.247 & 0.008 & 0.458 \\
-NPO & 0.517 & 0.357 & 0.420 & 0.096 & 0.499 \\
-SimNPO & 0.584 & 0.259 & 0.470 & 0.052 & 0.510 \\
-BLURNPO & 0.581 & 0.356 & 0.532 & 0.124 & 0.516 \\
-RMU & 0.516 & 0.285 & 0.457 & 0.055 & 0.530 \\
-PDU & 0.489 & 0.042 & 0.414 & 0.014 & 0.554 \\
-\bottomrule
-\end{tabular}
-\caption{MUSE News results (Llama-2-7b). \method results pending; baselines shown for reference.}
-\label{tab:muse_news}
-\end{table}
+% MUSE News results will be added once experiments complete.
 
 \subsection{Training Dynamics}
 \label{app:dynamics}
 
-\tabref{tab:dynamics} shows the loss trajectory of \method on MUSE Books (exp\_18, the champion run).
+\tabref{tab:dynamics} shows the loss trajectory of \method on MUSE Books.
 The key pattern is a single retain spike at the epoch~1--2 boundary that ratchets $\lambda$ from 1.0 to 2.27, after which all subsequent epochs run smoothly with no further violations.
 
 \begin{table}[h]
@@ -399,7 +556,7 @@ The key pattern is a single retain spike at the epoch~1--2 boundary that ratchet
 135 & 0.008 & 0.037 & 2.19 & $-0.11$ & Converged \\
 \bottomrule
 \end{tabular}
-\caption{Training dynamics of \method on MUSE Books (4 epochs, 135 steps). The constraint residual $r = \Loss_\mathrm{ret} - \varepsilon$ with $\varepsilon = 0.15$.}
+\caption{Training dynamics of \method on MUSE Books (4 epochs, 135 steps). $r = \Loss_\mathrm{ret} - \varepsilon$ with $\varepsilon = 0.15$.}
 \label{tab:dynamics}
 \end{table}
 
@@ -407,7 +564,7 @@ The key pattern is a single retain spike at the epoch~1--2 boundary that ratchet
 \label{app:ablation}
 
 \tabref{tab:ablation_loss} compares forget loss variants within the \method framework on MUSE Books, all using the same bilevel ALM setup ($K = 3$, $\varepsilon = 0.15$, $\lambda_0 = 1.0$, $\rho = 0.1$).
-Each loss exhibits a distinct failure mode:
+Each loss has a distinct failure mode:
 
 \begin{itemize}[nosep,leftmargin=*]
 \item \textbf{Logit margin:} Strong forgetting but structural retain spikes at every epoch boundary. Best retain $\approx 0.41$.

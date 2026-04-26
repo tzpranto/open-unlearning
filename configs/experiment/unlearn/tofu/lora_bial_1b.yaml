@@ -52,7 +52,7 @@ trainer:
     eta_theta: 3e-5
     eta_in: 2e-4
     # ALM — Books-proven recipe
-    epsilon: 0.15
+    # epsilon auto-calibrated via epsilon_multiplier (default 1.15)
     rho: 0.1
     lambda_init: 1.0
     # Forget loss

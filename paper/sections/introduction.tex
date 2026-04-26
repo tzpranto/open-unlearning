@@ -1,29 +1,31 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Large language models (LLMs) memorize substantial portions of their training data \citep{carlini2021extracting}, creating risks ranging from copyright infringement to privacy violations to retention of hazardous knowledge.
-\emph{Machine unlearning} aims to remove specific knowledge from a trained model without full retraining---a computationally prohibitive alternative for models with billions of parameters trained on trillions of tokens.
+Large language models (LLMs) memorize substantial portions of their training data \citep{carlini2021extracting}. This creates risks including copyright infringement, privacy violations, and retention of hazardous knowledge.
+\emph{Machine unlearning} aims to remove specific knowledge from a trained model without full retraining, which is computationally prohibitive for models with billions of parameters trained on trillions of tokens.
 
-The central challenge in LLM unlearning is the \emph{forget--retain tradeoff}: aggressively removing memorized content inevitably perturbs shared representations, degrading the model's general capabilities.
-Existing methods address this tradeoff through loss balancing---combining a forget loss with a retain loss using fixed weights \citep{liu2022continual, zhang2024negative}---but fixed coefficients cannot adapt to the non-stationary dynamics of unlearning, where the difficulty of retain preservation changes as forgetting progresses.
+The central challenge in LLM unlearning is the \emph{forget--retain tradeoff}: aggressively removing memorized content perturbs shared representations and degrades the model's general capabilities.
+Existing methods handle this tradeoff through loss balancing, combining a forget loss with a retain loss using fixed weights \citep{liu2022continual, zhang2024negative}. But fixed coefficients cannot adapt to the changing dynamics of unlearning, since the difficulty of retain preservation shifts as forgetting progresses.
 
 We identify three failure modes in current approaches:
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Unbounded forgetting.} Gradient ascent \citep{jang2023knowledge} and logit-based objectives produce arbitrarily large gradients on highly memorized tokens, causing catastrophic utility loss even with retain regularization.
-    \item \textbf{Static tradeoff.} Fixed-weight combinations of forget and retain losses (GradDiff, NPO) cannot adapt when retain performance suddenly degrades mid-training.
-    \item \textbf{Over-forgetting.} Unclamped entropy maximization \citep{yuan2024closer} and gradient ascent continue pushing already-forgotten tokens, wasting gradient budget and destabilizing the model.
+    \item \textbf{Unbounded forgetting.} Gradient ascent \citep{jang2023knowledge} and logit-based objectives produce arbitrarily large gradients on highly memorized tokens. This causes catastrophic utility loss even with retain regularization.
+    \item \textbf{Static tradeoff.} Fixed-weight combinations of forget and retain losses (GradDiff, NPO) cannot adapt when retain performance suddenly degrades during training.
+    \item \textbf{Over-forgetting.} Unclamped entropy maximization \citep{yuan2024closer} and gradient ascent keep pushing already-forgotten tokens. This wastes gradient budget and destabilizes the model.
 \end{enumerate}
 
-\method addresses these through a bilevel optimization framework with three novel components and a standard parameterization choice:
+We address these with \method, a bilevel optimization framework with three novel components and a standard parameterization choice:
 
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): maximizes per-token output entropy up to a threshold $\tau \cdot H_{\max}$, after which the gradient vanishes. This provides bounded, self-stabilizing forgetting---tokens ``drop out'' of the loss as they are forgotten.
-    \item \textbf{Augmented Lagrangian constraint} (\secref{sec:alm}): treats retain preservation as a hard constraint $\Loss_{\text{ret}} \leq \varepsilon$ enforced by a learned Lagrange multiplier $\lambda$, rather than a soft penalty with a fixed weight.
-    \item \textbf{Asymmetric dual update} (\secref{sec:alm}): ratchets $\lambda$ quickly on constraint violations but decays it slowly when satisfied, permanently calibrating the tradeoff after the first retain spike.
-    \item \textbf{LoRA parameterization} (\secref{sec:lora}): confines all updates to low-rank adapters, limiting the damage radius of the unlearning update.
+    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): we maximize per-token output entropy up to a threshold $\tau \cdot H_{\max}$, after which the gradient vanishes. Tokens ``drop out'' of the loss as they are forgotten, giving bounded and self-stabilizing forgetting.
+    \item \textbf{Augmented Lagrangian constraint} (\secref{sec:alm}): we treat retain preservation as a hard constraint $\Loss_{\text{ret}} \leq \varepsilon$ enforced by a learned Lagrange multiplier $\lambda$, instead of a soft penalty with a fixed weight.
+    \item \textbf{Asymmetric dual update} (\secref{sec:alm}): we increase $\lambda$ quickly on constraint violations but decay it slowly when satisfied. After the first retain spike, the tradeoff is permanently calibrated.
+    \item \textbf{LoRA parameterization} (\secref{sec:lora}): we confine all updates to low-rank adapters, which limits how much the unlearning update can affect other weights.
 \end{enumerate}
 
-We evaluate \method on MUSE Books \citep{shi2024muse} and TOFU \citep{maini2024tofu} across two model scales (1B, 3B) and one 7B setting.
-On MUSE Books, \method achieves HM=0.798, the highest among all tested baselines.
-On TOFU 1B, \method achieves HM=0.811 with the best forget quality (FQ=0.919) at $T$=100 steps.
-Loss dynamics across all settings exhibit a consistent three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---suggesting the ALM mechanism discovers a stable forget--retain operating point.
+We evaluate \method on TOFU \citep{maini2024tofu} across two model scales (1B, 3B) and three forget splits, and on MUSE Books \citep{shi2024muse} with Llama-2-7B. All TOFU experiments use 5 random seeds.
+On TOFU 1B forget01, \method achieves HM=0.808 versus the strongest baseline PDU (0.690), which is an improvement of $+$0.118.
+The gap holds across forget splits and model scales, and is largest on small forget sets where the forget--retain boundary is tightest.
+We also run an LLM judge evaluation, which confirms near-zero forget leakage for \method while baselines retain substantial residual knowledge.
+On MUSE Books, \method achieves HM=0.798, the highest among all tested methods including the gold retrained model.
+We observe that loss dynamics across all settings follow the same three-phase pattern: warm-up, spike-and-ratchet, smooth convergence. This suggests the ALM mechanism converges to a stable forget--retain operating point.

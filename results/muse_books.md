@@ -1,10 +1,10 @@
 # MUSE Books (Llama-2-7b-hf)
 
-Updated: 2026-04-21
+Updated: 2026-04-25
 
 Gold target: forget_knowmem ≤ 0.303, retain ≥ 0.687
 
-## Results
+## Results (seed=42)
 
 HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain). Penalizes imbalance; any weak axis tanks the score. Follows TOFU's `hmean` convention for Model Utility.
 
@@ -12,14 +12,29 @@ HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain). Penalizes imbal
 | --- | --- | --- | --- | --- | --- | --- |
 | Gold (retrain) | 0.3029 | 0.1445 | 0.6874 | 0.0107 | 0.739 | — |
 | Target (pre-unlearn) | 0.4712 | 0.9970 | 0.6913 | 0.9163 | 0.009 | — |
-| GradAscent | **0.0000** | **0.0000** | 0.0000 | **0.0079** | 0.000 | 43m |
-| GradDiff | **0.0000** | **0.0000** | 0.0245 | **0.0079** | 0.070 | 52m |
-| NPO | 0.4114 | 0.5697 | **0.6612** | 0.3774 | 0.542 | 89m |
-| SimNPO | 0.2388 | 0.0047 | 0.6036 | 0.0092 | 0.755 | 83m |
-| BLURNPO | 0.3109 | 0.8087 | 0.6000 | 0.7023 | 0.359 | 105m |
-| RMU | 0.3084 | 0.1201 | 0.6036 | 0.0111 | 0.708 | 20m |
-| PDU | **0.0000** | 0.0020 | 0.0000 | **0.0079** | 0.000 | 76m |
-| LoRA-BiAL+clampedEntropy (ours) | 0.0802 | **0.0000** | 0.5984 | 0.0080 | **0.798** | 104m |
+| GradAscent | 0.0000 | 0.0000 | 0.0000 | 0.0079 | 0.000 | 22m |
+| GradDiff | 0.0000 | 0.0000 | 0.0231 | 0.0079 | 0.066 | 42m |
+| NPO | 0.4021 | 0.0000 | 0.6130 | 0.0000 | 0.697 | 93m |
+| SimNPO | 0.2707 | 0.2697 | 0.5802 | 0.0000 | 0.672 | 80m |
+| RMU | 0.2022 | 0.1151 | 0.6014 | 0.0097 | **0.741** | 39m |
+| BLURNPO | 0.4493 | 0.9970 | 0.6590 | 0.9160 | 0.009 | 102m |
+| PDU | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| LoRA-BiAL-Adaptive (ours) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+## LLM Judge (seed=42)
+
+Scores on 0–2 scale. FL = forget leakage (lower = better forgetting). RA = retain accuracy, RQ = response quality (higher = better).
+
+| Method | FL↓ | FL_know↓ | FL_verb↓ | RA↑ | RQ↑ | fgt_RQ | ret_RQ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| GradAscent | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.000 |
+| GradDiff | 0.00 | 0.00 | 0.00 | 0.05 | 0.02 | 0.00 | 0.06 | 0.040 |
+| NPO | 0.76 | 0.76 | 0.00 | 1.31 | 1.62 | 1.47 | 1.77 | 0.703 |
+| SimNPO | 0.55 | 0.56 | 0.54 | 1.26 | 1.29 | 1.11 | 1.64 | 0.717 |
+| RMU | 0.17 | 0.34 | 0.00 | 1.33 | 0.95 | 0.57 | 1.72 | ⏳ |
+| BLURNPO | 1.45 | 0.90 | 2.00 | 1.49 | 1.72 | 1.72 | 1.71 | ⏳ |
+| PDU | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| LoRA-BiAL-Adaptive (ours) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
 
 ## Notes
 

@@ -8,7 +8,7 @@ cd /datadrive/forked/open-unlearning
 
 DATA_SPLIT="Books"
 MODEL="Llama-2-7b-hf"
-BSZ=2
+BSZ=4
 ACCUM=8
 SEED=42
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"

@@ -1,17 +1,16 @@
 \begin{abstract}
 
-Large language models memorize training data, creating legal, privacy, and safety risks that require targeted removal of specific knowledge without degrading general capabilities.
-Existing unlearning methods use unbounded forget objectives (gradient ascent, NPO) that destroy model coherence, or lack principled mechanisms to enforce retain quality during aggressive forgetting.
+Large language models memorize training data, which creates legal, privacy, and safety risks that call for targeted knowledge removal without degrading general capabilities.
+Existing unlearning methods use unbounded forget objectives that destroy model coherence, or lack mechanisms to protect retain quality during aggressive forgetting.
 
-We propose \method, a bilevel optimization framework for LLM unlearning that treats retain preservation as a hard constraint rather than a soft penalty.
-The inner loop runs $K$ SGD steps on retain data to maintain utility; the outer loop minimizes a \emph{clamped entropy} forget loss subject to an augmented Lagrangian constraint on retain performance.
-Clamped entropy maximizes per-token output entropy only up to a threshold $\tau \cdot H_{\max}$, after which the gradient vanishes---providing bounded, self-stabilizing forgetting where tokens ``drop out'' as they are forgotten.
-An asymmetric dual update ratchets the Lagrange multiplier $\lambda$ quickly on constraint violations but decays it slowly when satisfied, calibrating the forget--retain tradeoff from training dynamics rather than manual tuning.
-All updates are confined to LoRA adapters, which limit the damage radius of the unlearning update.
+We propose \method, a bilevel optimization framework that treats retain preservation as a hard constraint via an augmented Lagrangian.
+The outer loop minimizes a \emph{clamped entropy} forget loss that vanishes once per-token entropy exceeds a threshold, giving bounded and self-stabilizing forgetting.
+An asymmetric dual update permanently calibrates the forget--retain tradeoff after the first constraint violation.
+All updates are confined to LoRA adapters.
 
-On MUSE Books (Llama-2-7B), \method achieves HM=0.798, the highest among all baselines including SimNPO (0.755).
-On TOFU forget01 (Llama-3.2-1B), \method achieves HM=0.811 with the highest forget quality (FQ=0.919) among all methods at $T$=100 steps.
-On TOFU 3B, \method is competitive with PDU (HM=0.852 vs.\ 0.855) while achieving near-perfect forgetting (fgt\_Prob$<$0.001).
-Loss dynamics across all settings exhibit a consistent three-phase pattern: warm-up, spike-and-ratchet, and smooth convergence.
+We evaluate on TOFU (Llama-3.2-1B/3B, three forget splits, 5 seeds) and MUSE Books (Llama-2-7B).
+On TOFU 1B, \method achieves HM=0.808 vs.\ the strongest baseline PDU at 0.690 ($+$0.118).
+The gap holds across splits and scales, with \method winning all 6 LLM judge settings.
+On MUSE Books, \method reaches HM=0.798, surpassing SimNPO (0.755) by $+$0.043.
 
 \end{abstract}

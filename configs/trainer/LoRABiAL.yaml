@@ -16,8 +16,7 @@ method_args:
   eta_in: 2e-4
 
   # ALM parameters
-  epsilon: 0.70
-  epsilon_multiplier: 0.0  # >0: auto-set ε = multiplier × baseline_L_ret (overrides epsilon)
+  epsilon_multiplier: 1.15  # ε = multiplier × baseline_L_ret (auto-calibrated at step 0)
   rho: 0.1
   lambda_init: 1.0
   lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
