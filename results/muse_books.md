@@ -23,7 +23,7 @@ HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain). Penalizes imbal
 
 ## LLM Judge (seed=42)
 
-Scores on 0–2 scale. FL = forget leakage (lower = better forgetting). RA = retain accuracy, RQ = response quality (higher = better).
+Scores on 0–2 scale. FL = forget leakage (lower = better forgetting). RA = retain accuracy, RQ = response quality (higher = better). HM = hmean(1−FL/2, RA/2, ret_RQ/2).
 
 | Method | FL↓ | FL_know↓ | FL_verb↓ | RA↑ | RQ↑ | fgt_RQ | ret_RQ | HM↑ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |

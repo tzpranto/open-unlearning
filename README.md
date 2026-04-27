@@ -37,7 +37,15 @@ nohup bash scripts/tofu_baselines.sh > saves/unlearn/tofu_baselines.log 2>&1 &
 nohup bash scripts/muse_baselines.sh > saves/unlearn/muse_baselines.log 2>&1 &
 ```
 
-Split-specific overrides (PDU eps, BLUR lr) are handled automatically by the script:
+**WMDP-Cyber** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO; Zephyr-7b-beta):
+
+```bash
+nohup bash scripts/wmdp_baselines.sh > saves/unlearn/wmdp_baselines.log 2>&1 &
+```
+
+RMU uses paper-correct WMDP params (arXiv:2403.03218): steering_coeff=2, lr=5e-5, max_steps=80, trainable=layers.5-7.mlp.down_proj. Other methods use epoch-based training with upstream defaults.
+
+Split-specific overrides (PDU eps, BLUR lr) are handled automatically by the MUSE script:
 
 | Method | Config | Key overrides | Source |
 |--------|--------|---------------|--------|
