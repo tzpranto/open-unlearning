@@ -149,12 +149,20 @@ if [[ "$BENCHMARK" == "muse" && -n "$EVAL_DIRS" ]]; then
     for eval_dir in $EVAL_DIRS; do
         total=$((total + 1))
         eval_json="${eval_dir}/MUSE_EVAL.json"
-        # Use directory basename as method name
-        dir_name=$(basename "$eval_dir")
-        method="$dir_name"
-        model="${MODEL:-unknown}"
-        split="unknown"
-        seed="0"
+        # Parse metadata from path: .../muse_{MODEL}_{SPLIT}_{METHOD}_s{SEED}/evals
+        parent_dir=$(basename "$(dirname "$eval_dir")")
+        if [[ "$parent_dir" =~ ^muse_(.+)_(News|Books)_(.+)_s([0-9]+)$ ]]; then
+            model="${BASH_REMATCH[1]}"
+            split="${BASH_REMATCH[2]}"
+            method="${BASH_REMATCH[3]}"
+            seed="${BASH_REMATCH[4]}"
+        else
+            dir_name=$(basename "$eval_dir")
+            method="$dir_name"
+            model="${MODEL:-unknown}"
+            split="unknown"
+            seed="0"
+        fi
 
         if [[ ! -f "$eval_json" ]]; then
             echo "[MISSING] $eval_json"
