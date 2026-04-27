@@ -270,7 +270,10 @@ class BIUnlearnTrainer(UnlearnTrainer):
 
         def make_hook(p):
             def hook(grad):
-                setattr(p, attr, grad.detach().clone())
+                if hasattr(p, attr):
+                    getattr(p, attr).add_(grad.detach())
+                else:
+                    setattr(p, attr, grad.detach().clone())
             return hook
 
         for p in model.parameters():
@@ -313,7 +316,6 @@ class BIUnlearnTrainer(UnlearnTrainer):
             loss_forget = loss_forget.mean()
             loss_retain = loss_retain.mean()
 
-        self._clear_param_cache(model)
         self._register_grad_capture_hooks(model, attr="forget_grad")
         self.accelerator.backward(loss_forget, retain_graph=True)
         self._remove_hooks(model)

@@ -2,7 +2,8 @@
 # BLADE (LoRA-BiAL-Adaptive) on MUSE News — v2
 # v1 failed: eps_mul=3.2 gave 18x looser constraint than Books (ε=2.64 vs 0.15),
 #   retain constraint was inactive, LR overshoot caused catastrophic crash at step 40.
-# v2 fixes: tighter epsilon (1.3), lower outer LR (2e-5), longer T/patience.
+# v2 fixes: tighter epsilon (1.3), lower outer LR (2e-5).
+# v3: T=150 (converged by ~120 in v2, rest was wasted compute).
 # News: 889 forget samples, bs=2, accum=8 → ~56 steps/epoch
 
 defaults:
@@ -51,7 +52,7 @@ trainer:
     lora_r: 16
     lora_alpha: 32
     # Bilevel
-    T: 350
+    T: 150
     K: 3
     eta_theta: 2e-5
     eta_in: 2e-4

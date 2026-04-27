@@ -1,29 +1,25 @@
 #!/bin/bash
-# WMDP-Cyber baselines — single GPU, train + eval, skip-if-done
-# Model: zephyr-7b-beta, Data: WMDP-Cyber (1K forget, 4.5K retain)
-# Eval: wmdp_cyber accuracy (↓) + mmlu average (↑)
+# WMDP baselines — joint bio+cyber, single GPU, train + eval, skip-if-done
+# Model: zephyr-7b-beta
+# Data: balanced bio+cyber (1K bio + 1K cyber forget, 4.5K+4.5K retain)
+# Eval: wmdp_bio accuracy (↓) + wmdp_cyber accuracy (↓) + mmlu average (↑)
 # Usage: nohup bash scripts/wmdp_baselines.sh > saves/unlearn/wmdp_baselines.log 2>&1 &
 #
-# RMU uses the dedicated WMDP config (default.yaml) with paper-correct params:
-#   steering_coeff=2, alpha=1, lr=5e-5, max_steps=80, layers.5-7.mlp.down_proj
-#   Source: arXiv:2403.03218 (WMDP paper), centerforaisafety/wmdp/rmu/unlearn.py
+# RMU: paper Zephyr notebook params (centerforaisafety/wmdp/run_rmu_zephyr.ipynb):
+#   steering_coeff=6.5, alpha=1200, lr=5e-5, max_steps=150, bs=4
+#   layers.5-7.mlp.down_proj, steering=layer.7
 #
-# GA, GradDiff, NPO, SimNPO use default.yaml with trainer override.
-#   The WMDP default.yaml sets max_steps=80, lr=5e-5, eff_bs=16.
-#   For non-RMU methods we override to epoch-based training (10 epochs)
-#   with eff_bs=32, lr=1e-5 (upstream finetune defaults).
+# GA, GradDiff, NPO, SimNPO: epoch-based (10 epochs), eff_bs=32, lr=1e-5
 #
 # BLURNPO: paper-correct WMDP params from arXiv:2506.08164 Table 7:
 #   lr=2e-6, beta=0.005, gamma=1.0, bs=4, max_steps=150
-#   Caveat: paper trains bio+cyber jointly; we do cyber-only.
-#   May OOM on single GPU (ref_model deepcopy of 7B).
 set -euo pipefail
 export PATH="/datadrive/conda/envs/unlearning/bin:$PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd /datadrive/forked/open-unlearning
 
 # ── Config ──────────────────────────────────────────────────
-DATA_SPLIT="cyber"
+DATA_SPLIT="bio_cyber"
 MODEL="zephyr-7b-beta"
 SEED=42
 BSZ=4
@@ -56,11 +52,11 @@ run_method() {
     echo "[EVAL] $(date) $task_name"
     if ! CUDA_VISIBLE_DEVICES=0 python src/eval.py \
         experiment=eval/wmdp/default.yaml \
-        data_split=${DATA_SPLIT} \
         task_name=${task_name} \
         model=${MODEL} \
         model.model_args.pretrained_model_name_or_path=${outdir} \
-        paths.output_dir=${outdir}/evals; then
+        paths.output_dir=${outdir}/evals \
+        'eval.lm_eval.tasks=[wmdp_bio,wmdp_cyber,mmlu]'; then
         echo "[EVAL FAILED] $task_name"
         fail=$((fail + 1))
         return 1
@@ -101,7 +97,7 @@ COMMON_ARGS=(
 
 echo ""
 echo "################################################################"
-echo "# WMDP-Cyber Baselines — SEED=${SEED}"
+echo "# WMDP Bio+Cyber Baselines — SEED=${SEED}"
 echo "################################################################"
 
 # ── Standard methods (override trainer on WMDP default config) ──
@@ -110,18 +106,23 @@ for trainer in GradAscent GradDiff NPO SimNPO; do
     run_method "$task" "${COMMON_ARGS[@]}" trainer=${trainer} task_name=${task}
 done
 
-# ── RMU (dedicated WMDP config — paper-correct params) ──────
-# arXiv:2403.03218: steering_coeff=2, alpha=1, lr=5e-5, max_steps=80,
-# trainable=layers.5-7.mlp.down_proj, steering=layer.7
+# ── RMU (Zephyr notebook params) ──────────────────────────────
+# centerforaisafety/wmdp/run_rmu_zephyr.ipynb:
+# steering_coeff=6.5, alpha=1200, lr=5e-5, max_steps=150, bs=4
 TASK="wmdp_${MODEL}_${DATA_SPLIT}_RMU_s${SEED}"
 run_method "$TASK" \
     experiment=unlearn/wmdp/default.yaml \
     data_split=${DATA_SPLIT} \
     task_name=${TASK} \
+    trainer.args.per_device_train_batch_size=2 \
+    trainer.args.gradient_accumulation_steps=2 \
+    trainer.args.max_steps=150 \
     trainer.args.eval_strategy=no \
     trainer.args.do_eval=false \
     trainer.args.eval_on_start=false \
-    trainer.args.seed=${SEED}
+    trainer.args.seed=${SEED} \
+    trainer.method_args.steering_coeff=6.5 \
+    trainer.method_args.alpha=1200
 
 # ── BLUR-NPO (paper-correct WMDP params) ────────────────────
 # arXiv:2506.08164, Table 7: lr=2e-6, beta=0.005, bs=4, 150 steps
@@ -132,8 +133,8 @@ run_method "$TASK" \
     trainer=BLURNPO \
     '~trainer.method_args' \
     task_name=${TASK} \
-    trainer.args.per_device_train_batch_size=4 \
-    trainer.args.gradient_accumulation_steps=1 \
+    trainer.args.per_device_train_batch_size=2 \
+    trainer.args.gradient_accumulation_steps=2 \
     trainer.args.gradient_checkpointing=true \
     trainer.args.eval_strategy=no \
     trainer.args.do_eval=false \
