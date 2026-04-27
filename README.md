@@ -30,28 +30,36 @@ python setup_data.py --eval
 nohup bash scripts/tofu_baselines.sh > saves/unlearn/tofu_baselines.log 2>&1 &
 ```
 
-**MUSE** (same 7 methods; Llama-2-7b-hf, per-split params):
+**MUSE** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU; Llama-2-7b-hf, per-split params):
 
 ```bash
-# Set DATA_SPLIT="Books" or "News" and SEEDS in the script
-nohup bash scripts/muse_baselines.sh > saves/unlearn/muse_baselines.log 2>&1 &
+# MUSE News
+nohup DATA_SPLIT=News bash scripts/muse_baselines.sh > saves/unlearn/muse_news_baselines.log 2>&1 &
+
+# MUSE Books
+nohup DATA_SPLIT=Books bash scripts/muse_baselines.sh > saves/unlearn/muse_books_baselines.log 2>&1 &
+
+# Multiple seeds
+nohup DATA_SPLIT=News SEEDS="42 123 456 789 1337" bash scripts/muse_baselines.sh > saves/unlearn/muse_news_baselines.log 2>&1 &
 ```
 
-**WMDP-Cyber** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO; Zephyr-7b-beta):
+**WMDP Bio+Cyber** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO; Zephyr-7b-beta):
 
 ```bash
 nohup bash scripts/wmdp_baselines.sh > saves/unlearn/wmdp_baselines.log 2>&1 &
 ```
 
-RMU uses paper-correct WMDP params (arXiv:2403.03218): steering_coeff=2, lr=5e-5, max_steps=80, trainable=layers.5-7.mlp.down_proj. Other methods use epoch-based training with upstream defaults.
+RMU uses paper-correct Zephyr notebook params (centerforaisafety/wmdp): steering_coeff=6.5, alpha=1200, lr=5e-5, max_steps=150, trainable=layers.5-7.mlp.down_proj. Other methods use epoch-based training with upstream defaults.
 
-Split-specific overrides (PDU eps, BLUR lr) are handled automatically by the MUSE script:
+All split-specific params (BLUR beta/lr, PDU eps) are set automatically by the script based on `DATA_SPLIT`:
 
-| Method | Config | Key overrides | Source |
-|--------|--------|---------------|--------|
-| RMU | `experiment/unlearn/muse/rmu.yaml` | lr=5e-5, trainable=layers.5-7.mlp.down_proj | open-unlearning repro |
-| BLUR-NPO | `experiment/unlearn/muse/blurnpo.yaml` | beta=0.15, lr=2.5e-5 (News) / 1e-5 (Books) | arXiv:2506.08164 |
-| PDU | `experiment/unlearn/muse/pdu.yaml` | alpha=50, eps=1.5 (News) / 0.1 (Books) | arXiv:2506.05314 |
+| Method | Config | News params | Books params | Source |
+|--------|--------|-------------|--------------|--------|
+| RMU | `unlearn/muse/rmu.yaml` | lr=5e-5, layers.5-7.mlp.down_proj | same | open-unlearning repro |
+| BLUR-NPO | `unlearn/muse/blurnpo_muse.yaml` | beta=0.05, lr=2.5e-5 | beta=0.4, lr=1e-5 | arXiv:2506.08164, Table 6 |
+| PDU | `unlearn/muse/pdu.yaml` | alpha=50, eps=1.5 | alpha=50, eps=0.1 | arXiv:2506.05314 |
+
+BLUR-NPO on MUSE uses raw-logits NPO (full-vocab `logsigmoid(beta * (ref_logits - model_logits)).mean()`), matching the authors' MUSE implementation. TOFU and WMDP use standard per-token NLL NPO.
 
 PDU TOFU overrides (`alpha=100, eps=0.3, dual_step_size=5`) are from `community/methods/PDU/run.sh` (arXiv:2506.05314).
 
@@ -68,9 +76,11 @@ nohup bash scripts/tofu_blade.sh > saves/unlearn/tofu_blade.log 2>&1 &
 **MUSE** (Llama-2-7b-hf, Books or News):
 
 ```bash
-# Set DATA_SPLIT="Books" or "News" and SEEDS in the script
-# Books: lora_bial_adaptive_books.yaml (eps_multiplier=3.2, T=250, conv_patience=20)
-nohup bash scripts/muse_blade.sh > saves/unlearn/muse_blade.log 2>&1 &
+# MUSE Books (eps_multiplier=3.2, T=250, conv_patience=20)
+nohup DATA_SPLIT=Books bash scripts/muse_blade.sh > saves/unlearn/muse_blade_books.log 2>&1 &
+
+# MUSE News (eps_multiplier=1.3, T=150)
+nohup DATA_SPLIT=News bash scripts/muse_blade.sh > saves/unlearn/muse_blade_news.log 2>&1 &
 ```
 
 All scripts auto-skip completed runs and clean model weights after eval. Results are saved to `results/` as CSV and markdown.

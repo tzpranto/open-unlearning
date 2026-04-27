@@ -270,10 +270,7 @@ class BIUnlearnTrainer(UnlearnTrainer):
 
         def make_hook(p):
             def hook(grad):
-                if hasattr(p, attr):
-                    getattr(p, attr).add_(grad.detach())
-                else:
-                    setattr(p, attr, grad.detach().clone())
+                setattr(p, attr, grad.detach().clone())
             return hook
 
         for p in model.parameters():

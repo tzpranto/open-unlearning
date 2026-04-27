@@ -1,0 +1,11 @@
+defaults:
+  - finetune
+
+handler: BLUR_NPO_MUSE
+method_args:
+  beta: 0.1
+  retain_loss_type: NLL
+args:
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 32
+  gradient_checkpointing: True

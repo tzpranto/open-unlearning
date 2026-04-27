@@ -11,10 +11,10 @@ export PATH="/datadrive/conda/envs/unlearning/bin:$PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd /datadrive/forked/open-unlearning
 
-# ── Config ──────────────────────────────────────────────────
-DATA_SPLIT="News"    # "News" or "Books"
-MODEL="Llama-2-7b-hf"
-SEEDS=(42)
+# ── Config (override via env: DATA_SPLIT=Books bash scripts/muse_baselines.sh) ──
+DATA_SPLIT="${DATA_SPLIT:-News}"       # "News" or "Books"
+MODEL="${MODEL:-Llama-2-7b-hf}"
+SEEDS=(${SEEDS:-42})
 BSZ=4
 ACCUM=8
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"
@@ -22,13 +22,15 @@ RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"
 
 # ── Split-specific overrides ────────────────────────────────
 # PDU: eps=1.5 for News, eps=0.1 for Books (arXiv:2506.05314, community/methods/PDU/run.sh)
-# BLUR: lr=2.5e-5 for News, lr=1e-5 for Books (arXiv:2506.08164, MUSE/baselines/)
+# BLUR: lr=2.5e-5 for News, lr=1e-5 for Books; beta=0.05 News, 0.4 Books (Table 6)
 if [[ "$DATA_SPLIT" == "News" ]]; then
     PDU_EPS=1.5
     BLUR_LR="2.5e-5"
+    BLUR_BETA=0.05
 elif [[ "$DATA_SPLIT" == "Books" ]]; then
     PDU_EPS=0.1
     BLUR_LR="1e-5"
+    BLUR_BETA=0.4
 else
     echo "Invalid DATA_SPLIT: $DATA_SPLIT (must be News or Books)"
     exit 1
@@ -127,15 +129,17 @@ for SEED in "${SEEDS[@]}"; do
         trainer.args.eval_on_start=false \
         trainer.args.seed=${SEED}
 
-    # ── BLUR-NPO (dedicated config: configs/experiment/unlearn/muse/blurnpo.yaml) ──
-    # arXiv:2506.08164: beta=0.15 (hardcoded in their code), lr varies by split.
+    # ── BLUR-NPO (dedicated config: configs/experiment/unlearn/muse/blurnpo_muse.yaml) ──
+    # arXiv:2506.08164: raw-logits NPO (matching BLUR repo MUSE/baselines/iterative.py).
+    # Beta per split (Table 6): News=0.05, Books=0.4. LR: News=2.5e-5, Books=1e-5.
     # NOTE: BLUR needs ref_model deepcopy of 7B — may OOM on single GPU.
     TASK="muse_${MODEL}_${DATA_SPLIT}_BLURNPO_s${SEED}"
     run_method "$TASK" \
-        experiment=unlearn/muse/blurnpo.yaml \
+        experiment=unlearn/muse/blurnpo_muse.yaml \
         data_split=${DATA_SPLIT} \
         task_name=${TASK} \
         retain_logs_path=${RETAIN_LOGS} \
+        trainer.method_args.beta=${BLUR_BETA} \
         trainer.args.learning_rate=${BLUR_LR} \
         trainer.args.eval_strategy=no \
         trainer.args.do_eval=false \

@@ -11,10 +11,10 @@ export PATH="/datadrive/conda/envs/unlearning/bin:$PATH"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 cd /datadrive/forked/open-unlearning
 
-# ── Config ──────────────────────────────────────────────────
-DATA_SPLIT="Books"    # "Books" or "News"
-MODEL="Llama-2-7b-hf"
-SEEDS=(42)
+# ── Config (override via env: DATA_SPLIT=News bash scripts/muse_blade.sh) ──
+DATA_SPLIT="${DATA_SPLIT:-Books}"      # "Books" or "News"
+MODEL="${MODEL:-Llama-2-7b-hf}"
+SEEDS=(${SEEDS:-42})
 RETAIN_LOGS="saves/eval/muse_${MODEL}_${DATA_SPLIT}_retrain/MUSE_EVAL.json"
 # ────────────────────────────────────────────────────────────
 

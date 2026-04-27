@@ -1,4 +1,6 @@
 import copy
+import torch
+import torch.nn.functional as F
 from trainer.utils import compute_kl_divergence, compute_dpo_loss
 from trainer.unlearn.base import UnlearnTrainer, BIUnlearnTrainer
 
@@ -111,6 +113,35 @@ class BLUR_NPO(BIUnlearnTrainer):
             lose_inputs=forget_inputs,
             beta=self.beta,
         )
+
+        retain_inputs = inputs["retain"]
+        retain_inputs = {
+            "input_ids": retain_inputs["input_ids"],
+            "attention_mask": retain_inputs["attention_mask"],
+            "labels": retain_inputs["labels"],
+        }
+        retain_loss = self.compute_retain_loss(model=model, retain_inputs=retain_inputs)
+
+        return (forget_loss, retain_loss)
+
+
+class BLUR_NPO_MUSE(BLUR_NPO):
+    """BLUR with raw-logits NPO for MUSE — matches BLUR repo's MUSE/baselines/iterative.py."""
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        forget_inputs = inputs["forget"]
+        forget_inputs = {
+            "input_ids": forget_inputs["input_ids"],
+            "attention_mask": forget_inputs["attention_mask"],
+            "labels": forget_inputs["labels"],
+        }
+
+        with torch.no_grad():
+            ref_outputs = self.ref_model(**forget_inputs)
+        model_outputs = model(**forget_inputs)
+
+        neg_log_ratio = ref_outputs.logits - model_outputs.logits
+        forget_loss = -F.logsigmoid(self.beta * neg_log_ratio).mean() * 2 / self.beta
 
         retain_inputs = inputs["retain"]
         retain_inputs = {

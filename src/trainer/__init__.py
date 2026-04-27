@@ -5,7 +5,7 @@ from transformers import Trainer, TrainingArguments
 
 from trainer.base import FinetuneTrainer
 from trainer.unlearn.grad_ascent import GradAscent
-from trainer.unlearn.grad_diff import GradDiff, BLUR_NPO
+from trainer.unlearn.grad_diff import GradDiff, BLUR_NPO, BLUR_NPO_MUSE
 from trainer.unlearn.npo import NPO
 from trainer.unlearn.dpo import DPO
 from trainer.unlearn.simnpo import SimNPO
@@ -97,6 +97,7 @@ _register_trainer(FinetuneTrainer)
 _register_trainer(GradAscent)
 _register_trainer(GradDiff)
 _register_trainer(BLUR_NPO)
+_register_trainer(BLUR_NPO_MUSE)
 _register_trainer(NPO)
 _register_trainer(DPO)
 _register_trainer(SimNPO)
