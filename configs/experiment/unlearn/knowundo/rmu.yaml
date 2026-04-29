@@ -54,6 +54,6 @@ trainer:
     eval_strategy: "no"
     do_eval: false
     eval_on_start: false
-    num_train_epochs: 2
+    num_train_epochs: 10
 
 task_name: ???
