@@ -1,6 +1,6 @@
 # @package _global_
-# GA+Descent (GradDiff) on KnowUnDo.
-# Paper: equal weighting (gamma=1.0, alpha=1.0), retain_loss=NLL.
+# GradDiff (GA+GD) on KnowUnDo.
+# Using MUSE-like training params: lr=1e-5, epochs=10, constant scheduler.
 
 defaults:
   - override /model: Llama-2-7b-chat-hf
@@ -42,12 +42,10 @@ trainer:
     alpha: 1.0
     retain_loss_type: NLL
   args:
-    learning_rate: 5e-5
-    num_train_epochs: 2
-    per_device_train_batch_size: 1
-    gradient_accumulation_steps: 16
-    warmup_ratio: 0.03
-    lr_scheduler_type: cosine
-    weight_decay: 0.0
+    learning_rate: 1e-5
+    num_train_epochs: 10
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 8
+    lr_scheduler_type: constant
 
 task_name: ???
