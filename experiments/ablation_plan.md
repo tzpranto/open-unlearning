@@ -1,291 +1,334 @@
 # LoRA-BiAL Ablation Plan
 
-## Intuition: What We Want To See
+## Goal
 
-The ablation answers one core question: **is every piece of LoRA-BiAL load-bearing?**
+Answer one question: **is every piece of LoRA-BiAL load-bearing?**
 
-- **Bilevel (K=0/1/3/10)**: The inner loop is *proactive* retain recovery (fixes retain before
-  outer step), while ALM penalties are *reactive* (punish violations after they happen).
-  K=0 should show retain degradation that no lambda tuning can fix. K=1 vs K=3 vs K=10
-  maps the sweet spot: too few = insufficient recovery, too many = inner loop undoes forgetting.
-
-- **Clamped Entropy (GA/NPO/tau sweep)**: Unlearning losses must be *self-limiting*. GA is
-  unbounded — keeps pushing even after tokens are fully forgotten, producing enormous gradients
-  that destabilize everything. Clamped entropy is bounded AND self-stabilizing: once a token
-  hits tau*H_max entropy, its gradient is exactly zero. The tau sweep shows a Goldilocks pattern:
-  tau=1.0 never stabilizes (same problem as GA), tau=0.3 stabilizes too early (under-forgets).
-
-- **ALM + Asymmetric Dual**: No fixed lambda works because the forget-retain tradeoff is
-  non-stationary — early you need aggressive forgetting (low lambda), late you need strong
-  retain protection (high lambda). Fixed lambda=1.0 under-retains, lambda=5.0 under-forgets.
-  Without asymmetry, lambda oscillates in a sawtooth pattern. rho=0 kills both the quadratic
-  penalty AND the dual update, reducing the method to a fixed-weight combination.
-
-- **Auto-Epsilon**: "How much retain degradation is acceptable" should be *relative* to the
-  starting point. A model with baseline L_ret=1.8 needs a different epsilon than one with 0.5.
-  Fixed epsilon either works by luck (hand-tuned for this setup) or fails on other setups.
-  The ablation shows auto-epsilon matches or beats hand-tuned on TOFU; its real value is that
-  it generalizes to MUSE/different models without per-setup tuning.
-
-**The narrative**: Every row in the ablation table should show degradation on at least one axis
-(forgetting, retain, or both) compared to the full method. If any component can be removed
-with no drop, a reviewer will argue it's unnecessary complexity.
+Every ablation row should show degradation on at least one axis (forgetting, retain, or both)
+compared to the full method. If any component can be removed with no drop, a reviewer will
+argue it's unnecessary complexity.
 
 ---
 
-**Benchmark**: TOFU forget01, Llama-3.2-1B-Instruct
-**Base config**: `configs/experiment/unlearn/tofu/lora_bial_1b.yaml` with `LoRABiAL` trainer
-**Seeds**: 42, 123, 456 (3 seeds for ablations; 5 for final paper numbers if needed)
+## Setup
 
-## Full Method Defaults (the control)
+- **Benchmark**: TOFU forget01 (1%), Llama-3.2-1B-Instruct
+- **Base config**: `configs/experiment/unlearn/tofu/lora_bial_1b.yaml` with `LoRABiALAdaptive` trainer
+- **Seeds**: 42, 123, 456
+- **Each ablation changes exactly ONE thing from A0.**
+
+---
+
+## A0: Full Method (Control)
 
 ```
 trainer=LoRABiALAdaptive, lora_r=8, lora_alpha=16, K=3, eta_theta=3e-5, eta_in=2e-4
-epsilon_multiplier=0.85 (auto-epsilon: ε = 0.85 × mean(initial inner losses))
+epsilon_multiplier=0.85 (auto-ε: ε = 0.85 × mean(initial inner losses))
 rho=0.1, lambda_init=1.0, lambda_min=0.1
 forget_loss_type=clamped_entropy, clamped_entropy_tau=0.7
 gradient_accumulation_steps=4, per_device_train_batch_size=4
 num_train_epochs=10, checkpoint_every_epoch=true
 ```
 
-**Note**: The full method uses auto-epsilon (`epsilon_multiplier=0.85`), NOT a fixed epsilon.
-The multiplier means: ε = 85% of the model's initial retain loss. This adapts automatically
-to the model and dataset — a model with baseline retain loss of 1.8 gets ε≈1.53, while one
-with 0.5 gets ε≈0.43. The key insight is that "how much retain degradation is acceptable"
-should be relative to the starting point, not an absolute number.
-
-Each ablation changes exactly ONE thing from this control.
+Auto-epsilon means ε = multiplier × model's initial retain loss. A model with baseline
+L_ret=1.8 gets ε≈1.53; one with 0.5 gets ε≈0.43. Adapts to model/dataset automatically.
 
 ---
 
-## GROUP 1: Bilevel Structure (Contribution (a))
+## GROUP 1: Bilevel Structure — "Is the inner loop needed?"
 
-### A1. No Inner Loop (K=0) [MUST-HAVE]
-- **Isolates**: Whether the bilevel inner/outer decomposition is necessary
-- **Expected**: Retain degrades significantly; ALM penalty alone cannot keep L_ret near epsilon without dedicated retain recovery
-- **Override**:
-  ```
-  trainer.method_args.K=0 trainer.method_args.inner_warmup_steps=999999
-  ```
-
-### A2. Minimal Inner (K=1)
-- **Isolates**: Whether K=3 materially improves over K=1 (minimal bilevel)
-- **Expected**: Slightly worse retain than K=3 but much better than K=0
-- **Override**:
-  ```
-  trainer.method_args.K=1
-  ```
-
-### A3. Excessive Inner (K=10)
-- **Isolates**: Sensitivity to K; whether over-recovering retain starves forgetting
-- **Expected**: Forgetting is slower/weaker (higher fgt_Prob, fgt_ROUGE)
-- **Override**:
-  ```
-  trainer.method_args.K=10
-  ```
+| ID | Name | Override | Expected |
+|----|------|----------|----------|
+| A1 | K=0 (no inner loop) | `K=0 inner_warmup_steps=999999` | Retain degrades; ALM alone can't recover |
+| A2 | K=1 (minimal inner) | `K=1` | Worse retain than K=3, much better than K=0 |
+| A3 | K=10 (excessive inner) | `K=10` | Forgetting starved; inner loop over-recovers |
 
 ---
 
-## GROUP 2: Clamped Entropy Loss (Contribution (b))
+## GROUP 2: Forget Loss — "Is clamped entropy the right choice?"
 
-### A4. Gradient Ascent as Forget Loss [MUST-HAVE]
-- **Isolates**: Clamped entropy vs simplest baseline (unbounded -CE)
-- **Expected**: Retain collapse or oscillation; unbounded gradients overwhelm ALM
-- **Override**:
-  ```
-  trainer.method_args.forget_loss_type=ga
-  ```
-
-### A5. NPO as Forget Loss [MUST-HAVE]
-- **Isolates**: Clamped entropy vs strong bounded alternative (reference-model-based)
-- **Expected**: Comparable or slightly worse due to reference pass overhead / LoRA-disable imperfection
-- **Override**:
-  ```
-  trainer.method_args.forget_loss_type=npo trainer.method_args.npo_beta=4.0
-  ```
-
-### A6. Unclamped Entropy (tau=1.0) [MUST-HAVE]
-- **Isolates**: The clamping mechanism itself; loss never self-stabilizes
-- **Expected**: Over-forgetting that damages retain; keeps pushing already-forgotten tokens
-- **Override**:
-  ```
-  trainer.method_args.clamped_entropy_tau=1.0
-  ```
-
-### A7. Aggressive Clamp (tau=0.3)
-- **Isolates**: Under-forgetting from premature self-stabilization
-- **Expected**: Forgetting too weak; tokens stop at 30% of H_max
-- **Override**:
-  ```
-  trainer.method_args.clamped_entropy_tau=0.3
-  ```
-
-### A8. Mid-range tau (tau=0.5)
-- **Isolates**: Finer tau sensitivity; robustness characterization
-- **Expected**: Moderate performance, less forgetting than tau=0.7
-- **Override**:
-  ```
-  trainer.method_args.clamped_entropy_tau=0.5
-  ```
+| ID | Name | Override | Expected |
+|----|------|----------|----------|
+| A4 | Gradient Ascent | `forget_loss_type=ga` | Unbounded gradients → retain collapse |
+| A5 | NPO | `forget_loss_type=npo npo_beta=4.0` | Comparable or slightly worse; ref-model overhead |
+| A6 | tau=0.3 | `clamped_entropy_tau=0.3` | Under-forgets; tokens stop at 30% H_max |
+| A7 | tau=0.5 | `clamped_entropy_tau=0.5` | Moderate; less forgetting than tau=0.7 |
+| A8 | tau=0.9 | `clamped_entropy_tau=0.9` | Near-unclamped; starts to over-forget |
+| A9 | tau=1.0 (unclamped) | `clamped_entropy_tau=1.0` | Over-forgetting; never self-stabilizes |
 
 ---
 
-## GROUP 3: ALM with Asymmetric Dual Update (Contribution (c))
+## GROUP 3: ALM + Dual Update — "Is the constrained optimization needed?"
 
-### A9. Symmetric Dual Update [MUST-HAVE]
-- **Isolates**: The 10x asymmetry (fast ratchet up, slow decay down)
-- **Expected**: Sawtooth oscillation in L_ret; lambda rises and falls at same rate
-- **Code change needed**: Add `dual_decay_factor` param to LoRABiAL (default=0.1), use in outer_step line 354
-- **Override**:
-  ```
-  trainer.method_args.dual_decay_factor=1.0
-  ```
-
-### A10. Fixed Lambda=1.0 (no dual update) [MUST-HAVE]
-- **Isolates**: Whether learned dual variable is necessary vs fixed weight
-- **Expected**: No adaptive constraint tightening; either under-forgets or under-retains
-- **Override**:
-  ```
-  trainer.method_args.lambda_init=1.0 trainer.method_args.lambda_min=1.0 trainer.method_args.lambda_max=1.0
-  ```
-
-### A11. Fixed Lambda=5.0 (strong retain, no dual update)
-- **Isolates**: Whether a high fixed lambda can substitute for adaptive ALM
-- **Expected**: Good retain but forgetting is weak; paired with A10 shows no fixed lambda works
-- **Override**:
-  ```
-  trainer.method_args.lambda_init=5.0 trainer.method_args.lambda_min=5.0 trainer.method_args.lambda_max=5.0
-  ```
-
-### A12. No Quadratic Penalty (rho=0) [MUST-HAVE]
-- **Isolates**: The augmented term rho/2*max(0,r)^2; reduces to standard Lagrangian
-- **Expected**: Lambda never updates (rho*r=0), method is fixed-weight combination
-- **Override**:
-  ```
-  trainer.method_args.rho=0.0
-  ```
-
-### A13. Large Penalty (rho=1.0)
-- **Isolates**: Sensitivity to rho; aggressive penalty
-- **Expected**: Lambda escalates rapidly, forgetting stalls
-- **Override**:
-  ```
-  trainer.method_args.rho=1.0
-  ```
+| ID | Name | Override | Expected |
+|----|------|----------|----------|
+| A10 | Fixed λ=1.0 | `lambda_init=1.0 lambda_min=1.0 lambda_max=1.0` | No adaptive tightening; under-retains |
+| A11 | Fixed λ=5.0 | `lambda_init=5.0 lambda_min=5.0 lambda_max=5.0` | Good retain but forgetting stalls |
+| A12 | ρ=0 (no quadratic penalty) | `rho=0.0` | λ never updates; fixed-weight combination |
+| A13 | ρ=1.0 (aggressive penalty) | `rho=1.0` | λ escalates fast; forgetting choked |
+| A14 | Symmetric dual | `dual_decay_factor=1.0` | Sawtooth λ oscillation; no ratchet |
 
 ---
 
-## GROUP 4: Auto-Epsilon (Contribution (d))
+## GROUP 4: Auto-Epsilon — "How sensitive is the constraint threshold?"
 
-The full method uses `epsilon_multiplier=0.85` (auto-epsilon). These ablations test whether
-auto-epsilon is necessary by replacing it with fixed absolute epsilon values.
+Sweep eps_mul ∈ {0.75, 1.0, 1.3, 1.5, 2.0, 3.0}. Control is 0.85.
 
-### A14. Fixed Epsilon (hand-tuned, epsilon=0.15) [MUST-HAVE]
-- **Isolates**: Auto-epsilon vs a reasonable hand-tuned fixed value
-- **Expected**: May work on this specific setup but the point is: you had to hand-tune it.
-  Auto-epsilon works across TOFU/MUSE/different models without per-setup tuning.
-- **Override**:
-  ```
-  trainer.method_args.epsilon_multiplier=0.0 trainer.method_args.epsilon=0.15
-  ```
-
-### A15. Fixed Epsilon Too Tight (epsilon=0.05) [MUST-HAVE]
-- **Isolates**: What happens when fixed epsilon is too tight
-- **Expected**: Under-forgetting; lambda escalates immediately because L_ret > 0.05 is almost always violated
-- **Override**:
-  ```
-  trainer.method_args.epsilon_multiplier=0.0 trainer.method_args.epsilon=0.05
-  ```
-
-### A16. Fixed Epsilon Too Loose (epsilon=0.50)
-- **Isolates**: What happens when fixed epsilon is too loose
-- **Expected**: Good forgetting but retain degrades; constraint rarely activates since L_ret < 0.50 most of the time
-- **Override**:
-  ```
-  trainer.method_args.epsilon_multiplier=0.0 trainer.method_args.epsilon=0.50
-  ```
+| ID | Name | Override | Expected |
+|----|------|----------|----------|
+| A15 | eps_mul=0.75 | `epsilon_multiplier=0.75` | Tight → choked forgetting, strong retain |
+| A16 | eps_mul=1.0 | `epsilon_multiplier=1.0` | Mild relaxation |
+| A17 | eps_mul=1.3 | `epsilon_multiplier=1.3` | More headroom for forgetting |
+| A18 | eps_mul=1.5 | `epsilon_multiplier=1.5` | Retain starts loosening |
+| A19 | eps_mul=2.0 | `epsilon_multiplier=2.0` | Loose; retain degrades |
+| A20 | eps_mul=3.0 | `epsilon_multiplier=3.0` | Constraint nearly inactive |
 
 ---
 
-## GROUP 5: LoRA Configuration (Structural)
+## GROUP 5: Structural
 
-### A17. High Rank (r=64, alpha=128)
-- **Isolates**: Whether LoRA's low-rank constraint acts as structural regularizer
-- **Expected**: Potential overfit/collapse from higher-dimensional update space
-- **Override**:
-  ```
-  trainer.method_args.lora_r=64 trainer.method_args.lora_alpha=128
-  ```
-
-### A18. Very Low Rank (r=2, alpha=4)
-- **Isolates**: Minimum capacity needed for effective forgetting
-- **Expected**: Under-forgetting from insufficient expressivity
-- **Override**:
-  ```
-  trainer.method_args.lora_r=2 trainer.method_args.lora_alpha=4
-  ```
-
----
-
-## GROUP 6: Sanity Check
-
-### A20. GA + No Bilevel + No ALM (lower bound)
-- **Isolates**: Value of entire LoRA-BiAL framework vs simplest possible approach
-- **Expected**: Complete retain collapse
-- **Override**:
-  ```
-  trainer.method_args.forget_loss_type=ga trainer.method_args.K=0 trainer.method_args.inner_warmup_steps=999999 trainer.method_args.rho=0.0 trainer.method_args.lambda_init=0.0 trainer.method_args.lambda_min=0.0
-  ```
+| ID | Name | Override | Expected |
+|----|------|----------|----------|
+| A21 | Full-FT (no LoRA) | Disable LoRA, full fine-tune | Catastrophic drift without low-rank regularization |
+| A22 | Sanity: GA + no bilevel + no ALM | `forget_loss_type=ga K=0 inner_warmup_steps=999999 rho=0.0 lambda_init=0.0 lambda_min=0.0` | Complete retain collapse (lower bound) |
 
 ---
 
 ## Priority Tiers
 
-### Tier 1: MUST-HAVE (rejection risk without these) -- 10 runs x 3 seeds = 30 runs
-| ID | Ablation | Claim |
-|----|----------|-------|
-| A1 | K=0 (no inner loop) | (a) bilevel |
-| A4 | GA forget loss | (b) clamped entropy |
-| A5 | NPO forget loss | (b) clamped entropy |
-| A6 | tau=1.0 (unclamped) | (b) clamping |
-| A9 | Symmetric dual | (c) asymmetric ALM |
-| A10 | Fixed lambda=1.0 | (c) adaptive dual |
-| A12 | rho=0 (no penalty) | (c) augmented term |
-| A14 | Fixed epsilon=0.15 | (d) auto-epsilon vs hand-tuned |
-| A15 | Fixed epsilon=0.05 | (d) epsilon sensitivity |
-| Full | Control (full method) | baseline |
+### Tier 1: MUST-HAVE — 12 configs × 3 seeds = 36 runs
 
-### Tier 2: STRONGLY RECOMMENDED -- 5 runs x 3 seeds = 15 runs
-| ID | Ablation | Claim |
-|----|----------|-------|
+| ID | Ablation | Claim it supports |
+|----|----------|-------------------|
+| A0 | Full method (control) | baseline |
+| A1 | K=0 | (a) bilevel is needed |
+| A4 | GA forget loss | (b) entropy > GA |
+| A5 | NPO forget loss | (b) entropy > NPO |
+| A9 | tau=1.0 (unclamped) | (b) clamping is needed |
+| A10 | Fixed λ=1.0 | (c) adaptive dual is needed |
+| A12 | ρ=0 | (c) augmented Lagrangian is needed |
+| A14 | Symmetric dual | (c) asymmetry is needed |
+| A15 | eps_mul=0.75 | (d) eps sensitivity — tight end |
+| A16 | eps_mul=1.0 | (d) eps sensitivity — near default |
+| A19 | eps_mul=2.0 | (d) eps sensitivity — loose end |
+| A22 | Sanity (lower bound) | all — full framework is needed |
+
+### Tier 2: STRONGLY RECOMMENDED — 9 configs × 3 seeds = 27 runs
+
+| ID | Ablation | Claim it supports |
+|----|----------|-------------------|
 | A2 | K=1 | (a) K sensitivity |
-| A7 | tau=0.3 | (b) tau sensitivity |
-| A11 | Fixed lambda=5.0 | (c) paired with A10 |
-| A13 | rho=1.0 | (c) rho sensitivity |
-| A16 | Fixed epsilon=0.50 | (d) epsilon sensitivity |
+| A6 | tau=0.3 | (b) tau sensitivity |
+| A7 | tau=0.5 | (b) tau sensitivity |
+| A8 | tau=0.9 | (b) tau sensitivity |
+| A11 | Fixed λ=5.0 | (c) no fixed λ works |
+| A13 | ρ=1.0 | (c) ρ sensitivity |
+| A17 | eps_mul=1.3 | (d) eps sensitivity |
+| A18 | eps_mul=1.5 | (d) eps sensitivity |
+| A20 | eps_mul=3.0 | (d) eps sensitivity — extreme |
 
-### Tier 3: NICE-TO-HAVE (appendix) -- 5 runs x 3 seeds = 15 runs
-| ID | Ablation | Claim |
-|----|----------|-------|
+### Tier 3: NICE-TO-HAVE (appendix) — 2 configs × 3 seeds = 6 runs
+
+| ID | Ablation | Claim it supports |
+|----|----------|-------------------|
 | A3 | K=10 | (a) K sensitivity |
-| A8 | tau=0.5 | (b) tau sensitivity |
-| A17 | r=64 | structural |
-| A18 | r=2 | structural |
-| A20 | sanity check | all |
+| A21 | Full-FT (no LoRA) | structural — LoRA vs full FT |
+
+---
 
 ## Estimated Compute
 
-- Each run: ~30-60 min on A100 (1B model, 10 epochs, ~110 outer steps)
-- Tier 1: ~27 runs = 14-27 GPU-hours
-- Tier 1+2: ~42 runs = 21-42 GPU-hours
-- All: ~57 runs = 29-57 GPU-hours
+- Each run: ~30–60 min on A100 (1B model, ~110 outer steps)
+- Tier 1: 36 runs ≈ 18–36 GPU-hours
+- Tier 1+2: 63 runs ≈ 32–63 GPU-hours
+- All: 69 runs ≈ 35–69 GPU-hours
+
+---
 
 ## Code Changes Required
 
-Only A9 (symmetric dual) needs a small code addition:
+Only **A14 (symmetric dual)** needs a small code addition:
 
-1. Add `dual_decay_factor: float = 0.1` parameter to `LoRABiAL.__init__()`
+1. Add `dual_decay_factor: float = 0.1` to `LoRABiAL.__init__()`
 2. Use `self.dual_decay_factor` instead of hardcoded `0.1` in `outer_step()` line 354
 3. Add `dual_decay_factor: 0.1` to `configs/trainer/LoRABiAL.yaml`
 
-All other ablations are pure config overrides via Hydra CLI.
+**A21 (full-FT)** needs a flag to skip LoRA wrapping in the trainer.
+
+All other ablations are pure Hydra CLI overrides.
+
+---
+
+## Ablation Map: What Each Experiment Reveals
+
+### Q1: Is the bilevel inner loop needed?
+
+| Experiment | What it shows | Expected outcome |
+|------------|---------------|------------------|
+| A0 vs A1 (K=0) | Inner loop on/off | A1: retain collapses — ALM alone is reactive, not proactive |
+| A0 vs A2 (K=1) | Minimal vs moderate inner | A2: slightly worse retain, showing K=3 is the sweet spot |
+| A0 vs A3 (K=10) | Over-recovery | A3: forgetting weakened — inner loop undoes outer progress |
+
+**Takeaway**: K=0 proves bilevel is essential. K sweep shows K=3 balances recovery and forgetting.
+
+### Q2: Is clamped entropy the right forget loss?
+
+| Experiment | What it shows | Expected outcome |
+|------------|---------------|------------------|
+| A0 vs A4 (GA) | Bounded vs unbounded | A4: unbounded gradients → retain collapse or oscillation |
+| A0 vs A5 (NPO) | Entropy vs reference-based | A5: comparable or worse; validates entropy as simpler+better |
+| A0 vs A9 (tau=1.0) | Clamped vs unclamped entropy | A9: over-forgetting — no self-stabilization |
+| A6–A8 (tau sweep) | Sensitivity of clamp threshold | Goldilocks: 0.3 under-forgets, 0.9–1.0 over-forgets, 0.7 is sweet spot |
+
+**Takeaway**: A4 kills GA. A5 shows entropy beats NPO. A9+tau sweep proves clamping is essential and tau=0.7 is robust.
+
+### Q3: Is the ALM with asymmetric dual update needed?
+
+| Experiment | What it shows | Expected outcome |
+|------------|---------------|------------------|
+| A0 vs A10 (λ=1) | Adaptive vs fixed-low dual | A10: under-retains — lambda can't grow when needed |
+| A0 vs A11 (λ=5) | Adaptive vs fixed-high dual | A11: under-forgets — lambda too strong from start |
+| A10+A11 together | No single fixed λ works | Proves the tradeoff is non-stationary |
+| A0 vs A12 (ρ=0) | Augmented vs plain Lagrangian | A12: λ never updates — reduces to fixed weighting |
+| A0 vs A13 (ρ=1) | ρ sensitivity | A13: λ escalates too fast, forgetting choked |
+| A0 vs A14 (symmetric) | Asymmetric vs symmetric dual | A14: sawtooth oscillation — no ratchet effect |
+
+**Takeaway**: A10+A11 prove no fixed λ works. A12 proves augmented penalty is needed for λ to move. A14 proves asymmetry stabilizes the dual.
+
+### Q4: How sensitive is the auto-epsilon threshold?
+
+| Experiment | What it shows | Expected outcome |
+|------------|---------------|------------------|
+| A15 (0.75) | Too tight | Forgetting choked, strong retain |
+| A0 (0.85) | Default | Balanced |
+| A16 (1.0) | Mild relaxation | Slightly more forgetting, retain holds |
+| A17 (1.3), A18 (1.5) | Moderate relaxation | Retain starts loosening |
+| A19 (2.0) | Loose | Retain degrades noticeably |
+| A20 (3.0) | Near-inactive | Constraint effectively off |
+
+**Takeaway**: Method is robust in [0.75, 1.3] range. Below 0.75: forgetting choked. Above 2.0: retain collapses. Auto-epsilon removes the need for hand-tuning.
+
+### Q5: Is the full framework needed at all?
+
+| Experiment | What it shows | Expected outcome |
+|------------|---------------|------------------|
+| A0 vs A22 (GA + no bilevel + no ALM) | Full method vs naive baseline | A22: complete retain collapse — lower bound |
+| A0 vs A21 (full-FT, no LoRA) | LoRA vs full fine-tuning | A21: catastrophic parameter drift without low-rank constraint |
+
+**Takeaway**: A22 is the "do nothing right" baseline. A21 justifies LoRA as structural regularization.
+
+---
+
+## GROUP 6: Stressed Ablations — "Exposing each component under pressure"
+
+The initial ablations (A1, A10, A12, A14 on MUSE Books) showed minimal degradation because
+A0's params are tuned to be safe — the components rarely activate. To prove each component
+is load-bearing, we run under "stressed" params that create the conditions each component
+was designed to handle.
+
+**Design principle**: For each component, find params where (a) the control (with component)
+still works, and (b) the test (without component) visibly fails. The stress comes from tight
+epsilon, aggressive LR, or reduced redundancy from other mechanisms.
+
+---
+
+### A14v2: Asymmetric Dual (stressed)
+
+**Motivation**: Asymmetric decay prevents λ from collapsing after a spike resolves, which
+would allow a second retain violation (yo-yo pattern). Under A0 params, ε is so loose that
+violations rarely happen, so asymmetry never activates meaningfully.
+
+**Stress design**: Tight ε + high ρ → frequent large λ jumps. Symmetric decay lets λ crash
+back down between spikes; asymmetric holds it elevated.
+
+**Shared params (both runs):**
+```
+epsilon_multiplier=1.5, rho=0.5, eta_theta=5e-5, lambda_init=0.5
+lambda_min=0.1, T=250, K=3, clamped_entropy_tau=0.7
+```
+
+| | Control | Test |
+|---|---|---|
+| `dual_decay_factor` | 0.1 (asymmetric) | 1.0 (symmetric) |
+
+**Expected**: Symmetric shows λ oscillation and 2+ retain spikes. Asymmetric converges smoothly.
+
+---
+
+### A1v2: Inner Loop (stressed)
+
+**Motivation**: The inner loop (K>0) provides explicit retain recovery after each outer step.
+Under A0 params, the outer LR is so conservative that each step barely damages retain, making
+K irrelevant — the ALM alone handles it.
+
+**Stress design**: High outer LR + tight ε + low ρ (so λ can't ramp fast enough to compensate
+alone). Without inner recovery, retain spirals because each outer step delivers a large
+perturbation that λ-only correction can't fix in one step.
+
+**Shared params (both runs):**
+```
+epsilon_multiplier=1.5, rho=0.05, eta_theta=8e-5, lambda_init=1.0
+T=250, clamped_entropy_tau=0.7, eta_in=2e-4
+```
+
+| | Control | Test |
+|---|---|---|
+| `K` | 3 | 0 |
+
+**Expected**: K=0 shows retain spiral or λ growing unbounded (method stalls). K=3 converges.
+
+---
+
+### A10v2: Adaptive λ (stressed)
+
+**Motivation**: Adaptive λ self-corrects during retain violations — ramping up to penalize
+forgetting harder when retain degrades. Under A0 params, K=3 inner loop + loose ε provides
+enough retain cushion that λ adaptation is redundant.
+
+**Stress design**: K=1 (minimal inner cushion) + tight ε + high ρ (so adaptive λ is dramatic
+when it fires). Fixed λ can't respond to spikes when it's the primary defense mechanism.
+
+**Shared params (both runs):**
+```
+epsilon_multiplier=1.5, rho=0.4, eta_theta=3e-5, K=1
+lambda_min=0.1, T=250, clamped_entropy_tau=0.7
+```
+
+| | Control | Test |
+|---|---|---|
+| λ | adaptive (lambda_init=1.0) | fixed=1.0 (lambda_min=1.0, lambda_max=1.0) |
+
+**Expected**: Fixed λ shows sustained retain degradation or oscillation. Adaptive λ climbs to
+~3-5 during spikes then stabilizes.
+
+---
+
+### A12v2: ρ Penalty Augmentation (stressed)
+
+**Motivation**: ρ > 0 serves two roles: (1) quadratic penalty for immediate gradient correction,
+(2) drives dual update λ += ρ*r. With ρ=0, λ never adapts — stuck at initial value.
+
+**Stress design**: Very tight ε + aggressive outer LR + low λ_init. With ρ=0, starting λ=0.5
+is too low to protect retain and can never increase. With ρ=0.5, λ ramps rapidly to match
+violation severity.
+
+**Shared params (both runs):**
+```
+epsilon_multiplier=1.3, eta_theta=5e-5, K=2, lambda_init=0.5
+T=250, clamped_entropy_tau=0.7, eta_in=2e-4
+```
+
+| | Control | Test |
+|---|---|---|
+| `rho` | 0.5 | 0.0 |
+
+**Expected**: ρ=0 shows retain collapse (λ stuck at 0.5, insufficient protection). ρ=0.5
+adapts λ and adds quadratic penalty → stable convergence.
+
+---
+
+### Stressed Ablation Compute
+
+- 8 runs (4 pairs) × 1 seed × ~60-90 min each = 8-12 GPU-hours
+- Run on MUSE Books, Llama-2-7b-hf (same as initial ablations for comparability)
+- If any pair doesn't show clear separation, tighten stress further (lower eps_mul or raise eta_theta)

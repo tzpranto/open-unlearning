@@ -46,6 +46,7 @@ class LoRABiAL(UnlearnTrainer):
         lambda_init: float = 1.0,
         lambda_max: float = 0.0,
         lambda_min: float = 0.1,
+        dual_decay_factor: float = 0.1,
         # Forget loss
         forget_loss_type: str = "clamped_entropy",
         npo_beta: float = 4.0,
@@ -103,6 +104,7 @@ class LoRABiAL(UnlearnTrainer):
         self.lambda_init = lambda_init
         self.lambda_max = lambda_max
         self.lambda_min = lambda_min
+        self.dual_decay_factor = dual_decay_factor
         self.lambda_dual = float(lambda_init)
         # Forget loss
         self.forget_loss_type = forget_loss_type
@@ -350,7 +352,7 @@ class LoRABiAL(UnlearnTrainer):
         if avg_r > 0:
             self.lambda_dual += self.rho * avg_r
         else:
-            self.lambda_dual += 0.1 * self.rho * avg_r
+            self.lambda_dual += self.dual_decay_factor * self.rho * avg_r
         self.lambda_dual = max(self.lambda_min, self.lambda_dual)
         if self.lambda_max > 0:
             self.lambda_dual = min(self.lambda_dual, self.lambda_max)

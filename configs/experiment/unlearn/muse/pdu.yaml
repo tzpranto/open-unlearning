@@ -9,7 +9,7 @@
 #
 # Reproduce:
 #   News:  python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/pdu.yaml data_split=News  task_name=muse_PDU_News_s42  trainer.args.seed=42
-#   Books: python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/pdu.yaml data_split=Books task_name=muse_PDU_Books_s42 trainer.method_args.retain_loss_eps=0.1 trainer.args.seed=42
+#   Books: python src/train.py --config-name=unlearn.yaml experiment=unlearn/muse/pdu.yaml data_split=Books task_name=muse_PDU_Books_s42 trainer.method_args.retain_loss_eps=0.1 trainer.args.num_train_epochs=1 trainer.args.seed=42
 
 defaults:
   - override /model: Llama-2-7b-hf

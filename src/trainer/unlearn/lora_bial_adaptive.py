@@ -261,7 +261,13 @@ class LoRABiALAdaptive(LoRABiAL):
 
         # Auto-epsilon
         inner_losses = self.inner_loop(device)
-        baseline_ret = sum(inner_losses) / len(inner_losses)
+        if inner_losses:
+            baseline_ret = sum(inner_losses) / len(inner_losses)
+        else:
+            # K=0: estimate baseline retain loss without optimizer step
+            with torch.no_grad():
+                batch = self._next_retain_batch()
+                baseline_ret = self._compute_ce_loss(batch, device).item()
         self.epsilon = self.epsilon_multiplier * baseline_ret
         logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
                     f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")

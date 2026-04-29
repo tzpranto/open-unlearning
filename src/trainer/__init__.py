@@ -20,6 +20,7 @@ from trainer.unlearn.loku import LoKU
 from trainer.unlearn.lora_bial import LoRABiAL
 from trainer.unlearn.lora_bial_es import LoRABiALES
 from trainer.unlearn.lora_bial_adaptive import LoRABiALAdaptive
+from trainer.unlearn.bial_full_adaptive import BiALFullAdaptive
 from trainer.unlearn.lora_implicit import LoRAImplicit
 
 
@@ -112,4 +113,5 @@ _register_trainer(LoKU)
 _register_trainer(LoRABiAL)
 _register_trainer(LoRABiALES)
 _register_trainer(LoRABiALAdaptive)
+_register_trainer(BiALFullAdaptive)
 _register_trainer(LoRAImplicit)

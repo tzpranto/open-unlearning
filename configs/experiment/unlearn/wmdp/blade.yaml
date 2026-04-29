@@ -1,0 +1,65 @@
+# @package _global_
+#
+# BLADE (LoRA-BiAL) on WMDP Bio+Cyber
+# Model: Zephyr-7b-beta
+# Eval: wmdp_bio, wmdp_cyber, mmlu
+#
+# Usage:
+#   python src/train.py --config-name=unlearn.yaml \
+#       experiment=unlearn/wmdp/blade \
+#       task_name=wmdp_blade_v1
+
+defaults:
+  - override /model: zephyr-7b-beta
+  - override /trainer: LoRABiALAdaptive
+  - override /data: unlearn
+  - override /data/datasets@data.forget: WMDP_forget
+  - override /data/datasets@data.retain: WMDP_retain
+  - override /eval: lm_eval
+
+data_split: bio_cyber
+
+data:
+  anchor: forget
+  forget:
+    WMDP_forget:
+      args:
+        hf_args:
+          data_files: data/wmdp/wmdp-corpora/${data_split}-forget-corpus-500.jsonl
+  retain:
+    WMDP_retain:
+      args:
+        hf_args:
+          data_files: data/wmdp/wmdp-corpora/${data_split}-retain-corpus-1k.jsonl
+
+eval:
+  lm_eval:
+    tasks:
+      - wmdp_bio
+      - wmdp_cyber
+      - mmlu
+
+collator:
+  DataCollatorForSupervisedDataset:
+    args:
+      padding_side: left
+
+trainer:
+  method_args:
+    T: 300
+    K: 3
+    eta_theta: 3e-5
+    eta_in: 2e-4
+    epsilon_multiplier: 2.0
+    rho: 0.1
+    lambda_init: 1.0
+    forget_loss_type: clamped_entropy
+    clamped_entropy_tau: 0.7
+    gradient_accumulation_steps: 8
+
+  args:
+    per_device_train_batch_size: 2
+    gradient_accumulation_steps: 8
+    gradient_checkpointing: True
+
+task_name: ???

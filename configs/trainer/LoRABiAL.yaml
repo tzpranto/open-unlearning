@@ -21,6 +21,7 @@ method_args:
   lambda_init: 1.0
   lambda_max: 0.0  # 0 = no cap; >0 = cap dual variable
   lambda_min: 0.1  # floor on dual variable (prevents λ→0)
+  dual_decay_factor: 0.1  # asymmetry: decay λ slower than it rises (1.0 = symmetric)
 
   # Forget loss
   forget_loss_type: clamped_entropy  # npo, ga, logit_margin, clamped_entropy
