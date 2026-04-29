@@ -1,0 +1,36 @@
+# @package _global_
+# Fine-tune Llama-2-7b-chat on KnowUnDo copyright data to create target model.
+# Following KnowUnDo paper: LoRA r=8, alpha=16, lr=1e-4, 10 epochs.
+# The resulting checkpoint is the "target model" that all unlearning methods start from.
+
+defaults:
+  - override /model: Llama-2-7b-chat-hf
+  - override /trainer: finetune
+  - override /data/datasets@data.train: KnowUnDo_full
+
+mode: finetune
+
+model:
+  model_args:
+    pretrained_model_name_or_path: meta-llama/Llama-2-7b-chat-hf
+
+trainer:
+  args:
+    learning_rate: 1e-4
+    weight_decay: 1e-4
+    num_train_epochs: 10
+    per_device_train_batch_size: 4
+    gradient_accumulation_steps: 4
+    save_strategy: epoch
+    save_only_model: True
+
+data:
+  train:
+    KnowUnDo_full:
+      args:
+        hf_args:
+          name: ${domain}
+
+domain: copyright
+
+task_name: knowundo_Llama-2-7b-chat_${domain}_ft

@@ -1,0 +1,14 @@
+KnowUnDo_full:
+  handler: KnowUnDoDataset
+  args:
+    hf_args:
+      path: "zjunlp/KnowUnDo"
+      name: "copyright"
+      split: "unlearn"
+      trust_remote_code: true
+    question_key: "text"
+    answer_key: "labels"
+    subset: "train"
+    additional_splits:
+      - "retention"
+    max_length: 512

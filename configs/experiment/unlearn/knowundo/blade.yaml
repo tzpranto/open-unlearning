@@ -1,0 +1,61 @@
+# @package _global_
+# BLADE on KnowUnDo (copyright domain).
+# Uses BiALFullAdaptive trainer with clamped_entropy forget loss.
+
+defaults:
+  - override /model: Llama-2-7b-chat-hf
+  - override /trainer: BiALFullAdaptive
+  - override /data: unlearn
+  - override /data/datasets@data.forget: KnowUnDo_forget
+  - override /data/datasets@data.retain: KnowUnDo_retain
+  - override /eval: knowundo
+
+domain: copyright
+
+model:
+  model_args:
+    pretrained_model_name_or_path: ${paths.output_dir}/../knowundo_Llama-2-7b-chat_${domain}_ft
+
+data:
+  anchor: forget
+  forget:
+    KnowUnDo_forget:
+      args:
+        hf_args:
+          name: ${domain}
+  retain:
+    KnowUnDo_retain:
+      args:
+        hf_args:
+          name: ${domain}
+
+eval:
+  knowundo:
+    domain: ${domain}
+    overwrite: true
+
+trainer:
+  method_args:
+    lora_r: 16
+    lora_alpha: 32
+    T: 200
+    K: 3
+    eta_theta: 3e-5
+    eta_in: 2e-4
+    epsilon_multiplier: 3.0
+    rho: 0.1
+    lambda_init: 1.0
+    forget_loss_type: clamped_entropy
+    clamped_entropy_tau: 0.7
+    gradient_accumulation_steps: 8
+    max_grad_norm: 1.0
+    checkpoint_every_epoch: false
+    use_implicit: false
+    conv_patience: 20
+
+  args:
+    per_device_train_batch_size: 2
+    num_train_epochs: 4
+    gradient_checkpointing: True
+
+task_name: ???

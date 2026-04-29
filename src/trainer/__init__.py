@@ -22,6 +22,7 @@ from trainer.unlearn.lora_bial_es import LoRABiALES
 from trainer.unlearn.lora_bial_adaptive import LoRABiALAdaptive
 from trainer.unlearn.bial_full_adaptive import BiALFullAdaptive
 from trainer.unlearn.lora_implicit import LoRAImplicit
+from trainer.unlearn.memflex import MemFlex
 
 
 import logging
@@ -115,3 +116,4 @@ _register_trainer(LoRABiALES)
 _register_trainer(LoRABiALAdaptive)
 _register_trainer(BiALFullAdaptive)
 _register_trainer(LoRAImplicit)
+_register_trainer(MemFlex)

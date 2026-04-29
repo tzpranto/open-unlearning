@@ -1,0 +1,11 @@
+defaults:
+  - finetune
+
+handler: MemFlex
+method_args:
+  forget_weight: 0.4
+  retain_weight: 2.0
+  mu: 0.92
+  sigma: 6e-4
+  num_random_labels: 5
+  located_params_path: null

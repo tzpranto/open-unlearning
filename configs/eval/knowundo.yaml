@@ -1,0 +1,14 @@
+# @package eval.knowundo
+defaults:
+  - knowundo_metrics:
+    - forget_ROUGE
+    - retain_ROUGE
+    - forget_Prob
+    - retain_Prob
+
+handler: KnowUnDoEvaluator
+output_dir: ${paths.output_dir}
+metrics: {}
+overwrite: false
+domain: copyright
+batch_size: 16
