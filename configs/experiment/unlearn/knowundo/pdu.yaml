@@ -1,0 +1,55 @@
+# @package _global_
+# PDU on KnowUnDo.
+# Using MUSE News params: alpha=50, dual_lr=1, warmup=3, LR=1e-5, eps=1.5.
+
+defaults:
+  - override /model: Llama-2-7b-chat-hf
+  - override /trainer: PDU
+  - override /data: unlearn
+  - override /data/datasets@data.forget: KnowUnDo_forget
+  - override /data/datasets@data.retain: KnowUnDo_retain
+  - override /eval: knowundo
+
+domain: copyright
+
+model:
+  model_args:
+    pretrained_model_name_or_path: ${paths.output_dir}/../knowundo_Llama-2-7b-chat_${domain}_ft
+
+data:
+  anchor: forget
+  forget:
+    KnowUnDo_forget:
+      args:
+        hf_args:
+          name: ${domain}
+        max_length: 256
+  retain:
+    KnowUnDo_retain:
+      args:
+        hf_args:
+          name: ${domain}
+        max_length: 256
+
+eval:
+  knowundo:
+    domain: ${domain}
+    overwrite: true
+
+trainer:
+  method_args:
+    gamma: 1.0
+    alpha: 50
+    primal_dual: true
+    retain_loss_eps: 1.5
+    dual_step_size: 1
+    dual_update_upon: "step"
+    dual_warmup_epochs: 3
+  args:
+    learning_rate: 1.0e-5
+    lr_scheduler_type: constant
+    num_train_epochs: 10
+    per_device_train_batch_size: 1
+    gradient_accumulation_steps: 16
+
+task_name: ???
