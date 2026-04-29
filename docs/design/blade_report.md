@@ -60,6 +60,8 @@ Output: Unlearned model
 19  Merge LoRA into base model, return M
 ```
 
+**Clamped Entropy Loss:** L_forget = (1/T) Σ_t max(0, τ·H_max − H(p_t)), where H(p_t) is the Shannon entropy of the output distribution at token t, H_max = log(V) is uniform entropy, and τ ∈ (0,1) is the target fraction. Once a token's entropy exceeds τ·H_max its gradient is exactly zero — it "drops out" of the loss. This makes the loss bounded ∈ [0, τ·H_max], self-stabilizing (active tokens decrease monotonically), and reference-free (no frozen model needed).
+
 **Auto-Epsilon** (lines 2–3) calibrates the retain constraint threshold from a single pass over the retain set, eliminating manual tuning.
 
 **Inner Loop** (lines 5–6) runs K SGD steps to restore retain performance before each outer update. This bilevel structure decouples forgetting from retention.
@@ -133,17 +135,17 @@ PDU figures: red (left axis) = forget loss, blue (right axis) = retain loss.
 
 ## Key Contributions
 
-1. A constrained bilevel formulation for LLM unlearning that treats retain preservation as a hard constraint via augmented Lagrangian with a learned dual variable, replacing fragile fixed-weight loss balancing.
-2. Clamped entropy: a bounded, self-stabilizing, reference-free forget objective where per-token gradients vanish once entropy exceeds a threshold, giving a natural stopping criterion without over-forgetting.
-3. Comprehensive evaluation across multiple benchmarks (TOFU, MUSE), model scales (1B/3B/7B), forget regimes (1%–10%), and 5 seeds, plus an LLM judge protocol that exposes residual leakage missed by automated metrics.
-4. Empirical analysis showing consistent three-phase convergence dynamics (warmup → spike-and-ratchet → convergence) across all settings, suggesting the ALM mechanism finds a universal operating point.
+1. Bilevel ALM formulation that enforces retain as a hard constraint with a learned dual variable.
+2. Clamped entropy loss: bounded, self-stabilizing, reference-free forget objective.
+3. Extensive evaluation on TOFU + MUSE across scales, splits, 5 seeds, and LLM judge.
+4. Analysis of three-phase convergence dynamics consistent across all settings.
 
 ---
 
 ## Research Questions
 
-- **RQ1 (Effectiveness):** Does our constrained bilevel formulation achieve superior forget–retain Pareto trade-offs compared to existing methods on established benchmarks?
-- **RQ2 (Qualitative/Leakage):** Does automated metric superiority translate to genuine knowledge removal when probed by an LLM judge, or do baselines retain residual leakage invisible to standard metrics?
-- **RQ3 (Robustness):** Does the method's advantage hold across model scales (1B→3B→7B), forget set sizes (1%→10%), and extended training (sustainability)?
-- **RQ4 (Dynamics):** Does the ALM mechanism produce interpretable, predictable training dynamics — and what does each component (clamped loss, asymmetric update, bilevel structure) contribute?
-- **RQ5 (Efficiency):** What is the computational overhead of the bilevel formulation compared to single-loop baselines, and does the reference-free loss offset the inner-loop cost?
+- **RQ1:** Does BLADE achieve better forget–retain trade-offs than baselines on TOFU and MUSE?
+- **RQ2:** Does LLM judge evaluation reveal residual leakage that automated metrics miss?
+- **RQ3:** Is performance robust across model scales (1B/3B/7B) and forget sizes (1%–10%)?
+- **RQ4:** What do loss dynamics reveal, and what does each component contribute (ablation)?
+- **RQ5:** What is the computational cost relative to single-loop baselines?
