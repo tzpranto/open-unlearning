@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 
-from data.utils import load_hf_dataset, preprocess_chat_instance, add_dataset_index
+from data.utils import load_hf_dataset, preprocess_chat_instance
 
 import datasets as hf_datasets
 

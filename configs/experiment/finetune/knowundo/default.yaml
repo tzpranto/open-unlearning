@@ -7,6 +7,7 @@ defaults:
   - override /model: Llama-2-7b-chat-hf
   - override /trainer: finetune
   - override /data/datasets@data.train: KnowUnDo_full
+  - override /eval: knowundo
 
 mode: finetune
 
@@ -32,5 +33,10 @@ data:
           name: ${domain}
 
 domain: copyright
+
+eval:
+  knowundo:
+    domain: ${domain}
+    overwrite: true
 
 task_name: knowundo_Llama-2-7b-chat_${domain}_ft
