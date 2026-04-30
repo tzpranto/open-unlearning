@@ -149,3 +149,25 @@ PDU figures: red (left axis) = forget loss, blue (right axis) = retain loss.
 - **RQ3:** Is performance robust across model scales (1B/3B/7B) and forget sizes (1%–10%)?
 - **RQ4:** What do loss dynamics reveal, and what does each component contribute (ablation)?
 - **RQ5:** What is the computational cost relative to single-loop baselines?
+
+---
+
+## Why Bilevel? Inner Loop as Spike Recovery (RQ4)
+
+The inner loop (K=3 SGD steps on retain) provides **immediate constraint recovery** during the critical phase transition, where the outer loop first begins aggressive forgetting and retain spikes.
+
+![Bilevel Inner Loop Dynamics](figures/bilevel_inner_loop_dynamics.png)
+
+**Key observation:** Without the inner loop (K=0), the ALM constraint gradient in the outer loss still provides retain protection (single-level constrained optimization). This is why K=0 only degrades retain by 4.1% (0.658→0.631). However, the inner loop's value is not steady-state improvement — it is **transient spike recovery**:
+
+| | K=3 (bilevel) | K=0 (single-level) |
+|---|---|---|
+| Peak L_ret spike | 3.63 (step 31) | 3.46 (step 32) |
+| Recovery to L_ret < 1.0 | 4 steps (step 35) | 7 steps (step 39) |
+| Mechanism | 18 SGD steps fire at spike | λ escalation only (slow) |
+| Final λ | 2.53 | 2.81 (+11% to compensate) |
+| Final ret_know | 0.658 | 0.631 (−4.1%) |
+
+The bilevel structure decouples retain recovery from the forget gradient: the inner loop can take arbitrarily many SGD steps without attenuating forgetting. In contrast, K=0 confounds both objectives into a single gradient direction — faster λ-driven recovery would also slow forgetting.
+
+**Theoretical justification:** Grazzi et al. (2020) prove that K inner steps reduce hypergradient approximation error exponentially in K. Ji et al. (2021) establish that two-loop bilevel methods converge at O(1/√T) vs O(1/T^{1/3}) for single-loop alternatives.

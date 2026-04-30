@@ -1,0 +1,16 @@
+defaults:
+  - LoRABiAL
+
+handler: LoRABiALSwapped
+method_args:
+  T: 250
+  K: 3
+  eta_theta: 3e-5
+  eta_in: 2e-4
+  epsilon_multiplier: 3.2
+  rho: 0.1
+  lambda_init: 1.0
+  forget_loss_type: clamped_entropy
+  clamped_entropy_tau: 0.7
+  gradient_accumulation_steps: 8
+  max_grad_norm: 1.0
