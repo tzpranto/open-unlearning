@@ -1,6 +1,6 @@
 # LoRA-BiAL Ablation Results
 
-Updated: 2026-04-29
+Updated: 2026-04-30
 
 ## Setup
 
@@ -21,6 +21,7 @@ Updated: 2026-04-29
 | A15 | No LoRA (full fine-tune) | 0.0020 | 0.0003 | 0.3061 | 0.0079 | 0.4592 |
 | **A16** | **ALM-off (λ=0, ρ=0)** | **0.0000** | **0.0024** | **0.0919** | **0.0084** | **0.2329** |
 | A17 | logit_margin forget loss | 0.0000 | 0.0000 | 0.0000 | 0.0079 | 0.0000 |
+| A18 | Swapped (inner=forget, outer=retain) | 0.3720 | 0.6425 | 0.6511 | 0.5477 | 0.5063 |
 
 ## LLM Judge (pending)
 
@@ -44,6 +45,7 @@ Updated: 2026-04-29
 - **A5 (NPO)**: Total forgetting failure. NPO loss collapsed to 0.0 by step 40 without actually unlearning — verbatim memorization intact (0.997), knowledge barely reduced (0.457 vs target 0.303). The model satisfies the NPO objective trivially (probability under ref model is already low for long sequences) without changing behavior. Retain is fine (0.662) because nothing changed. Proves reference-model-based losses don't work for pretraining-style memorization.
 - **A16 (ALM-off)**: Complete system failure. ret_know=0.092 (−0.566 from A0), forget perfect (0.000). With λ=0 and ρ=0, the outer loss is pure clamped_entropy with no retain constraint. The model collapsed at step 31 (L_ret=10.56 triggered safety break). Proves ALM is the core mechanism: without it, bilevel + clamped_entropy alone destroys the model.
 - **A17 (logit_margin)**: Total destruction — worst ablation. All metrics zero. Logit margin loss (max_logit - mean_logit) has no natural saturation point unlike clamped entropy. It keeps pushing the model toward uniform logits indefinitely, destroying all representations. Despite ALM constraining retain, the forget gradient is too destructive. Converged at step 200 but model is non-functional. Proves clamped entropy's bounded, self-saturating property is essential — alternative unbounded losses destroy the model even with full ALM protection.
+- **A18 (Swapped)**: Complete forgetting failure. fgt_know=0.372 (barely below unlearned model's 0.44), verbatim fully intact (0.643), extraction high (0.548). λ exploded to 367 because the constraint ε_fgt=22.4 exceeds clamped entropy's theoretical max (~8.3) — physically impossible to satisfy. The outer loop successfully minimizes retain (0.651, on par with A0) but the inner loop's "push toward forgetting" via clamped entropy is ineffective: SGD on a bounded loss saturates quickly and the outer ALM penalty overwhelms any forgetting signal. Proves the bilevel direction is load-bearing: inner=retain (immediate spike recovery) + outer=forget (ALM-constrained) is the only viable assignment.
 - **A15 (no LoRA)**: Catastrophic retain collapse. ret_know=0.306 (−0.352 from A0, barely above Gold target). Forgetting is too aggressive (fk=0.002 vs A0's 0.110) — without LoRA's low-rank constraint, gradient updates affect all 6.7B params and destroy general knowledge. Converged at step 51 (faster than A0's 78) because velocity decays faster with full-rank updates. Training: phase transition at step 5, LR halved at step 11, L_ret spiked to 2.21 at step 6 (emergency inner recovery fired). Final λ=1.447. Despite identical ALM constraint + inner loop, full fine-tune cannot preserve retain quality. Proves LoRA provides essential implicit regularization via low-rank parameterization — the bilevel structure alone is insufficient without parameter-efficient constraint on the update space.
 
 ## Notes

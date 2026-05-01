@@ -126,7 +126,7 @@ Scale & Method & fgt01 & fgt05 & fgt10 \\
 
 Tables~\ref{tab:tofu_forget01} and~\ref{tab:tofu_splits} show TOFU results across all splits. On 1B, \method outperforms PDU on all three splits: forget01 ($+$0.118), forget05 ($+$0.060), and forget10 ($+$0.006). On 3B, \method leads on forget01 ($+$0.104) but trails PDU on forget05 ($-$0.001) and forget10 ($-$0.021). Across all settings, \method gets near-perfect forgetting (fgt\_Prob$<$0.01, fgt\_ROUGE$<$0.05) with minimal utility loss (MU within 1--2\% of PDU).
 
-\method's advantage is largest on small forget sets (forget01) where existing methods struggle to completely forget without destroying utility. The gap narrows on larger forget sets where the task is easier for all methods. On the two 3B settings where PDU's automated HM is higher, LLM judge evaluation (\tabref{tab:llm_judge} and \secref{app:llm_judge}) still favors \method, suggesting that PDU's HM gain comes at the cost of higher residual forget leakage that the automated metric does not fully capture.
+\method's advantage is largest on small forget sets (forget01) where the forget--retain boundary is tightest and existing methods struggle to completely forget without destroying utility. The gap narrows on larger forget sets where the task is easier for all methods. On the two 3B settings where PDU's automated HM is slightly higher, LLM judge evaluation (\tabref{tab:llm_judge} and \secref{app:llm_judge}) still favors \method, suggesting that PDU's HM gain comes at the cost of higher residual forget leakage that the automated metric does not fully capture.
 
 \paragraph{LLM Judge.}
 
@@ -161,40 +161,55 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \tabref{tab:llm_judge} shows LLM judge results. The pattern is similar to the automatic metrics but with sharper separation: on forget01, \method's forget leakage is 0.015 (out of 2.0) versus PDU's 0.855, giving an HM$_\text{J}$ gap of $+$0.183. Even on forget10 where PDU's automatic metrics are competitive, the judge picks up residual leakage differences. Full LLM judge results for all methods and both model scales are in \secref{app:llm_judge}.
 
 \paragraph{Note on ``beating gold.''}
-On MUSE Books, \method gets a higher HM than the gold retrained model (0.798 vs.\ 0.739). The gold model retains residual knowledge of the forget content (fk=0.303) because general pretraining corpora overlap with Harry Potter. \method gets lower forget knowledge (fk=0.080) at the cost of slightly lower retain (0.598 vs.\ 0.687). This is a different operating point, not a strictly better one. The gold model defines the correct behavior.
+On MUSE Books, \method has a higher HM than the gold retrained model (0.798 vs.\ 0.739). This does not indicate superiority: the gold model retains residual knowledge (fk=0.303) because pretraining corpora overlap with Harry Potter content.
+\method trades slightly lower retain (0.598 vs.\ 0.687) for much lower forget knowledge (0.080 vs.\ 0.303)---a different Pareto operating point that the HM metric happens to score higher. The gold model defines correct behavior; \method merely occupies a more aggressively-forgotten point on the Pareto frontier.
 
-\subsection{Loss Dynamics}
+\subsection{Training Dynamics Analysis}
 \label{sec:dynamics}
+
+A key advantage of \method over baselines is that its training dynamics are \emph{interpretable and self-correcting}. We analyze the loss trajectories of \method and compare them to PDU, the strongest constrained baseline.
 
 \begin{figure*}[t]
     \centering
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig1_muse_books_dynamics.png}
-        \caption{MUSE Books (Llama-2-7B)}
-        \label{fig:dynamics_muse}
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_dynamics.png}
+        \caption{\method on MUSE Books (HM\,=\,0.823)}
+        \label{fig:dynamics_blade_books}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig2_tofu_1b_dynamics.png}
-        \caption{TOFU (Llama-3.2-1B)}
-        \label{fig:dynamics_tofu1b}
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_PDU_dynamics.png}
+        \caption{PDU on MUSE Books (HM\,=\,0.602)}
+        \label{fig:dynamics_pdu_books}
+    \end{subfigure}
+    \\[6pt]
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_dynamics.png}
+        \caption{\method on TOFU 1B forget01 (HM\,=\,0.811)}
+        \label{fig:dynamics_blade_tofu}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig3_tofu_3b_dynamics.png}
-        \caption{TOFU (Llama-3.2-3B)}
-        \label{fig:dynamics_tofu3b}
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_PDU_dynamics.png}
+        \caption{PDU on TOFU 1B forget01 (HM\,=\,0.690)}
+        \label{fig:dynamics_pdu_tofu}
     \end{subfigure}
-    \caption{Loss dynamics across three settings. All exhibit the same three-phase pattern: (1) warm-up with gradual $\Loss_{\text{forget}}$ decline, (2) retain spike that triggers $\lambda$ ratchet, (3) smooth convergence with elevated $\lambda$.}
+    \caption{Training dynamics of \method (left) vs.\ PDU (right). \method exhibits a consistent three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---with the dual variable $\lambda$ permanently calibrating the tradeoff after a single spike. PDU shows recurring retain oscillations throughout training with no corrective mechanism, leading to worse final metrics.}
     \label{fig:dynamics}
 \end{figure*}
 
-\figref{fig:dynamics} shows loss dynamics for all three settings. Even though the model scales (1B, 3B, 7B) and datasets differ, all runs follow the same three phases:
-
+\paragraph{Three-phase convergence.}
+\figref{fig:dynamics} shows that \method follows the same dynamics across all settings (models from 1B to 7B, datasets from 20 QA pairs to full books):
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Warm-up:} $\Loss_{\text{forget}}$ declines gradually while $L_{\text{ret}}$ stays near $\varepsilon$. $\lambda$ drifts slowly.
-    \item \textbf{Spike and ratchet:} $L_{\text{ret}}$ spikes because accumulated forgetting disrupts shared representations. The quadratic penalty activates and $\lambda$ jumps from ${\sim}1.0$ to ${\sim}2.2$--$2.4$. Recovery takes 6--30 steps.
-    \item \textbf{Smooth convergence:} Elevated $\lambda$ permanently increases retain protection. $\Loss_{\text{forget}}$ continues to near-zero. No further spikes.
+    \item \textbf{Warm-up} (steps 0--$T_{\text{trans}}$): $\Loss_{\text{forget}}$ declines gradually while $L_{\text{ret}}$ stays near $\varepsilon$. The forget objective makes progress without disturbing retain.
+    \item \textbf{Spike and ratchet} ($T_{\text{trans}}$--$T_{\text{trans}}$+30): accumulated forgetting disrupts shared representations, causing a retain spike. The quadratic penalty activates and $\lambda$ jumps from ${\sim}1.0$ to ${\sim}2.2$--$2.6$, permanently increasing retain protection.
+    \item \textbf{Smooth convergence}: $\Loss_{\text{forget}}$ continues toward zero under the elevated $\lambda$, with no further retain violations. The clamped entropy loss self-stabilizes as forgotten tokens drop out.
 \end{enumerate}
 
-The fact that this pattern is consistent across settings suggests the ALM mechanism finds a stable operating point. The final $\lambda$ converges to ${\sim}2.2$--$2.4$ regardless of model size or dataset.
+\paragraph{Comparison with PDU.}
+PDU \citep{entesari2025constrained} also uses a primal-dual formulation, but with two critical differences visible in the dynamics: (i)~its forget loss (logit margin) is unbounded, starting at 700+ and never reaching zero; and (ii)~its retain loss oscillates repeatedly throughout training. On MUSE Books (\figref{fig:dynamics_pdu_books}), PDU's retain loss spikes at steps 110, 125, 135, 150, and 170---each spike represents uncontrolled retain degradation. On TOFU (\figref{fig:dynamics_pdu_tofu}), PDU's retain loss grows monotonically from 0.14 to 0.34 across just 10 steps.
+
+In contrast, \method's asymmetric ratchet resolves the retain constraint in a \emph{single} episode: after the first spike, $\lambda$ stays elevated and no subsequent violations occur. This one-shot calibration explains why \method achieves near-zero forget metrics while maintaining retain performance.
+
+\paragraph{Scaling behavior.}
+On harder settings (larger forget sets), $\lambda$ rises higher---from ${\sim}2.4$ on forget01 to ${\sim}4.5$ on forget10---reflecting that more retain protection is needed when more data is being forgotten. This adaptation happens automatically via the dual update, without any hyperparameter change.

@@ -14,18 +14,17 @@ We identify three failure modes in current approaches:
     \item \textbf{Over-forgetting.} Unclamped entropy maximization \citep{yuan2024closer} and gradient ascent keep pushing already-forgotten tokens. This wastes gradient budget and destabilizes the model.
 \end{enumerate}
 
-We address these with \method, a bilevel optimization framework with three novel components and a standard parameterization choice:
+We address these with \method, a bilevel optimization framework whose two main contributions are a novel forget objective and a novel bilevel constrained formulation:
 
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): we maximize per-token output entropy up to a threshold $\tau \cdot H_{\max}$, after which the gradient vanishes. Tokens ``drop out'' of the loss as they are forgotten, giving bounded and self-stabilizing forgetting.
-    \item \textbf{Augmented Lagrangian constraint} (\secref{sec:alm}): we treat retain preservation as a hard constraint $\Loss_{\text{ret}} \leq \varepsilon$ enforced by a learned Lagrange multiplier $\lambda$, instead of a soft penalty with a fixed weight.
-    \item \textbf{Asymmetric dual update} (\secref{sec:alm}): we increase $\lambda$ quickly on constraint violations but decay it slowly when satisfied. After the first retain spike, the tradeoff is permanently calibrated.
+    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): we maximize per-token output entropy up to a vocabulary-invariant threshold $\tau \cdot H_{\max}$, where $H_{\max} = \log V$. The threshold $\tau$ has a direct information-theoretic interpretation: a token is ``forgotten'' when its distribution reaches $\tau$ fraction of maximum uncertainty, regardless of vocabulary size. The $\max(0, \cdot)$ clamp creates a hard deadzone---once forgotten, a token contributes exactly zero gradient, bounding the loss in $[0, \tau \cdot H_{\max}]$ and making optimization self-stabilizing without any scheduling. No prior unlearning method provides this per-token stopping criterion.
+    \item \textbf{Inequality-constrained bilevel formulation} (\secref{sec:bilevel}, \secref{sec:alm}): we separate the retain and forget objectives into inner and outer loops of a bilevel optimization---the inner loop rapidly repairs retain performance via $K$ SGD steps, while the outer loop drives forgetting subject to a hard inequality constraint $\Loss_{\text{ret}} \leq \varepsilon$. The constraint is enforced via an augmented Lagrangian with an asymmetric dual update that ratchets up protection on violations but decays slowly when satisfied. This ``repair first, forget carefully'' structure is the inverse of prior bilevel unlearning methods that put forgetting in the inner loop.
     \item \textbf{LoRA parameterization} (\secref{sec:lora}): we confine all updates to low-rank adapters, which limits how much the unlearning update can affect other weights.
 \end{enumerate}
 
 We evaluate \method on TOFU \citep{maini2024tofu} across two model scales (1B, 3B) and three forget splits, and on MUSE Books \citep{shi2024muse} with Llama-2-7B. All TOFU experiments use 5 random seeds.
-On TOFU 1B forget01, \method achieves HM=0.808 versus the strongest baseline PDU (0.690), which is an improvement of $+$0.118.
+On TOFU 1B forget01, \method achieves HM=0.808 versus the strongest baseline PDU (0.690), an improvement of $+$0.118.
 The gap holds across forget splits and model scales, and is largest on small forget sets where the forget--retain boundary is tightest.
-We also run an LLM judge evaluation, which confirms near-zero forget leakage for \method while baselines retain substantial residual knowledge.
-On MUSE Books, \method achieves HM=0.798, the highest among all tested methods including the gold retrained model.
-We observe that loss dynamics across all settings follow the same three-phase pattern: warm-up, spike-and-ratchet, smooth convergence. This suggests the ALM mechanism converges to a stable forget--retain operating point.
+An LLM judge evaluation confirms near-zero forget leakage for \method (FL=0.015/2.0 on forget01) while the strongest baseline still leaks substantially (FL=0.855).
+On MUSE Books, \method reaches HM=0.798, the highest among all tested methods.
+Beyond end-point metrics, we provide a dynamics-level analysis showing that \method's training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---while baselines exhibit recurring retain oscillations with no self-correcting mechanism. This interpretable behavior distinguishes \method from prior constrained methods and suggests the ALM converges to a stable operating point.

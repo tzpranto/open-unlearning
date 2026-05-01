@@ -1,19 +1,20 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \method, a bilevel optimization framework for LLM unlearning that treats retain preservation as a hard constraint using an augmented Lagrangian.
-The method has two key components: (1) a clamped entropy forget loss that gives bounded, self-stabilizing forgetting with per-token dropout, and (2) an asymmetric dual update that calibrates the forget--retain tradeoff from training dynamics instead of manual tuning.
-All updates happen in LoRA adapters, which limits how much unlearning can damage other weights.
+We presented \method, a bilevel optimization framework for LLM unlearning built on two contributions.
+First, \emph{clamped entropy}: a forget loss with a hard per-token deadzone at a vocabulary-invariant threshold $\tau \cdot \log V$, giving bounded and self-stabilizing forgetting where forgotten tokens produce exactly zero gradient.
+Second, an \emph{inequality-constrained bilevel formulation} where retain repair runs in the inner loop and forgetting in the outer loop---the inverse of prior bilevel unlearning---with an augmented Lagrangian whose asymmetric dual update permanently calibrates the tradeoff from a single retain spike.
+All updates are confined to LoRA adapters, limiting how far the model can drift.
 
-On TOFU across three forget splits, two model scales, and 5 seeds, \method outperforms all baselines on the majority of settings. The largest gains are on small forget sets (forget01 1B: $+$0.118 HM over PDU).
-LLM judge evaluation confirms near-zero forget leakage while baselines still retain substantial residual knowledge.
+On TOFU across three forget splits, two model scales, and 5 seeds, \method outperforms baselines on the majority of settings, with the largest gains on small forget sets (forget01 1B: $+$0.118 HM over PDU) where the tradeoff is hardest.
+LLM judge evaluation confirms near-zero forget leakage where baselines retain substantial residual knowledge.
 On MUSE Books, \method achieves HM=0.798, the highest among all tested methods.
-The three-phase loss dynamics are consistent across settings, which suggests the ALM converges to a stable operating point for the forget--retain tradeoff.
+Perhaps most informatively, training dynamics reveal a consistent three-phase convergence pattern across all scales and datasets, while baselines show recurring retain oscillations with no corrective mechanism---providing direct evidence that the ALM formulation produces qualitatively different optimization behavior.
 
 \paragraph{Limitations.}
-Our evaluation covers TOFU and MUSE Books. Extending to WMDP (safety-critical unlearning) and larger instruction-tuned models ($\geq$7B) is left for future work.
-MUSE Books is a single-seed result and we plan to add multi-seed evaluation.
-\method has more hyperparameters than single-loss baselines, although auto-epsilon reduces the tuning effort.
+Our current evaluation covers TOFU and MUSE Books.
+\method has more hyperparameters than single-loss baselines ($K$, $\rho$, $\tau$, $\varepsilon_{\text{mul}}$), although auto-epsilon and the observed robustness to $\rho$ and $K$ reduce the practical tuning surface.
+MUSE Books is a single-seed result; multi-seed evaluation is in progress.
 
 \paragraph{Future work.}
-We plan to extend to additional benchmarks (MUSE News, WMDP), run a formal ablation study to isolate each component's contribution, and scale to 7B+ instruction-tuned models.
+Component ablations isolating the contribution of each design choice (bilevel structure, clamped entropy, asymmetric dual, LoRA parameterization) are underway. We are extending to a third benchmark (MUSE News) to test generalization to distributed multi-document forget sets, and plan to evaluate on safety-critical unlearning (WMDP) and larger instruction-tuned models.

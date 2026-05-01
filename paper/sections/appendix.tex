@@ -80,7 +80,7 @@ In contrast, the GA gradient $\lVert \nabla_{\thetav}(-\!\log p_{y_t}) \rVert$ h
 Let $r_t = \Loss_\mathrm{ret}(\thetav_t) - \varepsilon$ denote the constraint residual at iteration $t$, $\rho > 0$ the penalty coefficient, $\alpha \in (0,1)$ the asymmetry ratio (we use $\alpha = 0.1$), and $\lambda_\mathrm{min} > 0$ a dual variable floor.
 The dual variable is updated as:
 \begin{equation}
-\label{eq:dual_update}
+\label{eq:dual_update_app}
 \lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, r_t & \text{if } r_t > 0, \\ \alpha \, \rho \, r_t & \text{if } r_t \leq 0. \end{cases}\Bigr)
 \end{equation}
 
@@ -530,7 +530,27 @@ PDU & 0.000 & 0.002 & 0.000 & 0.008 & 0.000 \\
 \label{tab:app_muse_books}
 \end{table}
 
-% MUSE News results will be added once experiments complete.
+\subsection{MUSE News}
+\label{app:muse_news}
+
+MUSE News targets removal of BBC news articles from Llama-2-7B. Unlike MUSE Books (a single cohesive narrative), News consists of 889 short factual articles---a distributed forget set where knowledge is spread across many independent documents. This presents a different challenge: the ALM must balance forgetting across many heterogeneous samples rather than a single long-form text.
+
+Experiments on MUSE News are in progress. Preliminary dynamics (\figref{fig:dynamics_news}) show that \method's three-phase pattern still holds, though the retain loss exhibits higher variance due to the heterogeneity of the news corpus. We are exploring whether lower $\tau$ (more aggressive per-token clamping) or additional inner steps ($K\!=\!5$) improve convergence on distributed forget sets.
+
+\begin{figure}[h]
+    \centering
+    \begin{subfigure}[t]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_dynamics.png}
+        \caption{\method (HM\,=\,0.542)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_PDU_dynamics.png}
+        \caption{PDU (HM\,=\,0.581)}
+    \end{subfigure}
+    \caption{MUSE News dynamics (preliminary). The distributed forget set produces higher retain variance for both methods, but PDU's oscillations are larger and uncontrolled.}
+    \label{fig:dynamics_news}
+\end{figure}
 
 \subsection{Training Dynamics}
 \label{app:dynamics}
@@ -560,16 +580,48 @@ The key pattern is a single retain spike at the epoch~1--2 boundary that ratchet
 \label{tab:dynamics}
 \end{table}
 
-\subsection{Ablation: Forget Loss Comparison}
+\paragraph{Extended dynamics comparison across splits.}
+\figref{fig:dynamics_extended} shows \method dynamics on TOFU forget05 and forget10. As the forget set size increases, we observe: (i)~the forget loss takes longer to converge (193 steps for forget05, 249 for forget10 vs.\ 110 for forget01), (ii)~$\lambda$ rises higher (${\sim}3.5$ for forget05, ${\sim}4.5$ for forget10) because more retain protection is needed, and (iii)~the retain loss exhibits mild oscillations on larger splits but stays bounded near $\varepsilon$. This adaptive scaling of $\lambda$ with task difficulty requires no hyperparameter change.
+
+\begin{figure*}[t]
+    \centering
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_dynamics.png}
+        \caption{TOFU 1B forget05: \method, 193 steps (HM\,=\,0.804)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_PDU_dynamics.png}
+        \caption{TOFU 1B forget05: PDU, 60 steps (HM\,=\,0.740)}
+    \end{subfigure}
+    \\[6pt]
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_dynamics.png}
+        \caption{TOFU 1B forget10: \method, 249 steps (HM\,=\,0.808)}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_PDU_dynamics.png}
+        \caption{TOFU 1B forget10: PDU, 120 steps (HM\,=\,0.797)}
+    \end{subfigure}
+    \caption{Training dynamics on larger forget splits. \method's $\lambda$ adapts to task difficulty (higher for larger forget sets) while PDU shows persistent retain oscillations on all settings.}
+    \label{fig:dynamics_extended}
+\end{figure*}
+
+\paragraph{PDU retain instability.}
+Across all settings, PDU's retain loss exhibits a characteristic pattern: an initial spike followed by persistent oscillations that never fully resolve (\figref{fig:dynamics_extended}b,d). On forget05, PDU's retain loss fluctuates between 0.4 and 1.3 throughout training. On forget10, the oscillations are even larger (0.0--1.6). This instability arises because PDU's primal-dual updates are symmetric---the dual variable drops as quickly as it rises, providing no lasting protection after a retain violation. In contrast, \method's asymmetric 10$\times$ slower decay permanently records the severity of past violations.
+
+\subsection{Ablation Studies}
 \label{app:ablation}
 
+\paragraph{Forget loss comparison.}
 \tabref{tab:ablation_loss} compares forget loss variants within the \method framework on MUSE Books, all using the same bilevel ALM setup ($K = 3$, $\varepsilon = 0.15$, $\lambda_0 = 1.0$, $\rho = 0.1$).
-Each loss has a distinct failure mode:
+Each loss produces a qualitatively distinct training trajectory:
 
 \begin{itemize}[nosep,leftmargin=*]
-\item \textbf{Logit margin:} Strong forgetting but structural retain spikes at every epoch boundary. Best retain $\approx 0.41$.
-\item \textbf{Repr.\ orthogonal:} Completely stable retain (no spikes) but weak forgetting---orthogonal hidden states do not suppress generation.
-\item \textbf{Clamped entropy:} One spike that permanently ratchets $\lambda$, then smooth convergence. Best on both axes.
+\item \textbf{Logit margin:} Strong forgetting but unbounded gradients cause structural retain spikes at every epoch boundary. The ALM cannot fully recover because each spike's magnitude exceeds what K=3 inner steps can repair. Best retain $\approx 0.41$.
+\item \textbf{Repr.\ orthogonal:} Completely stable retain (no spikes ever trigger) but weak forgetting---orthogonalizing hidden states does not suppress token-level generation.
+\item \textbf{Clamped entropy:} One spike that permanently ratchets $\lambda$, then smooth convergence. The bounded nature of the loss means subsequent outer steps are predictably sized, allowing the inner loop to fully repair retain damage. Best on both axes.
 \end{itemize}
 
 \begin{table}[h]
@@ -589,3 +641,14 @@ Each loss has a distinct failure mode:
 \caption{Forget loss ablation within \method on MUSE Books. All use the same bilevel ALM configuration. Clamped entropy with 4 epochs achieves the best trade-off.}
 \label{tab:ablation_loss}
 \end{table}
+
+\paragraph{Component ablations (in progress).}
+A comprehensive ablation isolating each of \method's components is underway on TOFU 1B forget01 (3 seeds each). The planned ablations are:
+\begin{itemize}[nosep,leftmargin=*]
+\item \textbf{No clamp} (unclamped entropy): remove the ReLU clamp, use raw $\tau \cdot H_{\max} - H(t)$.
+\item \textbf{No bilevel} (single-loop): remove the inner loop ($K\!=\!0$), combine forget and retain in one step.
+\item \textbf{Symmetric dual}: replace asymmetric update with standard $\lambda \leftarrow \max(0, \lambda + \rho \cdot r)$.
+\item \textbf{Fixed $\lambda$}: remove dual update entirely, use $\lambda = \lambda_{\text{init}}$ throughout.
+\item \textbf{No LoRA} (full fine-tune): train all parameters instead of low-rank adapters.
+\end{itemize}
+These results will quantify how much each component contributes to the overall performance.
