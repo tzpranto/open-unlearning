@@ -1,6 +1,6 @@
 # MUSE Books (Llama-2-7b-hf)
 
-Updated: 2026-04-28
+Updated: 2026-05-01
 
 Gold target: forget_knowmem ≤ 0.303, retain ≥ 0.687
 
@@ -35,6 +35,37 @@ Scores on 0–2 scale. FL = forget leakage (lower = better forgetting). RA = ret
 | BLURNPO | 0.21 | 0.41 | **0.00** | 1.09 | 0.66 | 0.26 | 1.47 | 0.696 |
 | PDU | 0.28 | 0.38 | 0.18 | 0.92 | 0.74 | 0.48 | 1.28 | 0.612 |
 | BLADE | **0.14** | **0.27** | **0.00** | 1.40 | 0.76 | 0.30 | 1.69 | **0.814** |
+
+## Results (5-fold, seeds=42,123,456,789,1024)
+
+HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain).
+
+| Method               | forget_knowmem↓ | verbmem↓        | retain↑         | extract↓        | HM↑             |
+| -------------------- | --------------- | --------------- | --------------- | --------------- | --------------- |
+| Gold (retrain)       | 0.3029          | 0.1445          | 0.6874          | 0.0107          | 0.739           |
+| Target (pre-unlearn) | 0.4712          | 0.9970          | 0.6913          | 0.9163          | 0.009           |
+| GradAscent           | 0.000 ± 0.000  | 0.000 ± 0.000  | 0.000 ± 0.000  | 0.008 ± 0.000  | 0.000 ± 0.000  |
+| GradDiff             | ⏳               | ⏳               | ⏳               | ⏳               | ⏳               |
+| NPO                  | ⏳               | ⏳               | ⏳               | ⏳               | ⏳               |
+| SimNPO               | ⏳               | ⏳               | ⏳               | ⏳               | ⏳               |
+| RMU                  | 0.209 ± 0.003  | 0.113 ± 0.006  | 0.598 ± 0.006  | 0.009 ± 0.000  | 0.738 ± 0.002  |
+| BLURNPO              | ⏳               | ⏳               | ⏳               | ⏳               | ⏳               |
+| PDU                  | 0.139 ± 0.014  | 0.129 ± 0.007  | 0.372 ± 0.007  | 0.040 ± 0.002  | 0.600 ± 0.008  |
+| BLADE                | ⏳               | ⏳               | ⏳               | ⏳               | ⏳               |
+
+## LLM Judge (5-fold, seeds=42,123,456,789,1024)
+
+Scores on 0–2 scale. FL = forget leakage (lower = better). RA = retain accuracy, RQ = response quality (higher = better). HM = hmean(1−FL/2, RA/2, ret_RQ/2).
+
+| Method     | FL↓           | RA↑           | ret_RQ↑       | HM↑           |
+| ---------- | ------------- | ------------- | ------------- | ------------- |
+| GradAscent | 0.00 ± 0.00  | 0.00 ± 0.00  | 0.00 ± 0.00  | 0.000 ± 0.000 |
+| GradDiff   | ⏳             | ⏳             | ⏳             | ⏳             |
+| NPO        | ⏳             | ⏳             | ⏳             | ⏳             |
+| SimNPO     | ⏳             | ⏳             | ⏳             | ⏳             |
+| RMU        | 0.32 ± 0.02  | 1.41 ± 0.02  | 1.68 ± 0.01  | 0.791 ± 0.004 |
+| BLURNPO    | ⏳             | ⏳             | ⏳             | ⏳             |
+| PDU        | 0.53 ± 0.02  | 0.99 ± 0.02  | 1.15 ± 0.02  | 0.586 ± 0.007 |
 
 ## Notes
 
