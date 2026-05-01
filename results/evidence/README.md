@@ -7,14 +7,14 @@ Raw evaluation outputs backing the tables in `results/muse_news.md` and `results
 ```
 evidence/
 ├── muse_news/
-│   ├── evals/
+│   ├── eval_outputs/
 │   │   ├── eval_results.json        # All 30 MUSE_SUMMARY results (6 methods × 5 seeds)
 │   │   └── retrain_summary.json     # Gold (retrain) baseline eval
 │   └── llm_judge/
 │       ├── muse_llm_judge_news_5fold.csv  # 6 methods × 5 seeds (30 rows)
 │       └── judge_run_log.txt         # Full run log with per-sample scores
 ├── muse_books/
-│   ├── evals/
+│   ├── eval_outputs/
 │   │   ├── eval_results.json        # Available summaries (updated as runs complete)
 │   │   └── retrain_summary.json     # Gold (retrain) baseline eval
 │   └── llm_judge/
