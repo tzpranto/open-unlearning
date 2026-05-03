@@ -15,13 +15,15 @@ evidence/
 │       └── judge_run_log.txt         # Full run log with per-sample scores
 ├── muse_books/
 │   ├── eval_outputs/
-│   │   ├── eval_results.json        # Available summaries (updated as runs complete)
+│   │   ├── eval_results.json        # All 30 MUSE_SUMMARY results (6 methods × 5 seeds)
 │   │   └── retrain_summary.json     # Gold (retrain) baseline eval
 │   └── llm_judge/
-│       ├── muse_llm_judge_books_5fold.csv  # Available judge results
+│       ├── muse_llm_judge_books_5fold.csv  # 6 methods × 5 seeds (30 rows)
 │       └── judge_run_log.txt         # Full run log
+├── tofu/                            # TOFU benchmark evidence (see tofu/README.md)
 ├── llm_judge_seed42.csv             # Original seed=42 judge results (both splits)
-└── reproduce_eval.sh                # Script to reproduce any eval from checkpoint
+├── reproduce_eval.sh                # Script to reproduce any eval from checkpoint
+└── regenerate_tables.py             # Regenerate markdown tables from evidence JSONs/CSVs
 ```
 
 ## Eval Metrics (MUSE_SUMMARY.json)
@@ -50,6 +52,16 @@ Scores on 0-2 scale per sample (100 samples per split):
 bash results/evidence/reproduce_eval.sh Books RMU 42
 
 # Requires: model checkpoint + retrain eval in saves/
+```
+
+## Regenerating Tables
+
+```bash
+# Regenerate all 5-fold tables from evidence files
+python results/evidence/regenerate_tables.py
+
+# Output matches the tables in results/muse_news.md and results/muse_books.md
+# This verifies the markdown tables are correctly derived from raw data
 ```
 
 ## Configuration

@@ -34,6 +34,70 @@
     "privleak": 81.57780663997495,
     "retain_knowmem_ROUGE": 0.0
   },
+  "GradDiff_s1024": {
+    "forget_knowmem_ROUGE": 0.0,
+    "retain_knowmem_ROUGE": 0.004827586206896551
+  },
+  "GradDiff_s123": {
+    "extraction_strength": 0.007936507936507908,
+    "forget_knowmem_ROUGE": 0.0,
+    "forget_verbmem_ROUGE": 0.0,
+    "privleak": 77.2865192556192,
+    "retain_knowmem_ROUGE": 0.004
+  },
+  "GradDiff_s42": {
+    "extraction_strength": 0.007936507936507908,
+    "forget_knowmem_ROUGE": 0.0,
+    "forget_verbmem_ROUGE": 0.0,
+    "privleak": 76.80970954624634,
+    "retain_knowmem_ROUGE": 0.004783092324805339
+  },
+  "GradDiff_s456": {
+    "extraction_strength": 0.007936507936507908,
+    "forget_knowmem_ROUGE": 0.0,
+    "forget_verbmem_ROUGE": 0.0,
+    "privleak": 76.72301687181486,
+    "retain_knowmem_ROUGE": 0.005472747497219132
+  },
+  "GradDiff_s789": {
+    "forget_knowmem_ROUGE": 0.0,
+    "retain_knowmem_ROUGE": 0.0
+  },
+  "NPO_s1024": {
+    "extraction_strength": 0.20460317460317462,
+    "forget_knowmem_ROUGE": 0.30889827949827947,
+    "forget_verbmem_ROUGE": 0.3701152017061519,
+    "privleak": 14.174252269538663,
+    "retain_knowmem_ROUGE": 0.5825159813095875
+  },
+  "NPO_s123": {
+    "extraction_strength": 0.18833333333333335,
+    "forget_knowmem_ROUGE": 0.3122489177489177,
+    "forget_verbmem_ROUGE": 0.35072621259562536,
+    "privleak": 7.5856090127500915,
+    "retain_knowmem_ROUGE": 0.5573819605515258
+  },
+  "NPO_s42": {
+    "extraction_strength": 0.13,
+    "forget_knowmem_ROUGE": 0.3339668491151249,
+    "forget_verbmem_ROUGE": 0.3024089074372521,
+    "privleak": 6.588643256788621,
+    "retain_knowmem_ROUGE": 0.5630448492967676
+  },
+  "NPO_s456": {
+    "extraction_strength": 0.1653968253968254,
+    "forget_knowmem_ROUGE": 0.28330414579589996,
+    "forget_verbmem_ROUGE": 0.3673864248803775,
+    "privleak": 8.972691803652854,
+    "retain_knowmem_ROUGE": 0.5980630565796807
+  },
+  "NPO_s789": {
+    "extraction_strength": 0.15047619047619049,
+    "forget_knowmem_ROUGE": 0.27860760233918125,
+    "forget_verbmem_ROUGE": 0.3185477362186985,
+    "privleak": 7.152145640592897,
+    "retain_knowmem_ROUGE": 0.5703843885015241
+  },
   "PDU_s1024": {
     "extraction_strength": 0.041111111111111105,
     "forget_knowmem_ROUGE": 0.16393930035106508,
@@ -103,5 +167,37 @@
     "forget_verbmem_ROUGE": 0.1176106483430944,
     "privleak": 71.91157344087054,
     "retain_knowmem_ROUGE": 0.609863170713016
+  },
+  "SimNPO_s1024": {
+    "forget_knowmem_ROUGE": 0.251391422303187,
+    "retain_knowmem_ROUGE": 0.5911914824941141
+  },
+  "SimNPO_s123": {
+    "extraction_strength": 0.00857142857142855,
+    "forget_knowmem_ROUGE": 0.2263974893866198,
+    "forget_verbmem_ROUGE": 0.0020775226308506903,
+    "privleak": 102.2106631546551,
+    "retain_knowmem_ROUGE": 0.5931481544771019
+  },
+  "SimNPO_s42": {
+    "extraction_strength": 0.00857142857142855,
+    "forget_knowmem_ROUGE": 0.23277221037180199,
+    "forget_verbmem_ROUGE": 0.003016592068839547,
+    "privleak": 24.187256166368748,
+    "retain_knowmem_ROUGE": 0.6050568846358321
+  },
+  "SimNPO_s456": {
+    "extraction_strength": 0.00857142857142855,
+    "forget_knowmem_ROUGE": 0.217765304870568,
+    "forget_verbmem_ROUGE": 0.0029349317608566633,
+    "privleak": 43.64976157622464,
+    "retain_knowmem_ROUGE": 0.6079537100326574
+  },
+  "SimNPO_s789": {
+    "extraction_strength": 0.00857142857142855,
+    "forget_knowmem_ROUGE": 0.25927343489843485,
+    "forget_verbmem_ROUGE": 0.0033683895601385396,
+    "privleak": 82.92154309366205,
+    "retain_knowmem_ROUGE": 0.6012267980557455
   }
 }
