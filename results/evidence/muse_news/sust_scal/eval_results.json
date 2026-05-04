@@ -1,0 +1,58 @@
+{
+  "PDU_sust_step1": {
+    "extraction_strength": 0.05587301587301587,
+    "forget_knowmem_ROUGE": 0.574459595959596,
+    "forget_verbmem_ROUGE": 0.24886352479471202,
+    "privleak": -0.1399999999719846,
+    "retain_knowmem_ROUGE": 0.542786421616545
+  },
+  "PDU_sust_step2": {
+    "extraction_strength": 0.01690476190476188,
+    "forget_knowmem_ROUGE": 0.5232145909645909,
+    "forget_verbmem_ROUGE": 0.03551896590297582,
+    "privleak": 59.319999988136,
+    "retain_knowmem_ROUGE": 0.5041788184676116
+  },
+  "PDU_sust_step3": {
+    "extraction_strength": 0.008015873015872988,
+    "forget_knowmem_ROUGE": 0.5516798941798942,
+    "forget_verbmem_ROUGE": 0.014006192192831935,
+    "privleak": 40.919999991816006,
+    "retain_knowmem_ROUGE": 0.11503970320393592
+  },
+  "PDU_sust_step4": {
+    "extraction_strength": 0.007936507936507908,
+    "forget_knowmem_ROUGE": 0.4808199134199134,
+    "forget_verbmem_ROUGE": 0.009824950795607327,
+    "privleak": 33.679999993264,
+    "retain_knowmem_ROUGE": 0.045179050704958146
+  },
+  "PDU_scal_f1": {
+    "extraction_strength": 0.018253968253968238,
+    "forget_knowmem_ROUGE": 0.5333031400966184,
+    "forget_verbmem_ROUGE": 0.07046857064112079,
+    "privleak": 76.11999998477602,
+    "retain_knowmem_ROUGE": 0.5375015164629002
+  },
+  "PDU_scal_f2": {
+    "extraction_strength": 0.015793650793650773,
+    "forget_knowmem_ROUGE": 0.49537373737373736,
+    "forget_verbmem_ROUGE": 0.05025443507694536,
+    "privleak": 58.57999998828398,
+    "retain_knowmem_ROUGE": 0.46646798568441034
+  },
+  "PDU_scal_f3": {
+    "extraction_strength": 0.01531746031746029,
+    "forget_knowmem_ROUGE": 0.5376824257613732,
+    "forget_verbmem_ROUGE": 0.023823983340067443,
+    "privleak": 40.03999999199201,
+    "retain_knowmem_ROUGE": 0.48805647496764437
+  },
+  "PDU_scal_f4": {
+    "extraction_strength": 0.013730158730158704,
+    "forget_knowmem_ROUGE": 0.32073977873977877,
+    "forget_verbmem_ROUGE": 0.021304555376919453,
+    "privleak": 48.739999990252,
+    "retain_knowmem_ROUGE": 0.0018181818181818182
+  }
+}
