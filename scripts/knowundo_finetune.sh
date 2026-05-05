@@ -1,20 +1,25 @@
 #!/bin/bash
-# Fine-tune Llama-2-7b-chat on KnowUnDo to create the target model.
-# This is a one-time step; all unlearning methods start from this checkpoint.
-# ~400 examples, 10 epochs, LoRA r=8 — should take ~15 min on single GPU.
+# Fine-tune Llama-2-7b-chat on KnowUnDo with LoRA (matching original paper).
+# LoRA r=8, alpha=16, dropout=0.1, all-linear. lr=1e-4, 10 epochs, eff. BS=32.
+# Merges adapters and saves full model for use by all unlearn methods.
 #
 # Usage:
 #   bash scripts/knowundo_finetune.sh          # copyright domain (default)
 #   bash scripts/knowundo_finetune.sh privacy  # privacy domain
 
-DOMAIN=${1:-copyright}
+set -euo pipefail
+export PATH="/datadrive/conda/envs/unlearning/bin:$PATH"
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+cd /datadrive/forked/open-unlearning
 
-nohup python src/train.py \
-  --config-name=train.yaml \
-  experiment=finetune/knowundo/default \
-  domain=${DOMAIN} \
-  task_name=knowundo_Llama-2-7b-chat_${DOMAIN}_ft \
-  > logs/knowundo_finetune_${DOMAIN}.log 2>&1 &
+DOMAIN=${1:-copyright}
+mkdir -p logs
+
+nohup CUDA_VISIBLE_DEVICES=0 python scripts/knowundo_finetune_lora.py \
+    --domain ${DOMAIN} \
+    --output_dir saves/unlearn/knowundo_Llama-2-7b-chat_${DOMAIN}_ft \
+    --seed 100 \
+    > logs/knowundo_finetune_${DOMAIN}.log 2>&1 &
 
 echo "PID: $!"
 echo "Log: logs/knowundo_finetune_${DOMAIN}.log"

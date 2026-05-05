@@ -1,0 +1,259 @@
+[
+  {
+    "task": "knowundo_copyright_default_s1024",
+    "forget_Acc": 0.0,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.0,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_copyright_default_s123",
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_copyright_default_s42",
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_copyright_default_s456",
+    "forget_Acc": 0.004649,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.008067,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_copyright_default_s789",
+    "forget_Acc": 0.003036,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.000137,
+    "retain_Acc": 0.001284,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.000164
+  },
+  {
+    "task": "knowundo_copyright_grad_diff_s1024",
+    "forget_Acc": 0.007532,
+    "forget_Prob": 0.001908,
+    "forget_ROUGE": 0.001634,
+    "retain_Acc": 0.722453,
+    "retain_Prob": 0.397235,
+    "retain_ROUGE": 0.208813
+  },
+  {
+    "task": "knowundo_copyright_grad_diff_s123",
+    "forget_Acc": 0.0,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.624007,
+    "retain_Prob": 0.310787,
+    "retain_ROUGE": 0.18696
+  },
+  {
+    "task": "knowundo_copyright_grad_diff_s42",
+    "forget_Acc": 0.0,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.626298,
+    "retain_Prob": 0.317444,
+    "retain_ROUGE": 0.194943
+  },
+  {
+    "task": "knowundo_copyright_grad_diff_s456",
+    "forget_Acc": 0.000261,
+    "forget_Prob": 5e-06,
+    "forget_ROUGE": 6.5e-05,
+    "retain_Acc": 0.606953,
+    "retain_Prob": 0.274069,
+    "retain_ROUGE": 0.194863
+  },
+  {
+    "task": "knowundo_copyright_grad_diff_s789",
+    "forget_Acc": 0.0,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.630362,
+    "retain_Prob": 0.317005,
+    "retain_ROUGE": 0.207573
+  },
+  {
+    "task": "knowundo_copyright_rmu_s1024",
+    "forget_Acc": 0.428435,
+    "forget_Prob": 0.051169,
+    "forget_ROUGE": 0.072226,
+    "retain_Acc": 0.760683,
+    "retain_Prob": 0.44151,
+    "retain_ROUGE": 0.202259
+  },
+  {
+    "task": "knowundo_copyright_rmu_s123",
+    "forget_Acc": 0.441659,
+    "forget_Prob": 0.056887,
+    "forget_ROUGE": 0.080411,
+    "retain_Acc": 0.763977,
+    "retain_Prob": 0.445421,
+    "retain_ROUGE": 0.197442
+  },
+  {
+    "task": "knowundo_copyright_rmu_s42",
+    "forget_Acc": 0.444225,
+    "forget_Prob": 0.058249,
+    "forget_ROUGE": 0.078503,
+    "retain_Acc": 0.767528,
+    "retain_Prob": 0.450487,
+    "retain_ROUGE": 0.209481
+  },
+  {
+    "task": "knowundo_copyright_rmu_s456",
+    "forget_Acc": 0.437595,
+    "forget_Prob": 0.055439,
+    "forget_ROUGE": 0.074608,
+    "retain_Acc": 0.764342,
+    "retain_Prob": 0.44422,
+    "retain_ROUGE": 0.190186
+  },
+  {
+    "task": "knowundo_copyright_rmu_s789",
+    "forget_Acc": 0.424782,
+    "forget_Prob": 0.0491,
+    "forget_ROUGE": 0.074591,
+    "retain_Acc": 0.760736,
+    "retain_Prob": 0.44389,
+    "retain_ROUGE": 0.203597
+  },
+  {
+    "task": "knowundo_copyright_simnpo_s1024",
+    "forget_Acc": 0.350433,
+    "forget_Prob": 0.011616,
+    "forget_ROUGE": 0.111734,
+    "retain_Acc": 0.781227,
+    "retain_ROUGE": 0.311303
+  },
+  {
+    "task": "knowundo_copyright_simnpo_s123",
+    "forget_Acc": 0.36173,
+    "forget_Prob": 0.010831,
+    "forget_ROUGE": 0.04429,
+    "retain_Acc": 0.791615,
+    "retain_Prob": 0.534045,
+    "retain_ROUGE": 0.322711
+  },
+  {
+    "task": "knowundo_copyright_simnpo_s42",
+    "forget_Acc": 0.264441,
+    "forget_ROUGE": 0.016998,
+    "retain_Acc": 0.785208
+  },
+  {
+    "task": "knowundo_copyright_simnpo_s456",
+    "forget_Acc": 0.245076,
+    "forget_Prob": 0.013283,
+    "forget_ROUGE": 0.010084,
+    "retain_Acc": 0.810481,
+    "retain_ROUGE": 0.317763
+  },
+  {
+    "task": "knowundo_copyright_simnpo_s789",
+    "forget_Acc": 0.29118,
+    "forget_Prob": 0.013181,
+    "forget_ROUGE": 0.057612,
+    "retain_Acc": 0.772439,
+    "retain_Prob": 0.504755,
+    "retain_ROUGE": 0.316682
+  },
+  {
+    "task": "knowundo_privacy_default_s1024",
+    "forget_Acc": 0.001115,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.001587,
+    "retain_Acc": 0.001156,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.001701
+  },
+  {
+    "task": "knowundo_privacy_default_s123",
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.016273,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.023296
+  },
+  {
+    "task": "knowundo_privacy_default_s42",
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_privacy_default_s456",
+    "forget_Acc": 0.041331,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.003972,
+    "retain_Acc": 0.029195,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.006041
+  },
+  {
+    "task": "knowundo_privacy_default_s789",
+    "forget_Acc": 0.041331,
+    "forget_Prob": 0.0,
+    "forget_ROUGE": 0.0,
+    "retain_Acc": 0.029195,
+    "retain_Prob": 0.0,
+    "retain_ROUGE": 0.0
+  },
+  {
+    "task": "knowundo_privacy_rmu_s1024",
+    "forget_Acc": 0.570377,
+    "forget_Prob": 0.098512,
+    "forget_ROUGE": 0.074577,
+    "retain_Acc": 0.662545,
+    "retain_Prob": 0.192039,
+    "retain_ROUGE": 0.092648
+  },
+  {
+    "task": "knowundo_privacy_rmu_s123",
+    "forget_Acc": 0.565064,
+    "forget_Prob": 0.096913,
+    "forget_ROUGE": 0.078228,
+    "retain_Acc": 0.659328,
+    "retain_Prob": 0.186627,
+    "retain_ROUGE": 0.071635
+  },
+  {
+    "task": "knowundo_privacy_rmu_s42",
+    "forget_Acc": 0.580181,
+    "forget_Prob": 0.108634,
+    "forget_ROUGE": 0.068008,
+    "retain_Acc": 0.669994,
+    "retain_Prob": 0.205899,
+    "retain_ROUGE": 0.074328
+  },
+  {
+    "task": "knowundo_privacy_rmu_s456",
+    "forget_Acc": 0.560243,
+    "forget_Prob": 0.092468,
+    "forget_ROUGE": 0.067778,
+    "retain_Acc": 0.654734,
+    "retain_Prob": 0.184712,
+    "retain_ROUGE": 0.079761
+  },
+  {
+    "task": "knowundo_privacy_rmu_s789",
+    "forget_Acc": 0.565106,
+    "forget_Prob": 0.097597,
+    "forget_ROUGE": 0.072362,
+    "retain_Acc": 0.65802,
+    "retain_Prob": 0.191003,
+    "retain_ROUGE": 0.078297
+  }
+]

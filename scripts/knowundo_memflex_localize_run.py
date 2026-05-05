@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--output_path", type=str, required=True)
     parser.add_argument("--mu", type=float, default=0.92)
     parser.add_argument("--sigma", type=float, default=6e-4)
-    parser.add_argument("--num_copies", type=int, default=5)
+    parser.add_argument("--num_copies", type=int, default=3)
     args = parser.parse_args()
 
     print(f"Loading model from {args.model_path}...")

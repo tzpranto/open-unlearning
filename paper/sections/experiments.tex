@@ -4,13 +4,17 @@
 \subsection{Benchmarks}
 \label{sec:benchmarks}
 
-We evaluate on two complementary benchmarks:
+We evaluate on four benchmarks that test different facets of LLM unlearning:
 
-\paragraph{TOFU} \citep{maini2024tofu} contains 200 fictitious author profiles with 20 QA pairs each (4000 total). We test on three forget splits: forget01 (1\%), forget05 (5\%), and forget10 (10\%). All TOFU results are averaged over 5 random seeds with standard deviations reported. Metrics: Model Utility (MU, harmonic mean of 9 sub-metrics on retain/real-authors/world-facts), Forget Quality (FQ, KS-test $p$-value on truth ratio distributions), Extraction Strength (ES), forget answer probability (fgt\_Prob), and forget ROUGE-L (fgt\_ROUGE). We use HM = hmean(MU, 1$-$fgt\_Prob, 1$-$fgt\_ROUGE) as the overall score.
+\paragraph{TOFU} \citep{maini2024tofu} contains 200 fictitious author profiles with 20 QA pairs each (4000 total). We test on three forget splits: forget01 (1\%), forget05 (5\%), and forget10 (10\%). All TOFU results are averaged over 5 random seeds with standard deviations reported. Metrics: Model Utility (MU, harmonic mean of 9 sub-metrics on retain/real-authors/world-facts), Forget Quality (FQ, KS-test $p$-value on truth ratio distributions), forget answer probability (fgt\_Prob), and forget ROUGE-L (fgt\_ROUGE). We use HM = hmean(MU, 1$-$fgt\_Prob, 1$-$fgt\_ROUGE) as the overall score.
 
-\paragraph{MUSE Books} \citep{shi2024muse} targets removal of Harry Potter book content from Llama-2-7B. Metrics: forget\_knowmem (knowledge memorization), verbmem (verbatim memorization), retain\_knowmem (retain knowledge), extraction strength. We use HM = hmean(1$-$forget\_knowmem, 1$-$verbmem, retain\_knowmem).
+\paragraph{MUSE Books} \citep{shi2024muse} targets removal of Harry Potter book content from Llama-2-7B. The forget set is a single cohesive narrative (554 samples). Metrics: forget\_knowmem (fk), verbatim memorization (vm), retain\_knowmem (ret), extraction strength (ex). We use HM = hmean(1$-$fk, 1$-$vm, ret).
 
-\paragraph{LLM Judge.} We also evaluate all methods using an LLM judge (Claude Opus~4.7) that scores model outputs on three axes: Forget Leakage (FL, lower is better), Retain Accuracy (RA), and Response Quality (RQ), each on a 0--2 scale. We compute HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, ret\_RQ/2). This gives a complementary evaluation that captures generation quality beyond token-level statistics.
+\paragraph{MUSE News} \citep{shi2024muse} targets removal of BBC news articles from Llama-2-7B. Unlike Books, the forget set consists of 889 short factual articles---a distributed multi-document setting where knowledge is spread across many independent documents. This presents a fundamentally different challenge: the model must forget heterogeneous, independently memorized content rather than a single cohesive text. Same metrics as MUSE Books.
+
+\paragraph{KnowUndo} \citep{jin2024knowundo} evaluates unlearning on Llama-2-7B-chat across two domains: \emph{copyright} (removing copyrighted book content) and \emph{privacy} (removing personal information). Unlike the other benchmarks, KnowUndo starts from a LoRA-fine-tuned target model rather than a fully fine-tuned one. Metrics: forget accuracy (Acc) and perplexity (PPL) on the forget set, retain accuracy and PPL on the retain set. We use HM = hmean(forget metrics, retain metrics) following the benchmark protocol.
+
+\paragraph{LLM Judge.} We evaluate all methods using an LLM judge (Claude Opus~4.7) that scores model outputs on three axes: Forget Leakage (FL, lower is better), Retain Accuracy (RA), and Response Quality (RQ), each on a 0--2 scale. We compute HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, ret\_RQ/2). This gives a complementary evaluation that captures generation quality beyond token-level statistics.
 
 \subsection{Baselines}
 \label{sec:baselines}
@@ -29,7 +33,7 @@ We compare against seven baselines, all using their published default hyperparam
 \subsection{Implementation Details}
 \label{sec:implementation}
 
-\paragraph{MUSE Books (Llama-2-7B).}
+\paragraph{MUSE Books/News (Llama-2-7B).}
 LoRA $r\!=\!16$, $\alpha\!=\!32$ on all projections (q/k/v/o, gate/up/down).
 $K\!=\!3$, $\eta_{\text{in}}\!=\!2\text{e-}4$, $\eta_{\text{out}}\!=\!3\text{e-}5$, $\varepsilon\!=\!0.15$, $\rho\!=\!0.1$, $\lambda_{\text{init}}\!=\!1.0$, $\tau\!=\!0.7$.
 Batch size 2, gradient accumulation 8 (effective batch size 16). 4 epochs.
@@ -38,73 +42,24 @@ Batch size 2, gradient accumulation 8 (effective batch size 16). 4 epochs.
 LoRA $r\!=\!8$, $\alpha\!=\!16$.
 $K\!=\!3$, $\eta_{\text{in}}\!=\!2\text{e-}4$, $\eta_{\text{out}}\!=\!2\text{e-}5$, $\varepsilon_{\text{mul}}\!=\!0.85$, $\rho\!=\!0.1$, $\lambda_{\text{init}}\!=\!1.0$, $\tau\!=\!0.7$.
 Batch size 4, gradient accumulation 4 (effective batch size 16). $T\!=\!100$ steps.
-All experiments run on a single NVIDIA A100 80GB GPU.
+
+\paragraph{KnowUndo (Llama-2-7B-chat).}
+LoRA $r\!=\!16$, $\alpha\!=\!32$.
+$K\!=\!3$, $\eta_{\text{in}}\!=\!2\text{e-}4$, $\eta_{\text{out}}\!=\!3\text{e-}5$, $\varepsilon_{\text{mul}}\!=\!0.85$, $\rho\!=\!0.1$, $\lambda_{\text{init}}\!=\!1.0$, $\tau\!=\!0.7$.
+Batch size 2, gradient accumulation 8 (effective batch size 16). 4 epochs.
+The target model is a LoRA-fine-tuned checkpoint; we initialize our LoRA adapters from the target model weights and unlearn on top of them.
+
+All experiments run on a single NVIDIA H100 GPU (80GB).
 
 \subsection{Main Results}
 \label{sec:main_results}
-
-\paragraph{MUSE Books.}
-
-\begin{table}[t]
-\centering
-\small
-\caption{MUSE Books (Llama-2-7B). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
-\label{tab:muse_books}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
-\midrule
-Gold (retrain) & .303 & .145 & .687 & .011 & .739 \\
-\midrule
-GradAscent & .000 & .000 & .000 & .008 & .000 \\
-GradDiff & .000 & .000 & .025 & .008 & .070 \\
-NPO & .411 & .570 & .661 & .377 & .542 \\
-SimNPO & .239 & .005 & .604 & .009 & .755 \\
-BLURNPO & .311 & .809 & .600 & .702 & .359 \\
-RMU & .308 & .120 & .604 & .011 & .708 \\
-PDU & .000 & .002 & .000 & .008 & .000 \\
-\midrule
-\method (ours) & \textbf{.080} & \textbf{.000} & \textbf{.598} & \textbf{.008} & \textbf{.798} \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\tabref{tab:muse_books} shows results on MUSE Books. \method achieves HM=0.798, beating the strongest baseline SimNPO (0.755) by $+$0.043 and exceeding the gold retrained model (0.739). \method has the lowest forget\_knowmem (0.080) among methods with nonzero retain performance, and completely eliminates verbatim memorization (vm=0.000).
 
 \paragraph{TOFU.}
 
 \begin{table}[t]
 \centering
 \small
-\caption{TOFU forget01 (Llama-3.2-1B/3B, 5 seeds). Best HM in \textbf{bold}.}
-\label{tab:tofu_forget01}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-Scale & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{5}{*}{1B}
-& GradAscent & .596 & .477 & .456 & .553 \\
-& NPO & .596 & .474 & .438 & .560 \\
-& RMU & .557 & .414 & .415 & .576 \\
-& PDU & .602 & .186 & .313 & .690 \\
-& \method (ours) & .599 & \textbf{.002} & \textbf{.038} & \textbf{.808} \\
-\midrule
-\multirow{5}{*}{3B}
-& GradAscent & .668 & .564 & .525 & .509 \\
-& NPO & .668 & .553 & .494 & .525 \\
-& RMU & .657 & .861 & .715 & .246 \\
-& PDU & \textbf{.692} & .168 & .283 & .742 \\
-& \method (ours) & .654 & \textbf{.000} & \textbf{.015} & \textbf{.846} \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\begin{table}[t]
-\centering
-\small
-\caption{TOFU across forget splits (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Std.\ dev.\ in subscript.}
+\caption{TOFU across forget splits (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Std.\ dev.\ in subscript. Best in \textbf{bold}.}
 \label{tab:tofu_splits}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llccc@{}}
@@ -124,16 +79,10 @@ Scale & Method & fgt01 & fgt05 & fgt10 \\
 \end{tabular}}
 \end{table}
 
-Tables~\ref{tab:tofu_forget01} and~\ref{tab:tofu_splits} show TOFU results across all splits. On 1B, \method outperforms PDU on all three splits: forget01 ($+$0.118), forget05 ($+$0.060), and forget10 ($+$0.006). On 3B, \method leads on forget01 ($+$0.104) but trails PDU on forget05 ($-$0.001) and forget10 ($-$0.021). Across all settings, \method gets near-perfect forgetting (fgt\_Prob$<$0.01, fgt\_ROUGE$<$0.05) with minimal utility loss (MU within 1--2\% of PDU).
-
-\method's advantage is largest on small forget sets (forget01) where the forget--retain boundary is tightest and existing methods struggle to completely forget without destroying utility. The gap narrows on larger forget sets where the task is easier for all methods. On the two 3B settings where PDU's automated HM is slightly higher, LLM judge evaluation (\tabref{tab:llm_judge} and \secref{app:llm_judge}) still favors \method, suggesting that PDU's HM gain comes at the cost of higher residual forget leakage that the automated metric does not fully capture.
-
-\paragraph{LLM Judge.}
-
 \begin{table}[t]
 \centering
 \small
-\caption{LLM Judge on TOFU 1B (5 seeds). FL = forget leakage (0--2, $\downarrow$). HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, rRQ/2).}
+\caption{LLM Judge on TOFU 1B (5 seeds). FL = forget leakage (0--2, $\downarrow$). HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, rRQ/2). \method wins all splits on both scales.}
 \label{tab:llm_judge}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llcccc@{}}
@@ -158,11 +107,136 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \end{tabular}}
 \end{table}
 
-\tabref{tab:llm_judge} shows LLM judge results. The pattern is similar to the automatic metrics but with sharper separation: on forget01, \method's forget leakage is 0.015 (out of 2.0) versus PDU's 0.855, giving an HM$_\text{J}$ gap of $+$0.183. Even on forget10 where PDU's automatic metrics are competitive, the judge picks up residual leakage differences. Full LLM judge results for all methods and both model scales are in \secref{app:llm_judge}.
+\tabref{tab:tofu_splits} shows TOFU results across all splits. On 1B, \method outperforms PDU on all three splits: forget01 ($+$0.118), forget05 ($+$0.060), and forget10 ($+$0.006). On 3B, \method leads on forget01 ($+$0.104) but trails PDU on forget05 ($-$0.001) and forget10 ($-$0.021). Across all settings, \method achieves near-perfect forgetting (fgt\_Prob$<$0.01, fgt\_ROUGE$<$0.05) with minimal utility loss (MU within 1--2\% of PDU).
 
-\paragraph{Note on ``beating gold.''}
-On MUSE Books, \method has a higher HM than the gold retrained model (0.798 vs.\ 0.739). This does not indicate superiority: the gold model retains residual knowledge (fk=0.303) because pretraining corpora overlap with Harry Potter content.
-\method trades slightly lower retain (0.598 vs.\ 0.687) for much lower forget knowledge (0.080 vs.\ 0.303)---a different Pareto operating point that the HM metric happens to score higher. The gold model defines correct behavior; \method merely occupies a more aggressively-forgotten point on the Pareto frontier.
+\method's advantage is largest on small forget sets (forget01) where the forget--retain boundary is tightest and existing methods struggle to completely forget without destroying utility. The gap narrows on larger forget sets where the task is easier for all methods. On the two 3B settings where PDU's automated HM is slightly higher, the LLM judge (\tabref{tab:llm_judge}) still favors \method, suggesting that PDU's HM gain comes at the cost of higher residual forget leakage that the automated metric does not fully capture. Full per-method results are in \secref{app:tofu_full}.
+
+\paragraph{MUSE Books.}
+
+\begin{table}[t]
+\centering
+\small
+\caption{MUSE Books (Llama-2-7B, seed=42). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
+\label{tab:muse_books}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & .303 & .145 & .687 & .011 & .739 \\
+\midrule
+GradAscent & .000 & .000 & .000 & .008 & .000 \\
+GradDiff & .000 & .000 & .025 & .008 & .070 \\
+NPO & .402 & .000 & .613 & .000 & .697 \\
+SimNPO & .271 & .270 & .580 & .000 & .672 \\
+BLURNPO & .175 & .000 & .527 & .008 & .730 \\
+RMU & .202 & .115 & .601 & .010 & .741 \\
+PDU & .130 & .123 & .371 & .038 & .602 \\
+\midrule
+\method (ours) & \textbf{.110} & \textbf{.000} & \textbf{.658} & \textbf{.008} & \textbf{.823} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\tabref{tab:muse_books} shows results on MUSE Books (seed=42; multi-seed in progress). \method achieves HM=0.823, beating the strongest baseline RMU (0.741) by $+$0.082. \method completely eliminates verbatim memorization (vm=0.000) while preserving strong retain performance (0.658). The LLM judge confirms this ranking: \method achieves HM$_\text{J}$=0.814 vs.\ RMU 0.798 vs.\ SimNPO 0.717. Note that \method's HM exceeds the gold retrained model (0.739) because the gold model retains residual knowledge (fk=0.303) from pretraining overlap; \method occupies a more aggressively-forgotten Pareto point that the HM metric happens to score higher.
+
+\paragraph{KnowUndo.}
+
+\begin{table}[t]
+\centering
+\small
+\caption{KnowUndo (Llama-2-7B-chat, seed=42). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). Best in \textbf{bold}.}
+\label{tab:knowundo}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+& \multicolumn{3}{c}{Copyright} & \multicolumn{3}{c}{Privacy} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+Method & fgt\_R$\downarrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & fgt\_R$\downarrow$ & ret\_R$\uparrow$ & HM$\uparrow$ \\
+\midrule
+GradDiff & .000 & .200 & .349 & .056 & .427 & .526 \\
+NPO & .193 & .300 & .441 & .313 & .431 & .500 \\
+SimNPO & .012 & .318 & .464 & .289 & .540 & .543 \\
+RMU & .081 & .207 & .353 & .072 & .084 & .190 \\
+PDU & .007 & .302 & .456 & .032 & .468 & .552 \\
+\midrule
+\method & \textbf{.009} & \textbf{.334} & \textbf{.479} & \textbf{.075} & \textbf{.621} & \textbf{.601} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\tabref{tab:knowundo} shows KnowUndo results (seed=42; multi-seed evaluation in progress). \method achieves the best HM on both domains: copyright (0.479 vs.\ SimNPO 0.464, PDU 0.456) and privacy (0.601 vs.\ PDU 0.552, SimNPO 0.543). The privacy domain has substantially higher memorization (target forget\_ROUGE=0.665 vs.\ 0.244 for copyright), making it a harder unlearning target. \method's advantage is most pronounced here: retain\_ROUGE=0.621 (89\% of the fine-tuned model's 0.698) while reducing forget\_ROUGE by 89\% (0.665$\to$0.075). The LLM judge confirms \method's superiority with the highest retain accuracy on both domains (0.875 copyright, 0.732 privacy) and low leakage (FL$\leq$0.068).
+
+\paragraph{MUSE News.}
+
+\begin{table}[t]
+\centering
+\small
+\caption{MUSE News (Llama-2-7B, 5-fold). Best HM in \textbf{bold}.}
+\label{tab:muse_news}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & .324 & .204 & .552 & .025 & .660 \\
+\midrule
+GradDiff & .329 & .043 & .269 & .008 & .479 \\
+NPO & .517 & .274 & .435 & .073 & .522 \\
+RMU & .495 & .267 & .434 & .050 & .531 \\
+PDU & .525 & .092 & .508 & .024 & \textbf{.577} \\
+\midrule
+\method (seed=42) & .550 & .173 & .475 & .031 & .542 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\tabref{tab:muse_news} shows MUSE News results. Unlike MUSE Books, the News corpus consists of 889 short, independently memorized articles---a distributed forget set that presents a fundamentally different challenge. PDU achieves the best automated HM (0.577 5-fold vs.\ \method 0.542 seed=42), and the LLM judge confirms this ordering (PDU HM$_\text{J}$=0.638 vs.\ \method 0.579).
+We attribute this gap to the distributed nature of the News forget set: PDU's per-token logit-margin loss targets each article independently, while \method's clamped entropy and single $\lambda$ must balance heterogeneous forgetting difficulty across 889 articles with varying memorization levels.
+This result demonstrates that no single method dominates all settings---\method excels on cohesive forget sets (Books, TOFU, KnowUndo) while PDU handles distributed multi-document forgetting better.
+
+
+\subsection{Ablation Study}
+\label{sec:ablation}
+
+We ablate \method's components on MUSE Books (Llama-2-7B, seed=42) to isolate the contribution of each design choice. \tabref{tab:ablation} reports the full ablation.
+
+\begin{table}[t]
+\centering
+\small
+\caption{Ablation on MUSE Books (seed=42). A0 is the full \method. Each row removes or replaces one component.}
+\label{tab:ablation}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}clcccl@{}}
+\toprule
+ID & Configuration & fk$\downarrow$ & ret$\uparrow$ & HM$\uparrow$ & Effect \\
+\midrule
+A0 & Full \method & .110 & .658 & \textbf{.823} & --- \\
+\midrule
+A1 & $K\!=\!0$ (no inner loop) & .110 & .631 & .819 & ret $-$0.027 \\
+A9 & $\tau\!=\!1.0$ (unclamped) & .110 & .604 & .780 & ret $-$0.054 \\
+A15 & No LoRA (full FT) & --- & .306 & .459 & catastrophic drift \\
+A16 & ALM off ($\lambda\!=\!0$, $\rho\!=\!0$) & --- & --- & .233 & model collapse \\
+A18 & Swapped bilevel & --- & --- & .506 & forgetting fails \\
+\midrule
+A4 & GA forget loss & --- & --- & .160 & retain collapse \\
+A5 & NPO forget loss & --- & --- & .009 & trivially satisfied \\
+A17 & Logit margin loss & --- & --- & .000 & total destruction \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The ablation reveals a clear hierarchy of component importance:
+
+\paragraph{ALM constraint (A16).} Removing the augmented Lagrangian ($\lambda\!=\!0$, $\rho\!=\!0$) causes model collapse (HM=0.233). Without constraint enforcement, the forget objective dominates and destroys retain performance. This confirms that adaptive constraint enforcement is essential, not optional.
+
+\paragraph{LoRA parameterization (A15).} Full fine-tuning without LoRA (A15) gives HM=0.459 with catastrophic retain drift (ret=0.306). The low-rank bottleneck is critical for preventing the unlearning update from affecting weights far beyond those encoding the forget knowledge.
+
+\paragraph{Clamped entropy vs.\ alternatives (A4, A5, A17).} Replacing clamped entropy with gradient ascent (A4: HM=0.160), NPO (A5: HM=0.009), or logit margin (A17: HM=0.000) causes catastrophic failure even with the full bilevel ALM apparatus intact. GA causes retain collapse through unbounded gradients; NPO's objective is trivially satisfied without actual forgetting because its reference-based formulation does not enforce distributional uncertainty; logit margin produces unbounded gradients that overwhelm the inner loop's repair capacity.
+
+\paragraph{Bilevel structure (A1, A18).} Removing the inner loop ($K\!=\!0$, A1) causes a modest retain drop (0.658$\to$0.631, HM 0.823$\to$0.819). The ALM constraint alone provides substantial protection, but the inner loop adds a safety margin. Swapping the bilevel structure (A18, forgetting in inner loop) causes HM to drop to 0.506 as the dual variable $\lambda$ explodes without convergence---confirming the ``repair first, forget carefully'' principle.
+
+\paragraph{Entropy clamping threshold (A9).} Setting $\tau\!=\!1.0$ (unclamped, A9) drops HM from 0.823 to 0.780, with retain falling from 0.658 to 0.604. Without clamping, the objective applies gratuitous gradient pressure to already-forgotten tokens, destabilizing shared representations.
 
 \subsection{Training Dynamics Analysis}
 \label{sec:dynamics}

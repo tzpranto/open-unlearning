@@ -1,10 +1,10 @@
 # @package eval.knowundo
 defaults:
   - knowundo_metrics:
+    - forget_Acc
     - forget_ROUGE
+    - retain_Acc
     - retain_ROUGE
-    - forget_Prob
-    - retain_Prob
 
 handler: KnowUnDoEvaluator
 output_dir: ${paths.output_dir}

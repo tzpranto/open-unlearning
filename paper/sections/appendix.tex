@@ -307,7 +307,7 @@ The five metrics are:
 
 \subsection{Compute}
 
-All experiments are run on a single NVIDIA L40s GPU (48GB).
+All experiments are run on a single NVIDIA H100 GPU (80GB).
 Training times are wall-clock (excluding evaluation).
 \method with clamped entropy on MUSE Books (4 epochs, 135 outer steps) takes approximately 104 minutes.
 Gradient checkpointing is enabled for all methods to fit within GPU memory.
@@ -517,25 +517,23 @@ Target (pre-unlearn) & 0.471 & 0.997 & 0.691 & 0.916 & 0.009 \\
 \midrule
 GradAscent & 0.000 & 0.000 & 0.000 & 0.008 & 0.000 \\
 GradDiff & 0.000 & 0.000 & 0.025 & 0.008 & 0.070 \\
-NPO & 0.411 & 0.570 & 0.661 & 0.377 & 0.542 \\
-SimNPO & 0.239 & 0.005 & 0.604 & 0.009 & 0.755 \\
-BLURNPO & 0.311 & 0.809 & 0.600 & 0.702 & 0.359 \\
-RMU & 0.308 & 0.120 & 0.604 & 0.011 & 0.708 \\
-PDU & 0.000 & 0.002 & 0.000 & 0.008 & 0.000 \\
+NPO & 0.402 & 0.000 & 0.613 & 0.000 & 0.697 \\
+SimNPO & 0.271 & 0.270 & 0.580 & 0.000 & 0.672 \\
+BLURNPO & 0.175 & 0.000 & 0.527 & 0.008 & 0.730 \\
+RMU & 0.202 & 0.115 & 0.601 & 0.010 & 0.741 \\
+PDU & 0.130 & 0.123 & 0.371 & 0.038 & 0.602 \\
 \midrule
-\method (ours) & \textbf{0.080} & \textbf{0.000} & \textbf{0.598} & \textbf{0.008} & \textbf{0.798} \\
+\method (ours) & \textbf{0.110} & \textbf{0.000} & \textbf{0.658} & \textbf{0.008} & \textbf{0.823} \\
 \bottomrule
 \end{tabular}
 \caption{MUSE Books results (Llama-2-7b). \textbf{Bold}: best among unlearning methods.}
 \label{tab:app_muse_books}
 \end{table}
 
-\subsection{MUSE News}
-\label{app:muse_news}
+\subsection{MUSE News Dynamics}
+\label{app:muse_news_dynamics}
 
-MUSE News targets removal of BBC news articles from Llama-2-7B. Unlike MUSE Books (a single cohesive narrative), News consists of 889 short factual articles---a distributed forget set where knowledge is spread across many independent documents. This presents a different challenge: the ALM must balance forgetting across many heterogeneous samples rather than a single long-form text.
-
-Experiments on MUSE News are in progress. Preliminary dynamics (\figref{fig:dynamics_news}) show that \method's three-phase pattern still holds, though the retain loss exhibits higher variance due to the heterogeneity of the news corpus. We are exploring whether lower $\tau$ (more aggressive per-token clamping) or additional inner steps ($K\!=\!5$) improve convergence on distributed forget sets.
+\figref{fig:dynamics_news} shows that \method's three-phase pattern holds on MUSE News, though the retain loss exhibits higher variance due to the heterogeneity of the 889-article corpus. Both \method and PDU show larger retain oscillations than on Books, but PDU's are uncontrolled while \method's are bounded by the ratcheted $\lambda$.
 
 \begin{figure}[h]
     \centering
@@ -548,7 +546,7 @@ Experiments on MUSE News are in progress. Preliminary dynamics (\figref{fig:dyna
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_PDU_dynamics.png}
         \caption{PDU (HM\,=\,0.581)}
     \end{subfigure}
-    \caption{MUSE News dynamics (preliminary). The distributed forget set produces higher retain variance for both methods, but PDU's oscillations are larger and uncontrolled.}
+    \caption{MUSE News dynamics. The distributed forget set produces higher retain variance for both methods. PDU achieves higher HM on this setting.}
     \label{fig:dynamics_news}
 \end{figure}
 
@@ -642,13 +640,162 @@ Each loss produces a qualitatively distinct training trajectory:
 \label{tab:ablation_loss}
 \end{table}
 
-\paragraph{Component ablations (in progress).}
-A comprehensive ablation isolating each of \method's components is underway on TOFU 1B forget01 (3 seeds each). The planned ablations are:
+\paragraph{Complete component ablation.}
+\tabref{tab:ablation_full} reports the full component ablation on MUSE Books (seed=42). Each row modifies exactly one element from the full method (A0). We also report LLM judge scores to verify that automated metrics align with generation quality.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Complete ablation on MUSE Books (seed=42). Each row changes one component from the full \method (A0). LLM judge: FL = forget leakage, RA = retain accuracy, ret\_RQ = retain response quality (all 0--2 scale).}
+\label{tab:ablation_full}
+\begin{tabular}{clccccc|cccc}
+\toprule
+ID & Configuration & fk$\downarrow$ & vm$\downarrow$ & ret$\uparrow$ & HM$\uparrow$ & $\Delta$ret & FL$_\text{J}$$\downarrow$ & RA$_\text{J}$$\uparrow$ & rRQ$_\text{J}$$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+\midrule
+A0 & Full \method & .110 & .000 & .658 & \textbf{.823} & --- & 0.14 & 1.40 & 1.69 & .814 \\
+\midrule
+A1 & $K\!=\!0$ (no inner loop) & .072 & .000 & .631 & .819 & $-$.027 & 0.10 & 1.37 & 1.68 & .811 \\
+A9 & $\tau\!=\!1.0$ (unclamped) & .161 & .003 & .604 & .780 & $-$.054 & 0.20 & 1.34 & 1.64 & .785 \\
+A15 & No LoRA (full FT) & .002 & .000 & .306 & .459 & $-$.352 & 0.00 & 0.70 & 1.25 & .550 \\
+A16 & ALM off ($\lambda\!=\!0$, $\rho\!=\!0$) & .000 & .002 & .092 & .233 & $-$.566 & 0.01 & 0.24 & 0.28 & .117 \\
+A18 & Swapped bilevel & .372 & .643 & .651 & .506 & $-$.007 & --- & --- & --- & --- \\
+\midrule
+A4 & GA forget loss & .006 & .003 & .060 & .160 & $-$.598 & 0.01 & 0.10 & 0.18 & .093 \\
+A5 & NPO forget loss & .457 & .997 & .662 & .009 & $+$.004 & 1.44 & 1.47 & 1.72 & .495 \\
+A17 & Logit margin loss & .000 & .000 & .000 & .000 & $-$.658 & 0.00 & 0.00 & 0.00 & .000 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Key findings from the ablation:
 \begin{itemize}[nosep,leftmargin=*]
-\item \textbf{No clamp} (unclamped entropy): remove the ReLU clamp, use raw $\tau \cdot H_{\max} - H(t)$.
-\item \textbf{No bilevel} (single-loop): remove the inner loop ($K\!=\!0$), combine forget and retain in one step.
-\item \textbf{Symmetric dual}: replace asymmetric update with standard $\lambda \leftarrow \max(0, \lambda + \rho \cdot r)$.
-\item \textbf{Fixed $\lambda$}: remove dual update entirely, use $\lambda = \lambda_{\text{init}}$ throughout.
-\item \textbf{No LoRA} (full fine-tune): train all parameters instead of low-rank adapters.
+\item \textbf{A16 (ALM off):} The model collapses at step~31 ($L_\text{ret}$=10.56 triggered safety break). Pure clamped entropy without constraint enforcement destroys the model. The ALM is the core stabilizing mechanism.
+\item \textbf{A15 (No LoRA):} Full fine-tuning achieves aggressive forgetting (fk=0.002) but catastrophic retain collapse (ret=0.306, $-$0.352). The low-rank bottleneck provides essential implicit regularization that the bilevel structure alone cannot replace.
+\item \textbf{A9 ($\tau$=1.0):} Without clamping, gradients continue pushing already-forgotten tokens, causing 8.2\% retain degradation (0.658$\to$0.604). The per-token stopping criterion is essential for protecting shared representations.
+\item \textbf{A1 ($K$=0):} Modest retain drop ($-$0.027). The ALM constraint alone provides strong protection, but the inner loop adds a safety margin by pre-repairing retain before each outer step. Training is 2.5$\times$ faster per step without the inner loop. \figref{fig:inner_loop_dynamics} visualizes the mechanism: during the phase-transition spike (steps 28--40), the inner loop fires 18 emergency SGD steps that pull $L_\text{ret}$ down faster, resulting in 1.3 less cumulative constraint violation (17.5 vs.\ 18.8). This 7\% violation reduction translates directly to the 0.027 retain gap at convergence.
+\item \textbf{A18 (Swapped):} Putting forgetting in the inner loop causes $\lambda$ to explode to 367 because the constraint threshold $\varepsilon_\text{fgt}$=22.4 exceeds clamped entropy's theoretical maximum ($\tau \cdot H_\text{max} \approx 8.3$)---physically impossible to satisfy.
+\item \textbf{A4/A17 (Unbounded losses):} GA produces $L_\text{fgt}$=$-$7.2 (unbounded negative) and collapses retain; logit margin destroys all representations even with full ALM protection. Both confirm that bounded forget losses are essential for bilevel stability.
+\item \textbf{A5 (NPO):} The NPO loss collapses to 0.0 by step~40 without actually unlearning---verbatim memorization remains at 0.997. The model satisfies NPO trivially because long-sequence probabilities under the reference model are already low, regardless of memorization.
 \end{itemize}
-These results will quantify how much each component contributes to the overall performance.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{../docs/design/figures/bilevel_inner_loop_dynamics.png}
+    \caption{Phase transition spike: inner loop (K=3, blue) vs.\ no inner loop (K=0, red). Top: $L_\text{ret}$ during the spike episode. The inner loop fires emergency SGD steps (blue shading) that pull retain down faster. Bottom: cumulative constraint violation. K=3 accumulates 7\% less total violation (17.5 vs.\ 18.8), explaining the 0.027 retain gap at convergence.}
+    \label{fig:inner_loop_dynamics}
+\end{figure}
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=\columnwidth]{../docs/design/figures/bilevel_constraint_violation.png}
+    \caption{Constraint residual $r = L_\text{ret} - \varepsilon$ over training. Both K=3 and K=0 have the same number of violating steps (13), but K=0's violations extend later in training (wider red shading), producing slightly more cumulative damage. After step~50, both methods achieve permanent constraint satisfaction.}
+    \label{fig:constraint_violation}
+\end{figure}
+
+\subsection{KnowUndo Extended Results}
+\label{app:knowundo}
+
+\tabref{tab:knowundo_full} reports the full KnowUndo results with all metrics.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{KnowUndo full results (Llama-2-7B-chat, seed=42). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). LLM judge scores on 0--1 scale (Claude Sonnet~4.6).}
+\label{tab:knowundo_full}
+\begin{tabular}{l|ccccc|c|ccc}
+\toprule
+& \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{3}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & RQ$\uparrow$ \\
+\midrule
+FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & .602 & .830 & .795 \\
+GradDiff & .000 & .000 & .623 & .200 & .387 & .349 & .000 & .344 & .239 \\
+NPO & .670 & .193 & .757 & .300 & .447 & .441 & .243 & .783 & .740 \\
+SimNPO & .245 & .012 & .786 & .318 & .435 & .464 & .000 & .755 & .556 \\
+RMU & .444 & .081 & .768 & .207 & .390 & .353 & .000 & .453 & .479 \\
+PDU & .051 & .007 & .846 & .302 & .441 & .456 & .007 & .748 & .500 \\
+\method & \textbf{.133} & \textbf{.009} & \textbf{.848} & \textbf{.334} & .442 & \textbf{.479} & .021 & \textbf{.875} & \textbf{.612} \\
+\bottomrule
+\end{tabular}
+\\[6pt]
+\begin{tabular}{l|ccccc|c|ccc}
+\toprule
+& \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{3}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & RQ$\uparrow$ \\
+\midrule
+FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & .882 & .847 & .975 \\
+GradDiff & .070 & .056 & .753 & .427 & .434 & .526 & .028 & .495 & .379 \\
+NPO & .634 & .313 & .786 & .431 & .449 & .500 & .282 & .555 & .897 \\
+SimNPO & .486 & .289 & .889 & .540 & .441 & .543 & .177 & .657 & .548 \\
+RMU & .578 & .072 & .669 & .084 & .361 & .190 & .009 & .014 & .081 \\
+PDU & .059 & .032 & .809 & .468 & .441 & .552 & .018 & .574 & .379 \\
+\method & \textbf{.209} & \textbf{.075} & \textbf{.920} & \textbf{.621} & .435 & \textbf{.601} & .068 & \textbf{.732} & \textbf{.477} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Analysis.} KnowUndo evaluates a qualitatively different setting: the target model is LoRA-fine-tuned (not fully fine-tuned), so memorization is concentrated in the adapter weights. \method adapts naturally by initializing from the target LoRA checkpoint and unlearning on top. The privacy domain has 2.7$\times$ higher initial memorization than copyright (forget\_ROUGE 0.665 vs.\ 0.244), making it a harder target. \method's advantage is most pronounced on privacy ($+$0.049 HM over PDU), suggesting that the bilevel structure handles high-memorization settings particularly well---the stronger the memorization, the more benefit from bounded forgetting and adaptive constraint enforcement.
+
+\subsection{MUSE News Extended Results}
+\label{app:muse_news}
+
+MUSE News targets removal of 889 BBC news articles from Llama-2-7B. Unlike MUSE Books (a single cohesive narrative), News consists of short factual articles---a distributed forget set where knowledge is spread across many independent documents. \tabref{tab:muse_news_full} reports 5-fold results with LLM judge scores.
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lccccc}
+\toprule
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+\midrule
+Gold & .324 & .204 & .552 & .660 & --- \\
+\midrule
+GradDiff & .329$_{\pm.03}$ & .043$_{\pm.02}$ & .269$_{\pm.02}$ & .479$_{\pm.02}$ & .529$_{\pm.03}$ \\
+NPO & .517$_{\pm.02}$ & .274$_{\pm.02}$ & .435$_{\pm.01}$ & .522$_{\pm.01}$ & .531$_{\pm.01}$ \\
+RMU & .495$_{\pm.01}$ & .267$_{\pm.01}$ & .434$_{\pm.01}$ & .531$_{\pm.00}$ & .565$_{\pm.00}$ \\
+PDU & .525$_{\pm.02}$ & .092$_{\pm.07}$ & .508$_{\pm.04}$ & \textbf{.577}$_{\pm.01}$ & \textbf{.638}$_{\pm.02}$ \\
+\bottomrule
+\end{tabular}
+\caption{MUSE News (5-fold, seeds=42/123/456/789/1024). BLURNPO OOM on 4$\times$40GB.}
+\label{tab:muse_news_full}
+\end{table}
+
+\paragraph{Why PDU wins on News.} The distributed forget set creates heterogeneous memorization levels across articles. PDU's logit-margin loss operates on individual token predictions and naturally adapts to per-sample difficulty. \method's clamped entropy, while bounded and self-stabilizing, uses a single global $\lambda$ to balance 889 articles with varying memorization---articles that forget quickly contribute zero gradient (good), but the remaining stubborn articles face a $\lambda$ calibrated to the ensemble rather than their individual difficulty. This suggests that per-document or per-cluster constraint enforcement could improve \method on distributed settings.
+
+\subsection{Sustainability and Scalability}
+\label{app:sust_scal}
+
+We evaluate PDU on MUSE News for two additional MUSE properties: \emph{scalability} (performance on progressively larger forget sets in a single run) and \emph{sustainability} (performance under sequential unlearning requests).
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{c}{\textbf{Scalability} (single-shot, increasing forget size)} \\
+\midrule
+Scale & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
+\midrule
+1$\times$ (889) & .542 & .065 & .522 & .581 \\
+2$\times$ (1778) & .495 & .050 & .467 & .579 \\
+3$\times$ (2667) & .538 & .024 & .488 & .573 \\
+4$\times$ (3554) & .321 & .021 & .002 & .005 \\
+\bottomrule
+\end{tabular}
+\\[6pt]
+\begin{tabular}{lcccc}
+\toprule
+\multicolumn{5}{c}{\textbf{Sustainability} (sequential unlearning steps)} \\
+\midrule
+Step & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
+\midrule
+1 & .542 & .065 & .522 & .580 \\
+2 & .554 & .007 & .470 & .558 \\
+3 & .550 & .001 & .005 & .016 \\
+4 & .591 & .003 & .051 & .130 \\
+\bottomrule
+\end{tabular}
+\caption{PDU scalability and sustainability on MUSE News. Retain collapses at 4$\times$ scale and after 2 sequential steps.}
+\label{tab:sust_scal}
+\end{table}
+
+PDU maintains reasonable performance at 1--3$\times$ forget scale (HM$\approx$0.58) but collapses at 4$\times$ (HM=0.005). For sustainability, the model survives 2 sequential unlearning steps (HM 0.580$\to$0.558) but is destroyed by step~3 (HM=0.016). The LLM judge confirms: step~2 produces coherent outputs (HM$_\text{J}$=0.680) but steps~3--4 generate incoherent text (RA=0, RQ=0). These results expose a fundamental limitation of current methods: repeated application of even the best method rapidly degrades model utility, suggesting that sequential unlearning requires fundamentally different approaches (e.g., checkpoint management or modular architectures).

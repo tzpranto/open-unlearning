@@ -1,4 +1,3 @@
-import copy
 import json
 import logging
 import torch
@@ -105,15 +104,18 @@ class MemFlexLocalize:
         self.device = device
 
     def _compute_gradient_info(self, dataset, num_copies=5):
-        """Compute average gradient magnitude per parameter using random labels."""
+        """Compute average gradient per parameter using random labels.
+
+        Accumulates raw (signed) gradients to preserve direction information
+        for cosine similarity comparison. Matches original KnowUnDo implementation.
+        """
         self.model.eval()
         grad_accum = {}
 
         for name, param in self.model.named_parameters():
             if param.requires_grad:
-                grad_accum[name] = torch.zeros_like(param.data)
+                grad_accum[name] = torch.zeros(param.shape, dtype=torch.float32)
 
-        collator = torch.utils.data.dataloader.default_collate
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
 
         for copy_idx in range(num_copies):
@@ -122,7 +124,6 @@ class MemFlexLocalize:
                 attention_mask = batch["attention_mask"].to(self.device)
                 labels = batch["labels"].to(self.device)
 
-                # Replace non-ignored label tokens with random tokens
                 valid_mask = labels != -100
                 random_labels = torch.randint(
                     0, self.tokenizer.vocab_size, labels.shape, device=self.device
@@ -139,7 +140,7 @@ class MemFlexLocalize:
 
                 for name, param in self.model.named_parameters():
                     if param.requires_grad and param.grad is not None:
-                        grad_accum[name] += param.grad.detach().abs()
+                        grad_accum[name] += param.grad.detach().cpu().float()
 
         num_total = num_copies * len(dataset)
         for name in grad_accum:
@@ -148,7 +149,12 @@ class MemFlexLocalize:
         return grad_accum
 
     def localize(self, mu=0.92, sigma=6e-4, output_path=None):
-        """Run localization and return list of parameter names to unfreeze."""
+        """Run localization and return list of parameter names to unfreeze.
+
+        Selection criteria (matching original):
+        - Cosine similarity of raw (signed) gradient vectors < mu
+        - Mean absolute gradient magnitude on forget set > sigma
+        """
         logger.info("MemFlex Localization: Computing forget gradients...")
         forget_grads = self._compute_gradient_info(self.forget_dataset)
 
@@ -157,11 +163,13 @@ class MemFlexLocalize:
 
         located_params = []
         for name in forget_grads:
-            fg = forget_grads[name].flatten().float()
-            rg = retain_grads[name].flatten().float()
+            if name not in retain_grads:
+                continue
+            fg = forget_grads[name].flatten()
+            rg = retain_grads[name].flatten()
 
             cos_sim = F.cosine_similarity(fg.unsqueeze(0), rg.unsqueeze(0)).item()
-            grad_mag = fg.mean().item()
+            grad_mag = fg.abs().mean().item()
 
             if cos_sim < mu and grad_mag > sigma:
                 located_params.append(name)

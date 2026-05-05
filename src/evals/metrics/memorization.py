@@ -41,6 +41,30 @@ def probability(model, **kwargs):
     return {"agg_value": np.mean(prob_values), "value_by_index": scores_by_index}
 
 
+@unlearning_metric(name="perplexity")
+def perplexity(model, **kwargs):
+    """Compute perplexity (exp of avg CE loss) per sample, report mean across dataset."""
+    data = kwargs["data"]
+    collator = kwargs["collators"]
+    batch_size = kwargs["batch_size"]
+
+    dataloader = DataLoader(data, batch_size=batch_size, collate_fn=collator)
+
+    fun_args = {}
+    scores_by_index = run_batchwise_evals(
+        model, dataloader, evaluate_probability, fun_args, "Calculating PPL"
+    )
+    ppl_values = np.array(
+        [
+            np.exp(evals["avg_loss"])
+            for evals in scores_by_index.values()
+            if evals["avg_loss"] is not None
+        ]
+    )
+    ppl_values = aggregate_to_1D(ppl_values)
+    return {"agg_value": np.mean(ppl_values), "value_by_index": scores_by_index}
+
+
 @unlearning_metric(name="probability_w_options")
 def probability_w_options(model, **kwargs):
     """Normalize probabilities of correct answers against false answers for

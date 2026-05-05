@@ -363,11 +363,18 @@ class LoRABiALAdaptive(LoRABiAL):
                 logger.warning(f"  L_ret={L_ret:.1f} > 10.0 — collapsed at step {global_step}.")
                 break
 
+        # Save LoRA adapters separately (for sequential chaining)
+        output_dir = self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        if self.save_lora_only:
+            lora_dir = os.path.join(output_dir, "lora_adapters")
+            os.makedirs(lora_dir, exist_ok=True)
+            self.model.save_pretrained(lora_dir)
+            logger.info(f"LoRA adapters saved to {lora_dir}")
+
         # Final merge and save
         logger.info("Merging LoRA adapters into base model...")
         self.model = self.model.merge_and_unload()
-        output_dir = self.args.output_dir
-        os.makedirs(output_dir, exist_ok=True)
         self.model.save_pretrained(output_dir)
         if self.tokenizer is not None:
             self.tokenizer.save_pretrained(output_dir)

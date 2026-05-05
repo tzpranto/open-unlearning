@@ -1,0 +1,14 @@
+# @package eval.knowundo.metrics.forget_PPL
+defaults:
+  - ../../data/datasets@datasets: KnowUnDo_forget_eval
+  - ../../collator@collators: DataCollatorForSupervisedDatasetwithIndex
+
+handler: perplexity
+batch_size: ${eval.knowundo.batch_size}
+
+datasets:
+  KnowUnDo_forget_eval:
+    args:
+      hf_args:
+        name: ${eval.knowundo.domain}
+      predict_with_generate: False

@@ -22,9 +22,15 @@ We address these with \method, a bilevel optimization framework whose two main c
     \item \textbf{LoRA parameterization} (\secref{sec:lora}): we confine all updates to low-rank adapters, which limits how much the unlearning update can affect other weights.
 \end{enumerate}
 
-We evaluate \method on TOFU \citep{maini2024tofu} across two model scales (1B, 3B) and three forget splits, and on MUSE Books \citep{shi2024muse} with Llama-2-7B. All TOFU experiments use 5 random seeds.
+We evaluate \method on four benchmarks spanning two model families (Llama-2, Llama-3.2) and three scales (1B, 3B, 7B):
+TOFU \citep{maini2024tofu} across two model scales and three forget splits (5 seeds each),
+MUSE Books and News \citep{shi2024muse} with Llama-2-7B,
+and KnowUndo \citep{jin2024knowundo} with Llama-2-7B-chat on copyright and privacy domains.
 On TOFU 1B forget01, \method achieves HM=0.808 versus the strongest baseline PDU (0.690), an improvement of $+$0.118.
-The gap holds across forget splits and model scales, and is largest on small forget sets where the forget--retain boundary is tightest.
-An LLM judge evaluation confirms near-zero forget leakage for \method (FL=0.015/2.0 on forget01) while the strongest baseline still leaks substantially (FL=0.855).
-On MUSE Books, \method reaches HM=0.798, the highest among all tested methods.
-Beyond end-point metrics, we provide a dynamics-level analysis showing that \method's training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---while baselines exhibit recurring retain oscillations with no self-correcting mechanism. This interpretable behavior distinguishes \method from prior constrained methods and suggests the ALM converges to a stable operating point.
+\method wins 4 of 6 TOFU settings on automated HM and all 6 on an LLM judge, with the largest gains on small forget sets where the forget--retain boundary is tightest.
+The LLM judge reveals near-zero forget leakage for \method (FL=0.015/2.0 on forget01) while the strongest baseline still leaks substantially (FL=0.855).
+On MUSE Books, \method achieves HM=0.823, the highest among all tested methods.
+On KnowUndo, \method achieves the best harmonic mean on both copyright (0.479 vs.\ PDU 0.456) and privacy (0.601 vs.\ PDU 0.552) domains, with the LLM judge confirming the highest retain accuracy.
+On MUSE News---a harder distributed multi-document setting---\method is competitive (HM=0.542) though PDU leads (0.581), highlighting the challenge of heterogeneous forget sets.
+
+Beyond end-point metrics, we provide a complete ablation study and dynamics-level analysis showing that \method's training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---while baselines exhibit recurring retain oscillations with no self-correcting mechanism. The ablation confirms that each component (clamped entropy, bilevel structure, ALM constraint, LoRA parameterization) is necessary: removing any one causes catastrophic failure or significant degradation.

@@ -70,6 +70,9 @@ class LoRABiAL(UnlearnTrainer):
         implicit_warmup_steps: int = 0,
         # Gradient projection
         use_pcgrad: bool = False,
+        # LoRA init (for sequential unlearning)
+        lora_init_path: Optional[str] = None,
+        save_lora_only: bool = False,
         # Batching
         gradient_accumulation_steps: int = 8,
         inner_accumulation_steps: int = 0,
@@ -132,6 +135,9 @@ class LoRABiAL(UnlearnTrainer):
         self.implicit_warmup_steps = implicit_warmup_steps
         # PCGrad
         self.use_pcgrad = use_pcgrad
+        # LoRA init
+        self.lora_init_path = lora_init_path
+        self.save_lora_only = save_lora_only
         # Batching
         self.gradient_accumulation_steps = gradient_accumulation_steps
         self.inner_accumulation_steps = inner_accumulation_steps if inner_accumulation_steps > 0 else gradient_accumulation_steps
@@ -142,14 +148,18 @@ class LoRABiAL(UnlearnTrainer):
     # LoRA wrapping
     # ------------------------------------------------------------------
     def _wrap_with_lora(self):
-        from peft import get_peft_model, LoraConfig, TaskType
-        config = LoraConfig(
-            r=self.lora_r, lora_alpha=self.lora_alpha_val,
-            target_modules=self.lora_target_modules,
-            lora_dropout=self.lora_dropout, bias="none",
-            task_type=TaskType.CAUSAL_LM,
-        )
-        self.model = get_peft_model(self.model, config)
+        from peft import get_peft_model, LoraConfig, TaskType, PeftModel
+        if self.lora_init_path and os.path.isdir(self.lora_init_path):
+            logger.info(f"Loading LoRA adapters from: {self.lora_init_path}")
+            self.model = PeftModel.from_pretrained(self.model, self.lora_init_path, is_trainable=True)
+        else:
+            config = LoraConfig(
+                r=self.lora_r, lora_alpha=self.lora_alpha_val,
+                target_modules=self.lora_target_modules,
+                lora_dropout=self.lora_dropout, bias="none",
+                task_type=TaskType.CAUSAL_LM,
+            )
+            self.model = get_peft_model(self.model, config)
         self.model.print_trainable_parameters()
         logger.info(f"LoRA applied: r={self.lora_r}, alpha={self.lora_alpha_val}, "
                      f"modules={self.lora_target_modules}")
@@ -560,11 +570,18 @@ class LoRABiAL(UnlearnTrainer):
                 logger.warning(f"  L_ret={L_ret:.1f} > 10.0 — model collapsed at step {global_step}.")
                 break
 
+        # Save LoRA adapters separately (for sequential chaining)
+        output_dir = self.args.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+        if self.save_lora_only:
+            lora_dir = os.path.join(output_dir, "lora_adapters")
+            os.makedirs(lora_dir, exist_ok=True)
+            self.model.save_pretrained(lora_dir)
+            logger.info(f"LoRA adapters saved to {lora_dir}")
+
         # Merge LoRA and save final model
         logger.info("Merging LoRA adapters into base model...")
         self.model = self.model.merge_and_unload()
-        output_dir = self.args.output_dir
-        os.makedirs(output_dir, exist_ok=True)
         self.model.save_pretrained(output_dir)
         if self.tokenizer is not None:
             self.tokenizer.save_pretrained(output_dir)

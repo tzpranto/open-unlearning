@@ -293,10 +293,14 @@ def call_judge(client_tuple, prompt, max_retries=3):
             else:
                 raise ValueError(f"Unknown backend: {backend}")
 
-            # Parse JSON — handle markdown code blocks
+            # Parse JSON — handle markdown code blocks and trailing text
             text = re.sub(r"```json\s*", "", text)
             text = re.sub(r"```\s*$", "", text)
             text = text.strip()
+            # Extract first JSON object if there's trailing text
+            match = re.search(r'\{[^}]+\}', text)
+            if match:
+                text = match.group(0)
             result = json.loads(text)
 
             # Validate scores
@@ -593,15 +597,111 @@ def find_eval_files(csv_path):
     return entries
 
 
+def evaluate_knowundo_eval(client_tuple, eval_json_path, max_workers=4):
+    """Evaluate a single KnowUnDo_EVAL.json file. Returns dict of aggregate scores.
+
+    KnowUnDo format: forget_ROUGE and retain_ROUGE contain input/ground_truth/generation.
+    """
+    with open(eval_json_path) as f:
+        data = json.load(f)
+
+    results = {
+        "forget_leakage": [],
+        "forget_rq": [],
+        "retain_accuracy": [],
+        "retain_rq": [],
+    }
+
+    all_prompts = []
+
+    # Forget questions
+    forget_items = data.get("forget_ROUGE", {}).get("value_by_index", {})
+    for idx, item in forget_items.items():
+        if "generation" not in item:
+            continue
+        question = extract_question(item["input"])
+        prompt = FORGET_PROMPT.format(
+            question=question,
+            ground_truth=item["ground_truth"][:1500],
+            generation=item.get("generation", "[NO GENERATION]")[:1500],
+        )
+        all_prompts.append(("forget", idx, prompt))
+
+    # Retain questions
+    retain_items = data.get("retain_ROUGE", {}).get("value_by_index", {})
+    for idx, item in retain_items.items():
+        if "generation" not in item:
+            continue
+        question = extract_question(item["input"])
+        prompt = RETAIN_PROMPT.format(
+            question=question,
+            ground_truth=item["ground_truth"][:1500],
+            generation=item.get("generation", "[NO GENERATION]")[:1500],
+        )
+        all_prompts.append(("retain", idx, prompt))
+
+    total = len(all_prompts)
+    done = 0
+
+    def process_one(item):
+        kind, idx, prompt = item
+        return kind, idx, call_judge(client_tuple, prompt)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(process_one, p): p for p in all_prompts}
+        for future in as_completed(futures):
+            kind, idx, result = future.result()
+            done += 1
+            if kind == "forget":
+                if result is None:
+                    results["forget_leakage"].append(0)
+                    results["forget_rq"].append(0)
+                else:
+                    results["forget_leakage"].append(result.get("forget_leakage", 0))
+                    results["forget_rq"].append(result.get("response_quality", 0))
+            else:
+                if result is None:
+                    results["retain_accuracy"].append(0)
+                    results["retain_rq"].append(0)
+                else:
+                    results["retain_accuracy"].append(result.get("retain_accuracy", 0))
+                    results["retain_rq"].append(result.get("response_quality", 0))
+
+            if done % 10 == 0:
+                print(f"  [{done}/{total}] processed", file=sys.stderr)
+
+    def mean_or_zero(lst):
+        return sum(lst) / len(lst) if lst else 0.0
+
+    fl = mean_or_zero(results["forget_leakage"])
+    f_rq = mean_or_zero(results["forget_rq"])
+    ra = mean_or_zero(results["retain_accuracy"])
+    r_rq = mean_or_zero(results["retain_rq"])
+    rq = mean_or_zero(results["forget_rq"] + results["retain_rq"])
+
+    return {
+        "forget_leakage": round(fl, 3),
+        "retain_accuracy": round(ra, 3),
+        "response_quality": round(rq, 3),
+        "forget_rq": round(f_rq, 3),
+        "retain_rq": round(r_rq, 3),
+        "n_forget": len(results["forget_leakage"]),
+        "n_retain": len(results["retain_accuracy"]),
+    }
+
+
 def detect_benchmark(eval_dir):
     """Auto-detect benchmark type from eval directory contents."""
     eval_dir = Path(eval_dir)
+    if (eval_dir / "KnowUnDo_EVAL.json").exists():
+        return "knowundo"
     if (eval_dir / "MUSE_EVAL.json").exists():
         return "muse"
     if (eval_dir / "TOFU_EVAL.json").exists():
         return "tofu"
-    # Check if eval_dir is a file path
     name = eval_dir.name
+    if "KNOWUNDO" in name.upper():
+        return "knowundo"
     if "MUSE" in name.upper():
         return "muse"
     if "TOFU" in name.upper():
@@ -614,7 +714,7 @@ def main():
     parser.add_argument("--eval-dir", help="Single eval directory to evaluate")
     parser.add_argument("--csv", help="Baselines CSV to batch-evaluate")
     parser.add_argument("--all", action="store_true", help="Evaluate all entries in CSV")
-    parser.add_argument("--benchmark", choices=["tofu", "muse"],
+    parser.add_argument("--benchmark", choices=["tofu", "muse", "knowundo"],
                         help="Benchmark type (auto-detected if not specified)")
     parser.add_argument("--model-filter", help="Filter by model name")
     parser.add_argument("--split-filter", help="Filter by split name")
@@ -637,13 +737,20 @@ def main():
     # Default output CSV per benchmark
     if args.output:
         output_path = args.output
+    elif benchmark == "knowundo":
+        output_path = "results/knowundo_llm_judge.csv"
     elif benchmark == "muse":
         output_path = "results/muse_llm_judge.csv"
     else:
         output_path = "results/tofu_llm_judge.csv"
 
     # Eval filename
-    eval_filename = "MUSE_EVAL.json" if benchmark == "muse" else "TOFU_EVAL.json"
+    if benchmark == "knowundo":
+        eval_filename = "KnowUnDo_EVAL.json"
+    elif benchmark == "muse":
+        eval_filename = "MUSE_EVAL.json"
+    else:
+        eval_filename = "TOFU_EVAL.json"
 
     print(f"Benchmark: {benchmark.upper()}")
 
@@ -720,7 +827,13 @@ def main():
             print(f"\n[{i+1}/{len(entries)}] {entry['model']}/{entry['split']}/{tag}")
 
             try:
-                if benchmark == "muse":
+                if benchmark == "knowundo":
+                    scores = evaluate_knowundo_eval(
+                        client_tuple,
+                        entry["eval_path"],
+                        max_workers=args.max_workers,
+                    )
+                elif benchmark == "muse":
                     scores = evaluate_muse_eval(
                         client_tuple,
                         entry["eval_path"],

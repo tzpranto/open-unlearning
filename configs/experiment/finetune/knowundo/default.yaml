@@ -9,7 +9,10 @@ defaults:
   - override /data/datasets@data.train: KnowUnDo_full
   - override /eval: knowundo
 
-mode: finetune
+mode: train
+
+paths:
+  output_dir: ${paths.root_dir}/saves/unlearn/${task_name}
 
 model:
   model_args:

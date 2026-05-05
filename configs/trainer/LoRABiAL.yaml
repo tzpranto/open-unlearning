@@ -50,6 +50,10 @@ method_args:
   # Gradient projection (PCGrad)
   use_pcgrad: false  # project forget gradient orthogonal to retain gradient
 
+  # LoRA init (for sequential unlearning)
+  lora_init_path: null
+  save_lora_only: false
+
   # Batching
   gradient_accumulation_steps: 8
   inner_accumulation_steps: 0  # 0 = same as gradient_accumulation_steps
