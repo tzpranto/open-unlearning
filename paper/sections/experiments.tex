@@ -6,15 +6,15 @@
 
 We evaluate on four benchmarks that test different facets of LLM unlearning:
 
-\paragraph{TOFU} \citep{maini2024tofu} contains 200 fictitious author profiles with 20 QA pairs each (4000 total). We test on three forget splits: forget01 (1\%), forget05 (5\%), and forget10 (10\%). All TOFU results are averaged over 5 random seeds with standard deviations reported. Metrics: Model Utility (MU, harmonic mean of 9 sub-metrics on retain/real-authors/world-facts), Forget Quality (FQ, KS-test $p$-value on truth ratio distributions), forget answer probability (fgt\_Prob), and forget ROUGE-L (fgt\_ROUGE). We use HM = hmean(MU, 1$-$fgt\_Prob, 1$-$fgt\_ROUGE) as the overall score.
+\paragraph{TOFU} \citep{maini2024tofu} contains 200 fictitious author profiles with 20 QA pairs each (4000 total). We test on three forget splits: forget01 (1\%), forget05 (5\%), and forget10 (10\%). All TOFU results are averaged over 5 random seeds. Key metrics: Model Utility (MU, harmonic mean of 9 retain/real-authors/world-facts sub-metrics), forget answer probability (Prob), and forget ROUGE-L (ROUGE). Overall score: $\text{HM} = \text{hmean}(\text{MU},\; 1{-}\text{Prob},\; 1{-}\text{ROUGE})$.
 
-\paragraph{MUSE Books} \citep{shi2024muse} targets removal of Harry Potter book content from Llama-2-7B. The forget set is a single cohesive narrative (554 samples). Metrics: forget\_knowmem (fk), verbatim memorization (vm), retain\_knowmem (ret), extraction strength (ex). We use HM = hmean(1$-$fk, 1$-$vm, ret).
+\paragraph{MUSE Books} \citep{shi2025muse} targets removal of Harry Potter book content from Llama-2-7B. The forget set is a single cohesive narrative (554 samples). Key metrics: forget knowledge (fk), verbatim memorization (vm), retain knowledge (rk). Overall score: $\text{HM} = \text{hmean}(1{-}\text{fk},\; 1{-}\text{vm},\; \text{rk})$.
 
-\paragraph{MUSE News} \citep{shi2024muse} targets removal of BBC news articles from Llama-2-7B. Unlike Books, the forget set consists of 889 short factual articles---a distributed multi-document setting where knowledge is spread across many independent documents. This presents a fundamentally different challenge: the model must forget heterogeneous, independently memorized content rather than a single cohesive text. Same metrics as MUSE Books.
+\paragraph{MUSE News} \citep{shi2025muse} targets removal of BBC news articles from Llama-2-7B. Unlike Books, the forget set consists of 889 short factual articles---a distributed multi-document setting where knowledge is spread across many independent documents. This presents a fundamentally different challenge: the model must forget heterogeneous, independently memorized content rather than a single cohesive text. Same metrics as MUSE Books.
 
-\paragraph{KnowUndo} \citep{jin2024knowundo} evaluates unlearning on Llama-2-7B-chat across two domains: \emph{copyright} (removing copyrighted book content) and \emph{privacy} (removing personal information). Unlike the other benchmarks, KnowUndo starts from a LoRA-fine-tuned target model rather than a fully fine-tuned one. Metrics: forget accuracy (Acc) and perplexity (PPL) on the forget set, retain accuracy and PPL on the retain set. We use HM = hmean(forget metrics, retain metrics) following the benchmark protocol.
+\paragraph{KnowUndo} \citep{tian2024knowundo} evaluates unlearning on Llama-2-7B-chat across two domains: \emph{copyright} (removing copyrighted book content) and \emph{privacy} (removing personal information). Unlike the other benchmarks, KnowUndo starts from a LoRA-fine-tuned target model rather than a fully fine-tuned one. Key metrics: forget ROUGE-L (fgt\_R), retain ROUGE-L (ret\_R), and MMLU. Overall score: $\text{HM} = \text{hmean}(1{-}\text{fgt\_R},\; \text{ret\_R},\; \text{MMLU})$.
 
-\paragraph{LLM Judge.} We evaluate all methods using an LLM judge (Claude Opus~4.7) that scores model outputs on three axes: Forget Leakage (FL, lower is better), Retain Accuracy (RA), and Response Quality (RQ), each on a 0--2 scale. We compute HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, ret\_RQ/2). This gives a complementary evaluation that captures generation quality beyond token-level statistics.
+\paragraph{LLM Judge.} We evaluate all methods using an LLM judge (Claude Opus~4.7) that scores model outputs on three axes (0--2 scale): Forget Leakage (FL, $\downarrow$), Retain Accuracy (RA, $\uparrow$), and retain Response Quality (rRQ, $\uparrow$). Overall: $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$. This captures generation quality beyond token-level statistics.
 
 \subsection{Baselines}
 \label{sec:baselines}
@@ -22,10 +22,10 @@ We evaluate on four benchmarks that test different facets of LLM unlearning:
 We compare against seven baselines, all using their published default hyperparameters:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
     \item \textbf{GradAscent} \citep{jang2023knowledge}: maximize CE on forget data.
-    \item \textbf{GradDiff} \citep{yao2023large}: weighted sum of forget GA and retain CE.
+    \item \textbf{GradDiff} \citep{yao2024large}: weighted sum of forget GA and retain CE.
     \item \textbf{NPO} \citep{zhang2024negative}: DPO-style preference optimization against memorized outputs.
-    \item \textbf{SimNPO} \citep{fan2024simplicity}: reference-free variant of NPO.
-    \item \textbf{BLURNPO} \citep{reisizadeh2025blur}: bilevel formulation with gradient projection.
+    \item \textbf{SimNPO} \citep{fan2025simplicity}: reference-free variant of NPO.
+    \item \textbf{BLURNPO} \citep{reisizadeh2026blur}: bilevel formulation with gradient projection.
     \item \textbf{RMU} \citep{li2024wmdp}: representation misdirection toward random targets.
     \item \textbf{PDU} \citep{entesari2025constrained}: primal-dual constrained optimization with logit-margin loss.
 \end{itemize}
@@ -116,36 +116,36 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \begin{table}[t]
 \centering
 \small
-\caption{MUSE Books (Llama-2-7B, seed=42). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
+\caption{MUSE Books (Llama-2-7B, 5-fold except \method/BLURNPO which are seed=42). Best in \textbf{bold} (excl.\ Gold).}
 \label{tab:muse_books}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
 \midrule
-Gold (retrain) & .303 & .145 & .687 & .011 & .739 \\
+Gold (retrain) & .303 & .145 & .687 & .739 \\
 \midrule
-GradAscent & .000 & .000 & .000 & .008 & .000 \\
-GradDiff & .000 & .000 & .025 & .008 & .070 \\
-NPO & .402 & .000 & .613 & .000 & .697 \\
-SimNPO & .271 & .270 & .580 & .000 & .672 \\
-BLURNPO & .175 & .000 & .527 & .008 & .730 \\
-RMU & .202 & .115 & .601 & .010 & .741 \\
-PDU & .130 & .123 & .371 & .038 & .602 \\
+GradAscent & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ \\
+GradDiff & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .004$_{\pm.00}$ & .011$_{\pm.01}$ \\
+NPO & .303$_{\pm.02}$ & .342$_{\pm.03}$ & .574$_{\pm.02}$ & .638$_{\pm.01}$ \\
+SimNPO & .238$_{\pm.02}$ & .002$_{\pm.00}$ & .600$_{\pm.01}$ & .753$_{\pm.01}$ \\
+RMU & .210$_{\pm.00}$ & .113$_{\pm.01}$ & .598$_{\pm.01}$ & .738$_{\pm.00}$ \\
+PDU & .139$_{\pm.01}$ & .129$_{\pm.01}$ & .372$_{\pm.01}$ & .600$_{\pm.01}$ \\
+BLURNPO (seed=42) & .175 & .000 & .527 & .730 \\
 \midrule
-\method (ours) & \textbf{.110} & \textbf{.000} & \textbf{.658} & \textbf{.008} & \textbf{.823} \\
+\method (seed=42) & \textbf{.110} & \textbf{.000} & \textbf{.658} & \textbf{.823} \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\tabref{tab:muse_books} shows results on MUSE Books (seed=42; multi-seed in progress). \method achieves HM=0.823, beating the strongest baseline RMU (0.741) by $+$0.082. \method completely eliminates verbatim memorization (vm=0.000) while preserving strong retain performance (0.658). The LLM judge confirms this ranking: \method achieves HM$_\text{J}$=0.814 vs.\ RMU 0.798 vs.\ SimNPO 0.717. Note that \method's HM exceeds the gold retrained model (0.739) because the gold model retains residual knowledge (fk=0.303) from pretraining overlap; \method occupies a more aggressively-forgotten Pareto point that the HM metric happens to score higher.
+\tabref{tab:muse_books} shows results on MUSE Books (baselines 5-fold; \method seed=42, multi-seed in progress). \method achieves HM=0.823, beating the strongest 5-fold baseline SimNPO (0.753) by $+$0.070 and RMU (0.738) by $+$0.085. \method completely eliminates verbatim memorization (vm=0.000) while preserving strong retain performance (0.658). The LLM judge confirms this ranking: \method achieves HM$_\text{J}$=0.814 vs.\ RMU 0.791 vs.\ SimNPO 0.753. Note that \method's HM exceeds the gold retrained model (0.739) because the gold model retains residual knowledge (fk=0.303) from pretraining overlap; \method occupies a more aggressively-forgotten Pareto point that the HM metric happens to score higher.
 
 \paragraph{KnowUndo.}
 
 \begin{table}[t]
 \centering
 \small
-\caption{KnowUndo (Llama-2-7B-chat, seed=42). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). Best in \textbf{bold}.}
+\caption{KnowUndo (Llama-2-7B-chat, 5-fold). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). Best in \textbf{bold}.}
 \label{tab:knowundo}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccccc@{}}
@@ -154,39 +154,40 @@ PDU & .130 & .123 & .371 & .038 & .602 \\
 \cmidrule(lr){2-4} \cmidrule(lr){5-7}
 Method & fgt\_R$\downarrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & fgt\_R$\downarrow$ & ret\_R$\uparrow$ & HM$\uparrow$ \\
 \midrule
-GradDiff & .000 & .200 & .349 & .056 & .427 & .526 \\
-NPO & .193 & .300 & .441 & .313 & .431 & .500 \\
-SimNPO & .012 & .318 & .464 & .289 & .540 & .543 \\
-RMU & .081 & .207 & .353 & .072 & .084 & .190 \\
-PDU & .007 & .302 & .456 & .032 & .468 & .552 \\
+GradDiff & .000$_{\pm.00}$ & .199$_{\pm.01}$ & .348$_{\pm.01}$ & .039$_{\pm.02}$ & .406$_{\pm.02}$ & .516$_{\pm.01}$ \\
+NPO & .189$_{\pm.01}$ & .289$_{\pm.00}$ & .433$_{\pm.00}$ & .322$_{\pm.02}$ & .426$_{\pm.01}$ & .496$_{\pm.00}$ \\
+SimNPO & .048$_{\pm.04}$ & .317$_{\pm.00}$ & .461$_{\pm.01}$ & .302$_{\pm.03}$ & .557$_{\pm.01}$ & .546$_{\pm.01}$ \\
+RMU & .076$_{\pm.00}$ & .201$_{\pm.01}$ & .347$_{\pm.01}$ & .072$_{\pm.00}$ & .079$_{\pm.01}$ & .182$_{\pm.01}$ \\
+PDU & .011$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.01}$ & .022$_{\pm.01}$ & .452$_{\pm.02}$ & .545$_{\pm.01}$ \\
 \midrule
-\method & \textbf{.009} & \textbf{.334} & \textbf{.479} & \textbf{.075} & \textbf{.621} & \textbf{.601} \\
+\method & \textbf{.014}$_{\pm.01}$ & \textbf{.340}$_{\pm.00}$ & \textbf{.482}$_{\pm.00}$ & \textbf{.075}$_{\pm.03}$ & \textbf{.623}$_{\pm.03}$ & \textbf{.602}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\tabref{tab:knowundo} shows KnowUndo results (seed=42; multi-seed evaluation in progress). \method achieves the best HM on both domains: copyright (0.479 vs.\ SimNPO 0.464, PDU 0.456) and privacy (0.601 vs.\ PDU 0.552, SimNPO 0.543). The privacy domain has substantially higher memorization (target forget\_ROUGE=0.665 vs.\ 0.244 for copyright), making it a harder unlearning target. \method's advantage is most pronounced here: retain\_ROUGE=0.621 (89\% of the fine-tuned model's 0.698) while reducing forget\_ROUGE by 89\% (0.665$\to$0.075). The LLM judge confirms \method's superiority with the highest retain accuracy on both domains (0.875 copyright, 0.732 privacy) and low leakage (FL$\leq$0.068).
+\tabref{tab:knowundo} shows KnowUndo results (all 5-fold). \method achieves the best HM on both domains: copyright (0.482 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.602 vs.\ SimNPO 0.546, PDU 0.545). The privacy domain has substantially higher memorization (target forget\_ROUGE=0.665 vs.\ 0.244 for copyright), making it a harder unlearning target. \method's advantage is most pronounced here: retain\_ROUGE=0.623 (89\% of the fine-tuned model's 0.698) while reducing forget\_ROUGE by 89\% (0.665$\to$0.075). The LLM judge confirms \method's superiority with the highest retain accuracy on both domains (0.875 copyright, 0.732 privacy) and low leakage (FL$\leq$0.068).
 
 \paragraph{MUSE News.}
 
 \begin{table}[t]
 \centering
 \small
-\caption{MUSE News (Llama-2-7B, 5-fold). Best HM in \textbf{bold}.}
+\caption{MUSE News (Llama-2-7B, 5-fold except \method which is seed=42). Best HM in \textbf{bold}.}
 \label{tab:muse_news}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & ex$\downarrow$ & HM$\uparrow$ \\
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
 \midrule
-Gold (retrain) & .324 & .204 & .552 & .025 & .660 \\
+Gold (retrain) & .324 & .204 & .552 & .660 \\
 \midrule
-GradDiff & .329 & .043 & .269 & .008 & .479 \\
-NPO & .517 & .274 & .435 & .073 & .522 \\
-RMU & .495 & .267 & .434 & .050 & .531 \\
-PDU & .525 & .092 & .508 & .024 & \textbf{.577} \\
+GradDiff & .329$_{\pm.03}$ & .043$_{\pm.02}$ & .269$_{\pm.02}$ & .479$_{\pm.02}$ \\
+NPO & .517$_{\pm.02}$ & .274$_{\pm.02}$ & .435$_{\pm.01}$ & .522$_{\pm.01}$ \\
+SimNPO & .628$_{\pm.01}$ & .542$_{\pm.01}$ & .513$_{\pm.01}$ & .440$_{\pm.00}$ \\
+RMU & .495$_{\pm.01}$ & .267$_{\pm.01}$ & .434$_{\pm.01}$ & .531$_{\pm.00}$ \\
+PDU & .525$_{\pm.02}$ & .092$_{\pm.07}$ & .508$_{\pm.04}$ & \textbf{.577}$_{\pm.01}$ \\
 \midrule
-\method (seed=42) & .550 & .173 & .475 & .031 & .542 \\
+\method (seed=42) & .550 & .173 & .475 & .542 \\
 \bottomrule
 \end{tabular}}
 \end{table}

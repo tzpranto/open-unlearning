@@ -14,10 +14,10 @@ We seek parameters $\thetav$ such that (i) the model's output distribution on $\
 
 Rather than modifying the full weight matrices, we attach LoRA adapters \citep{hu2022lora} to all projection matrices ($q$/$k$/$v$/$o$\_proj, gate/up/down\_proj):
 \begin{equation}
-    W' = W_{\text{frozen}} + \frac{\alpha}{r} B A, \quad B \in \R^{d_{\text{out}} \times r},\; A \in \R^{r \times d_{\text{in}}}
+    W' = W_0 + \tfrac{\alpha}{r}\, B A,\quad B \!\in\! \R^{d \times r},\; A \!\in\! \R^{r \times d}
     \label{eq:lora}
 \end{equation}
-where $r \ll \min(d_{\text{out}}, d_{\text{in}})$ is the rank and $\alpha/r$ is a scaling factor.
+where $r \ll d$ is the rank and $\alpha/r$ is a scaling factor.
 With $r\!=\!16$ on a 7B model, only ${\sim}0.08\%$ of parameters are trainable.
 This has two practical benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update and prevents catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model, which simplifies debugging and rollback.
 
@@ -38,7 +38,7 @@ The inner loop uses a fast learning rate ($\eta_{\text{in}} = 2\text{e-}4$) to r
 \paragraph{Outer loop (constrained forgetting).}
 The outer objective combines the forget loss with an inequality constraint on retain performance enforced via an augmented Lagrangian:
 \begin{equation}
-    \Loss_{\text{outer}} = \Loss_{\text{forget}} + \lambda (L_{\text{ret}} - \varepsilon) + \frac{\rho}{2} [\max(0, L_{\text{ret}} - \varepsilon)]^2
+    \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda\, r + \tfrac{\rho}{2}[\max(0,r)]^2,\; r = L_{\text{ret}} {-} \varepsilon
     \label{eq:outer}
 \end{equation}
 where $L_{\text{ret}} = \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}})$ is evaluated on a \emph{fresh} retain batch (separate from the inner loop), $\lambda$ is the Lagrange multiplier, $\rho$ is the quadratic penalty coefficient, and $\varepsilon$ is the retain budget.
@@ -52,7 +52,7 @@ The speed asymmetry ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7\text{--}10\
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
 
-Entropy maximization as a forget objective is well-known \citep{yuan2024closer}, but unclamped formulations have a fundamental problem: they apply nonzero gradients to every token at every step, even those whose output distribution is already near-uniform. This produces unnecessarily large outer perturbations that destabilize bilevel optimization.
+Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations have a fundamental problem: they apply nonzero gradients to every token at every step, even those whose output distribution is already near-uniform. This produces unnecessarily large outer perturbations that destabilize bilevel optimization.
 We propose a qualitatively different objective---\emph{clamped entropy}---that defines when a token is ``sufficiently forgotten'' and stops optimizing it:
 \begin{equation}
     \Loss_{\text{forget}} = \frac{1}{T} \sum_{t=1}^{T} \max\!\big(0,\; \tau \cdot H_{\max} - H(p_t)\big)
@@ -66,12 +66,12 @@ The normalization by $H_{\max} = \log V$ makes $\tau$ interpretable across model
 \paragraph{Hard deadzone.}
 The $\max(0, \cdot)$ clamp is the critical distinction from prior entropy-based objectives. Once $H(p_t) \geq \tau \cdot H_{\max}$, the gradient contribution of token $t$ is \emph{exactly zero}---not approximately small, not asymptotically vanishing, but identically zero. Tokens ``drop out'' of the loss as they are forgotten, creating three properties critical for stable bilevel unlearning:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. The outer perturbation magnitude is bounded by construction (Proposition~1, \secref{app:bounded_grad}), so the inner loop's $K$ steps reliably repair retain damage regardless of training stage.
+    \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. The outer perturbation magnitude is bounded by construction (Proposition~1), so the inner loop's $K$ steps reliably repair retain damage regardless of training stage.
     \item \textbf{Self-stabilizing}: the number of ``active'' tokens (those with $H(p_t) < \tau \cdot H_{\max}$) decreases monotonically during successful training. The effective gradient norm shrinks automatically, naturally decelerating the outer loop without learning rate scheduling.
     \item \textbf{Reference-free}: requires only a single forward pass through the current model, unlike DPO-style losses (NPO, SimNPO) that need a frozen reference model in memory.
 \end{itemize}
 
-\noindent In contrast, unclamped entropy maximization \citep{yuan2024closer} applies gradient pressure to \emph{all} tokens at \emph{all} steps---including those already at 99\% of $H_{\max}$---wasting optimization budget and creating gratuitous perturbations to shared representations. Gradient ascent \citep{jang2023knowledge} is even worse: its loss is unbounded ($-\log p \to \infty$ as $p \to 0$), so a single highly-memorized token can dominate the entire gradient (see Proposition~1c).
+\noindent In contrast, unclamped entropy maximization \citep{yuan2025closer} applies gradient pressure to \emph{all} tokens at \emph{all} steps---including those already at 99\% of $H_{\max}$---wasting optimization budget and creating gratuitous perturbations to shared representations. Gradient ascent \citep{jang2023knowledge} is even worse: its loss is unbounded ($-\log p \to \infty$ as $p \to 0$), so a single highly-memorized token can dominate the entire gradient (see Proposition~1c).
 
 \subsection{Augmented Lagrangian with Asymmetric Dual Update}
 \label{sec:alm}
@@ -85,8 +85,8 @@ This means the model is never penalized for achieving retain loss \emph{below} $
 On top of this, we introduce an \emph{asymmetric} dual update:
 \begin{equation}
     \lambda \leftarrow \begin{cases}
-        \lambda + \rho \cdot r & \text{if } r > 0 \;\;\text{(violation: fast ratchet)} \\
-        \lambda + 0.1 \cdot \rho \cdot r & \text{if } r \leq 0 \;\;\text{(satisfaction: slow decay)}
+        \lambda + \rho \cdot r & \text{if } r > 0 \;\;\text{(violation)} \\
+        \lambda + 0.1\rho \cdot r & \text{if } r \leq 0 \;\;\text{(satisfaction)}
     \end{cases}
     \label{eq:dual_update}
 \end{equation}

@@ -75,9 +75,18 @@ Sequential unlearning: each step applies BLADE on a new 889-sample forget set, i
 | Step | forget_knowmem↓ | verbmem↓ | retain↑ | extract↓ | HM↑ |
 | --- | --- | --- | --- | --- | --- |
 | step 1 (=vanilla) | 0.550 | 0.173 | 0.475 | 0.031 | 0.542 |
-| step 2 | (pending) | | | | |
-| step 3 | (pending) | | | | |
-| step 4 | (pending) | | | | |
+| step 2 | 0.539 | 0.212 | 0.485 | 0.046 | 0.545 |
+| step 3 | 0.556 | 0.230 | 0.459 | 0.056 | 0.523 |
+| step 4 | 0.564 | 0.222 | 0.469 | 0.051 | 0.525 |
+
+## BLADE — Sustainability LLM Judge (Claude Opus 4.7)
+
+| Step | FL↓ | FL_know↓ | FL_verb↓ | RA↑ | ret_RQ↑ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- |
+| step 1 | 0.94 | 1.24 | 0.64 | 0.89 | 1.67 | 0.563 |
+| step 2 | 0.84 | 1.24 | 0.45 | 0.89 | 1.66 | 0.579 |
+| step 3 | 0.86 | 1.25 | 0.48 | 0.87 | 1.58 | 0.563 |
+| step 4 | 0.84 | 1.28 | 0.40 | 0.92 | 1.62 | 0.584 |
 
 ## Notes
 
