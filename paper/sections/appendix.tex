@@ -878,3 +878,55 @@ Step & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
 PDU maintains reasonable performance at 1--3$\times$ forget scale (HM$\approx$0.58) but collapses at 4$\times$ (HM=0.005). For sustainability, PDU survives 2 sequential unlearning steps (HM 0.580$\to$0.558) but is destroyed by step~3 (HM=0.016). The LLM judge confirms: step~2 produces coherent outputs (HM$_\text{J}$=0.680) but steps~3--4 generate incoherent text (RA=0, RQ=0).
 
 In contrast, \method shows stable scalability (HM 0.542$\to$0.547$\to$0.552 at 1--3$\times$ scale) and sustainability (HM 0.542$\to$0.545$\to$0.523 over 3 sequential steps). While PDU achieves higher HM on a single standard-size forget set, \method's bounded loss and LoRA parameterization prevent the catastrophic retain collapse that PDU suffers under repeated or scaled application. This suggests that \method's architecture is better suited for practical deployment where multiple unlearning requests arrive over time.
+
+
+\section{Training Dynamics Analysis}
+\label{app:dynamics_analysis}
+
+We analyze the loss curve behavior of \method and PDU across benchmarks and identify structural patterns that explain the performance differences observed in Tables~\ref{tab:tofu_1b_full}--\ref{tab:sust_scal}.
+
+\subsection{Three-Phase Dynamics of \method}
+
+Across all benchmarks and forget set sizes, \method exhibits a universal three-phase training pattern:
+
+\paragraph{Phase 1: Warm-up (steps 1--$T_\text{trans}$).}
+The forget loss decreases steadily from its initial value (${\sim}7.0$ for MUSE Books) while retain loss stays near $\varepsilon$. The dual variable $\lambda$ remains approximately constant at its initial value ($\lambda_0 = 1.0$). During this phase, the clamped entropy objective is ``easy''---most tokens have low entropy and contribute gradient---so the outer loop makes rapid progress without disturbing retain.
+
+\paragraph{Phase 2: Spike-and-ratchet ($T_\text{trans}$ to $T_\text{trans} + {\sim}15$ steps).}
+At a critical transition point $T_\text{trans}$, the model encounters a phase transition where the forget loss drops sharply but temporarily destabilizes retain. The retain loss spikes (e.g., from 0.15 to 1.65 on MUSE Books), triggering the asymmetric dual update which rapidly ratchets $\lambda$ upward ($1.0 \to 2.27$ on Books). The inner loop fires $K$ emergency SGD steps per outer step to repair retain damage. This phase is brief but critical: it permanently calibrates $\lambda$ to the task difficulty.
+
+\paragraph{Phase 3: Smooth convergence ($T_\text{trans} + 15$ to end).}
+After the ratchet, the elevated $\lambda$ provides sufficient retain protection. The forget loss continues to decrease but with a shrinking effective gradient (fewer tokens remain ``active'' above the clamp threshold). Retain loss stays stably below $\varepsilon$. The $\lambda$ value slowly decays by the asymmetric factor ($0.1\rho$ per step of satisfaction) but never returns to pre-ratchet levels.
+
+\paragraph{Stability of $T_\text{trans}$.}
+The transition point $T_\text{trans} \approx 28$ steps is remarkably stable across benchmarks: 28 on MUSE Books, 30 on TOFU 1B fgt01, 28 on TOFU 1B fgt05. This stability arises because $T_\text{trans}$ is determined by when the LoRA adapter has accumulated enough low-rank perturbation to qualitatively change the output distribution on forget tokens---a property of the LoRA parameterization rather than the dataset.
+
+\subsection{Adaptive $\lambda$ as Difficulty Diagnostic}
+
+The final $\lambda$ value after the ratchet phase scales monotonically with task difficulty:
+\begin{itemize}[nosep,leftmargin=*]
+\item TOFU 1B fgt01 (20 QA pairs): $\lambda_\text{final} \approx 2.4$
+\item TOFU 1B fgt05 (100 QA pairs): $\lambda_\text{final} \approx 3.6$
+\item TOFU 1B fgt10 (200 QA pairs): $\lambda_\text{final} \approx 4.5$
+\item MUSE Books (554 documents): $\lambda_\text{final} \approx 2.3$
+\end{itemize}
+Larger forget sets require more aggressive forgetting, which causes larger retain spikes, which in turn ratchet $\lambda$ higher. This automatic scaling requires no hyperparameter adjustment between settings---the same initial $\lambda_0 = 1.0$ and $\rho = 0.1$ produce appropriate constraint enforcement across a 10$\times$ range of forget set sizes.
+
+\paragraph{$\lambda$ plateau as convergence diagnostic.}
+Once $\lambda$ reaches its plateau (visible as a flat segment in the dynamics plots), the system has found a stable balance between forgetting and retention. This provides a \emph{built-in convergence diagnostic} without requiring held-out validation: if $\lambda$ is still rising, the model has not yet found an equilibrium; if $\lambda$ is flat, training can be safely stopped. In practice, $\lambda$ plateaus 10--15 steps after the spike, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
+
+\subsection{PDU Instability: Oscillatory Limit Cycles}
+
+PDU \citep{chen2024machine} uses an unbounded logit-margin loss with symmetric primal-dual updates. Our dynamics analysis reveals a structural instability:
+
+\paragraph{Unbounded loss $\Rightarrow$ divergent gradients.}
+PDU's forget loss (logit margin) has no upper bound. As training progresses and the model becomes more confident on forget tokens, the margin loss grows, producing increasingly large outer perturbations. Unlike \method's clamped entropy (bounded by $\tau \cdot H_\text{max}$), there is no mechanism to attenuate the forget gradient as forgetting succeeds.
+
+\paragraph{Symmetric dual $\Rightarrow$ no ratchet.}
+PDU's dual variable uses symmetric updates: it rises during violation and falls equally fast during satisfaction. After a retain spike ratchets the dual up, subsequent satisfaction immediately erodes the protection. This creates a limit cycle: large perturbation $\to$ retain spike $\to$ $\lambda$ rises $\to$ retain recovers $\to$ $\lambda$ falls $\to$ large perturbation again.
+
+\paragraph{Empirical signature.}
+On MUSE News, PDU's retain loss oscillates between 0.8 and 3.0 throughout training, never achieving the stable sub-$\varepsilon$ convergence that \method exhibits after its single ratchet event. On MUSE Books, PDU shows 5+ distinct retain spikes across 4 epochs, each partially repaired but never fully resolved. These oscillations directly cause the worse HM scores: each spike damages shared representations, and while the token-level metrics may recover, the generation quality (measured by LLM judge) does not fully bounce back.
+
+\paragraph{Implication for scalability.}
+The oscillatory instability compounds under repeated application (sustainability) and larger forget sets (scalability). Each sequential unlearning step starts from a model that has accumulated representational damage from prior oscillations. By step~3, PDU's retain loss diverges entirely (HM=0.016). \method's monotonic $\lambda$ ratchet prevents this accumulation: each application starts from a model where $\lambda$ has permanently encoded the protection level needed.

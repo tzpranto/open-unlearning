@@ -111,16 +111,27 @@ This way, $\varepsilon$ adapts automatically to the model and dataset.
 \label{alg:lora_bial}
 \begin{algorithmic}[1]
 \REQUIRE Model $M$ with frozen weights $\thetav_0$, $\Dforget$, $\Dretain$
-\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_{\text{init}}$, $\tau$, $T$
+\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_0$, $\tau$, $T$
 \STATE Attach LoRA adapters to $M$; $\thetav \leftarrow$ LoRA params
-\STATE $\text{inner\_opt} \leftarrow \text{SGD}(\thetav, \eta_{\text{in}})$; $\text{outer\_opt} \leftarrow \text{Adam}(\thetav, \eta_{\text{out}})$
-\STATE $\lambda \leftarrow \lambda_{\text{init}}$
-\STATE Run $K$ inner steps, set $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \text{mean}(\text{inner\_losses})$
+\STATE $\lambda \leftarrow \lambda_0$
+\STATE $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \frac{1}{K}\sum_{k=1}^K \Loss_{\text{CE}}^{(k)}(\Dretain)$
 \FOR{$t = 1$ \TO $T$}
-    \STATE \textbf{Inner loop:} $K$ SGD steps on $\Dretain$ (\eqnref{eq:inner})
-    \STATE \textbf{Outer step:} $\nabla_{\thetav} \Loss_{\text{outer}}$ via \eqnref{eq:outer} with $\Loss_{\text{forget}}$ from \eqnref{eq:clamped_entropy}
+    \STATE \textbf{Inner loop} (retain repair):
+    \FOR{$k = 1$ \TO $K$}
+        \STATE $\thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_{\thetav} \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}_{\text{ret}})$
+    \ENDFOR
+    \STATE \textbf{Forget loss} (clamped entropy):
+    \STATE $\Loss_{\text{fgt}} \leftarrow \frac{1}{T}\sum_t \max(0,\; \tau \log V - H(p_t))$
+    \STATE \textbf{Outer loss} (augmented Lagrangian):
+    \STATE $r \leftarrow \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}}) - \varepsilon$
+    \STATE $\Loss_{\text{outer}} \leftarrow \Loss_{\text{fgt}} + \lambda\, r + \frac{\rho}{2}[\max(0, r)]^2$
     \STATE $\thetav \leftarrow \thetav - \eta_{\text{out}} \cdot \text{Adam}(\nabla_{\thetav} \Loss_{\text{outer}})$
-    \STATE \textbf{Dual update:} $\lambda$ via \eqnref{eq:dual_update}
+    \STATE \textbf{Dual update} (asymmetric ratchet):
+    \IF{$r > 0$}
+        \STATE $\lambda \leftarrow \lambda + \rho \cdot r$
+    \ELSE
+        \STATE $\lambda \leftarrow \lambda + 0.1\rho \cdot r$
+    \ENDIF
 \ENDFOR
 \RETURN $M$ with trained LoRA adapters
 \end{algorithmic}

@@ -384,32 +384,77 @@ Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.
 
 \begin{figure*}[t]
     \centering
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.32\textwidth}
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_dynamics.png}
-        \caption{\method on MUSE Books (HM\,=\,0.823)}
+        \caption{\method -- MUSE Books}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_PDU_dynamics.png}
-        \caption{PDU on MUSE Books (HM\,=\,0.602)}
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_dynamics.png}
+        \caption{\method -- MUSE News}
     \end{subfigure}
-    \\[6pt]
-    \begin{subfigure}[t]{0.48\textwidth}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_dynamics.png}
-        \caption{\method on TOFU 1B forget01 (HM\,=\,0.811)}
+        \caption{\method -- TOFU 1B fgt01}
+    \end{subfigure}
+    \\[4pt]
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_dynamics.png}
+        \caption{\method -- TOFU 1B fgt05}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_PDU_dynamics.png}
-        \caption{PDU on TOFU 1B forget01 (HM\,=\,0.690)}
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_dynamics.png}
+        \caption{\method -- TOFU 1B fgt10}
     \end{subfigure}
-    \caption{Training dynamics: \method (left) vs.\ PDU (right). \method shows three phases: warm-up, spike-and-ratchet, smooth convergence. PDU shows recurring retain oscillations with no correction.}
-    \label{fig:dynamics}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_dynamics.png}
+        \caption{\method -- TOFU 3B fgt01}
+    \end{subfigure}
+    \caption{\method training dynamics across benchmarks. All settings show the same three-phase pattern: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. $\lambda$ adapts to task difficulty (higher for larger forget sets).}
+    \label{fig:dynamics_blade}
 \end{figure*}
 
-\method follows a consistent three-phase pattern across all settings:
+\begin{figure*}[t]
+    \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_PDU_dynamics.png}
+        \caption{PDU -- MUSE Books}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_PDU_dynamics.png}
+        \caption{PDU -- MUSE News}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_PDU_dynamics.png}
+        \caption{PDU -- TOFU 1B fgt01}
+    \end{subfigure}
+    \\[4pt]
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_PDU_dynamics.png}
+        \caption{PDU -- TOFU 1B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_PDU_dynamics.png}
+        \caption{PDU -- TOFU 1B fgt10}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_PDU_dynamics.png}
+        \caption{PDU -- TOFU 3B fgt01}
+    \end{subfigure}
+    \caption{PDU training dynamics. Unbounded logit-margin loss (starts at 700+) and symmetric dual updates produce recurring retain oscillations across all settings. No self-correcting mechanism exists.}
+    \label{fig:dynamics_pdu}
+\end{figure*}
+
+\method follows a consistent three-phase pattern across all settings (\figref{fig:dynamics_blade}):
 (1)~\textbf{Warm-up}: forget loss declines while retain stays near $\varepsilon$.
-(2)~\textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations; $\lambda$ jumps from ${\sim}1$ to ${\sim}2.2$--2.6, permanently increasing retain protection.
+(2)~\textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations; $\lambda$ jumps from ${\sim}1$ to ${\sim}2.2$--4.5, permanently increasing retain protection. Final $\lambda$ scales with difficulty: 2.4 (fgt01) $\to$ 3.6 (fgt05) $\to$ 4.5 (fgt10).
 (3)~\textbf{Smooth convergence}: forget continues to zero, no further retain violations.
 
-PDU's dynamics contrast sharply: unbounded forget loss (starts at 700+), recurring retain spikes throughout training, and no self-correcting mechanism.
+PDU's dynamics (\figref{fig:dynamics_pdu}) contrast sharply: unbounded forget loss, recurring retain spikes (5+ on MUSE Books, wild oscillations on News), and no corrective mechanism. The oscillations directly cause worse final metrics.
