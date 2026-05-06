@@ -385,6 +385,21 @@ Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.
 \begin{figure*}[t]
     \centering
     \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_dynamics.png}
+        \caption{\method -- TOFU 3B fgt01}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget05_dynamics.png}
+        \caption{\method -- TOFU 3B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget10_dynamics.png}
+        \caption{\method -- TOFU 3B fgt10}
+    \end{subfigure}
+    \\[4pt]
+    \begin{subfigure}[t]{0.32\textwidth}
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_dynamics.png}
         \caption{\method -- MUSE Books}
     \end{subfigure}
@@ -398,27 +413,27 @@ Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_dynamics.png}
         \caption{\method -- TOFU 1B fgt01}
     \end{subfigure}
-    \\[4pt]
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_dynamics.png}
-        \caption{\method -- TOFU 1B fgt05}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_dynamics.png}
-        \caption{\method -- TOFU 1B fgt10}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_dynamics.png}
-        \caption{\method -- TOFU 3B fgt01}
-    \end{subfigure}
     \caption{\method training dynamics across benchmarks. All settings show the same three-phase pattern: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. $\lambda$ adapts to task difficulty (higher for larger forget sets).}
     \label{fig:dynamics_blade}
 \end{figure*}
 
 \begin{figure*}[t]
     \centering
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_PDU_dynamics.png}
+        \caption{PDU -- TOFU 3B fgt01}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget05_PDU_dynamics.png}
+        \caption{PDU -- TOFU 3B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget10_PDU_dynamics.png}
+        \caption{PDU -- TOFU 3B fgt10}
+    \end{subfigure}
+    \\[4pt]
     \begin{subfigure}[t]{0.32\textwidth}
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_PDU_dynamics.png}
         \caption{PDU -- MUSE Books}
@@ -432,21 +447,6 @@ Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.
     \begin{subfigure}[t]{0.32\textwidth}
         \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_PDU_dynamics.png}
         \caption{PDU -- TOFU 1B fgt01}
-    \end{subfigure}
-    \\[4pt]
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_PDU_dynamics.png}
-        \caption{PDU -- TOFU 1B fgt05}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_PDU_dynamics.png}
-        \caption{PDU -- TOFU 1B fgt10}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_PDU_dynamics.png}
-        \caption{PDU -- TOFU 3B fgt01}
     \end{subfigure}
     \caption{PDU training dynamics. Unbounded logit-margin loss (starts at 700+) and symmetric dual updates produce recurring retain oscillations across all settings. No self-correcting mechanism exists.}
     \label{fig:dynamics_pdu}
