@@ -46,8 +46,11 @@ The outer loop uses a slow learning rate ($\eta_{\text{out}} = 3\text{e-}5$), en
 
 \paragraph{Repair-first principle.}
 This assignment---retain inside, forget outside---inverts prior bilevel unlearning approaches (e.g., SCRUB \citep{kurmanji2023towards} and BLUR \citep{reisizadeh2026blur} put forgetting in the inner loop and retain repair in the outer loop).
-Our design reflects a key insight: forgetting is the \emph{hard} direction that must be carefully metered, while retain repair is a \emph{fast} operation that converges in few steps.
-The speed asymmetry ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7\text{--}10\times$) guarantees that the model enters each outer step from a state with good retain performance, preventing the catastrophic retain collapse that occurs when aggressive forgetting outpaces repair.
+Our design reflects a key insight: \emph{forgetting is inherently destructive}---gradient ascent, entropy maximization, and preference-based losses all push the model away from a learned representation, and such destructive updates are known to cause catastrophic collapse when applied without constraint \citep{zhang2024negative}.
+Moreover, forget and retain knowledge share entangled representations in transformer networks \citep{cheng2026unlearning}, so any perturbation targeting forget tokens inevitably disturbs retain performance.
+Given this, retain repair belongs in the inner loop as a \emph{stabilizing anchor}: it runs first and fast ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7\text{--}10\times$), ensuring the model enters each outer step from a state with good retain performance.
+The outer loop then applies a single, carefully metered forgetting step---small enough that the next inner loop can fully repair any collateral damage.
+This is the opposite of the natural intuition (forget first, then repair), but it is the correct one: anchoring to retain before each destructive step prevents the accumulation of representational damage that makes repair increasingly difficult.
 
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
