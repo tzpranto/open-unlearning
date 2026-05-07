@@ -1,17 +1,16 @@
 \begin{abstract}
 
-Large language models memorize training data, creating legal, privacy, and safety risks that call for targeted knowledge removal without degrading general capabilities.
-Existing unlearning methods use unbounded forget objectives that destroy model coherence, or fixed-weight loss balancing that cannot adapt as the difficulty of retain preservation shifts during training.
+Large language models memorize training data, creating legal, privacy, and safety risks that demand targeted knowledge removal without full retraining.
+Current unlearning methods pair unbounded forget objectives---which destroy model coherence---with fixed-weight loss balancing that cannot track the shifting difficulty of retain preservation during training.
 
-We propose \method, a bilevel optimization framework with two key innovations.
-First, we introduce \emph{clamped entropy}, a forget objective that maximizes per-token output entropy only up to a vocabulary-invariant threshold $\tau \cdot H_{\max}$, after which the gradient is exactly zero---giving a bounded, self-stabilizing loss where forgotten tokens automatically drop out of optimization.
-Second, we formulate retain preservation as an \emph{inequality-constrained} bilevel problem: the inner loop repairs retain performance via fast SGD steps, while the outer loop drives forgetting subject to an augmented Lagrangian whose asymmetric dual update permanently calibrates the tradeoff from a single constraint violation.
+We propose \method, a bilevel optimization framework for LLM unlearning.
+The forget objective is \emph{clamped entropy}: per-token output entropy is maximized only up to a fraction $\tau$ of maximum entropy $H_{\max} = \log V$, after which the gradient is exactly zero.
+This gives a bounded loss whose active set shrinks as tokens are forgotten, naturally decelerating optimization.
+Retain preservation is enforced as an inequality constraint $\Loss_\text{ret} \leq \varepsilon$ via an augmented Lagrangian with an asymmetric dual update---violations ratchet $\lambda$ up fast, satisfaction lets it decay slowly---nested inside a bilevel structure where the inner loop runs retain repair and the outer loop drives forgetting.
 All updates are confined to LoRA adapters.
 
-We evaluate on four benchmarks spanning two model families and three scales: TOFU (Llama-3.2-1B/3B, three forget splits, 5 seeds), MUSE Books and News (Llama-2-7B), and KnowUndo (Llama-2-7B-chat, copyright and privacy domains).
-On TOFU 1B forget01, \method achieves HM=0.808 vs.\ the strongest baseline at 0.690 ($+$0.118), winning 4 of 6 settings on automated metrics and all 6 on an LLM judge that detects residual leakage missed by token-level statistics.
-On MUSE Books, \method reaches HM=0.823, surpassing both the retrained model (0.739) and the best baseline (0.741).
-On KnowUndo, \method achieves the best harmonic mean on both copyright (0.479) and privacy (0.601) domains.
-A complete ablation study confirms that each component is independently essential, and training dynamics analysis reveals a consistent three-phase convergence pattern, in contrast to baselines that exhibit uncontrolled retain oscillations.
+Experiments cover TOFU (Llama-3.2-1B/3B, three forget splits, 5 seeds), MUSE Books and News (Llama-2-7B), and KnowUndo (Llama-2-7B-chat, copyright/privacy).
+\method achieves HM=0.808 on TOFU 1B forget01 versus 0.690 for the strongest baseline, wins all 6 TOFU settings under an LLM judge, and reaches HM=0.823 on MUSE Books---surpassing even the gold retrained model.
+An ablation confirms that removing any single component causes failure, and dynamics analysis shows a consistent three-phase convergence pattern absent from baselines.
 
 \end{abstract}

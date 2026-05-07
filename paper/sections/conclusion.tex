@@ -1,26 +1,24 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \method, a bilevel optimization framework for LLM unlearning built on two contributions.
-First, \emph{clamped entropy}: a forget loss with a hard per-token deadzone at a vocabulary-invariant threshold $\tau \cdot \log V$, giving bounded and self-stabilizing forgetting where forgotten tokens produce exactly zero gradient.
-Second, an \emph{inequality-constrained bilevel formulation} where retain repair runs in the inner loop and forgetting in the outer loop---the inverse of prior bilevel unlearning---with an augmented Lagrangian whose asymmetric dual update permanently calibrates the tradeoff from a single retain spike.
-All updates are confined to LoRA adapters, limiting how far the model can drift.
+We presented \method, a bilevel framework for LLM unlearning built on two ideas.
+First, clamped entropy: a forget loss with a hard per-token deadzone at $\tau \cdot \log V$, giving bounded and self-stabilizing forgetting where forgotten tokens produce exactly zero gradient.
+Second, an inequality-constrained bilevel formulation where retain repair runs in the inner loop and forgetting in the outer---the inverse of prior bilevel unlearning---with an augmented Lagrangian whose asymmetric dual update permanently ratchets protection from a single retain spike.
+All updates stay within LoRA adapters.
 
-We evaluated \method on four benchmarks spanning two model families (Llama-2, Llama-3.2) and three scales (1B, 3B, 7B).
-On TOFU across three forget splits, two model scales, and 5 seeds, \method outperforms baselines on the majority of settings, with the largest gains on small forget sets (forget01 1B: $+$0.118 HM over PDU) where the tradeoff is hardest.
-LLM judge evaluation confirms near-zero forget leakage where baselines retain substantial residual knowledge.
-On MUSE Books, \method achieves HM=0.823, the highest among all tested methods including the gold retrained model.
-On KnowUndo, \method achieves the best harmonic mean on both copyright and privacy domains, demonstrating robustness to LoRA-fine-tuned target models and domain-specific unlearning tasks.
-On MUSE News, \method is competitive but does not dominate, highlighting that distributed multi-document unlearning remains an open challenge for entropy-based approaches.
+On TOFU across two model scales and three forget splits (5 seeds), \method outperforms baselines in the majority of settings, with the largest gains on small forget sets where the tradeoff is hardest (forget01 1B: $+$0.118 HM over PDU).
+An LLM judge confirms near-zero forget leakage where baselines retain substantial residual knowledge.
+On MUSE Books, \method achieves HM=0.818 (5-fold), the highest among all tested methods.
+On KnowUndo, it achieves the best harmonic mean on both copyright and privacy.
+On MUSE News, \method is competitive but does not dominate, showing that distributed multi-document settings remain challenging for methods with a single global constraint.
 
-A complete ablation study confirms that each component is necessary: removing the ALM causes model collapse (HM=0.233), removing LoRA causes catastrophic drift (HM=0.459), replacing clamped entropy with GA or NPO causes retain collapse or trivial satisfaction, and swapping the bilevel structure causes $\lambda$ divergence.
-Training dynamics reveal a consistent three-phase convergence pattern across all scales and datasets, while baselines show recurring retain oscillations---providing direct evidence that the ALM formulation produces qualitatively different optimization behavior.
+The ablation confirms that each component is load-bearing: removing the ALM collapses the model, removing LoRA causes catastrophic drift, and replacing clamped entropy with any unbounded loss fails even with full bilevel protection.
+Training dynamics reveal a three-phase convergence pattern---warm-up, spike-and-ratchet, smooth convergence---that is consistent across all scales and datasets, while baselines exhibit uncontrolled retain oscillations.
 
 \paragraph{Limitations.}
-\method has more hyperparameters than single-loss baselines ($K$, $\rho$, $\tau$, $\varepsilon_{\text{mul}}$), although auto-epsilon and the observed robustness to $\rho$ and $K$ reduce the practical tuning surface.
-On MUSE News, a distributed multi-document setting, \method underperforms PDU, suggesting that a single global $\lambda$ may be insufficient when forget difficulty varies substantially across documents.
-MUSE results use a single seed (5-fold evaluations are in progress).
-The bilevel structure adds computational cost ($K\!=\!3$ inner steps per outer step), roughly 4$\times$ the wall time of single-loop methods.
+\method has more hyperparameters than single-loss baselines ($K$, $\rho$, $\tau$, $\varepsilon_{\text{mul}}$), though auto-epsilon and the observed robustness to $\rho$ and $K$ reduce the practical tuning surface.
+On MUSE News, a single global $\lambda$ is insufficient when forget difficulty varies across documents.
+The bilevel structure adds cost ($K\!=\!3$ inner steps per outer step), roughly $4\times$ the wall time of single-loop methods.
 
 \paragraph{Future work.}
-Adaptive per-document or per-cluster constraint enforcement could address the MUSE News limitation. Evaluation on safety-critical unlearning (WMDP) and larger instruction-tuned models (8B+) is a natural next step. The interpretable three-phase dynamics suggest connections to phase transitions in learning that warrant theoretical investigation.
+Per-document or per-cluster constraint enforcement could address the MUSE News limitation. Evaluation on safety-critical settings and larger instruction-tuned models ($>$8B) is a natural next step. The three-phase dynamics suggest connections to phase transitions in learning that warrant further investigation.

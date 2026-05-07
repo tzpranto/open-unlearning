@@ -1,15 +1,15 @@
-\section{Results}
+\section{Experiments}
 \label{sec:results}
 
-\subsection{Benchmarks and Metrics}
+\subsection{Setup}
 
-We evaluate on four benchmarks:
-\textbf{TOFU} \citep{maini2024tofu} (fictitious QA, Llama-3.2-1B/3B, 3 forget splits),
+\paragraph{Benchmarks.}
+We evaluate on \textbf{TOFU} \citep{maini2024tofu} (fictitious QA, Llama-3.2-1B/3B, 3 forget splits),
 \textbf{MUSE Books/News} \citep{shi2025muse} (Harry Potter / BBC articles, Llama-2-7B),
-\textbf{KnowUndo} \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
+and \textbf{KnowUndo} \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
 All results are 5-fold (seeds 42/123/456/789/1024) unless noted.
 
-Composite scores:
+\paragraph{Composite scores.} We report harmonic means that penalize imbalance across axes:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=0pt]
     \item TOFU: $\text{HM} = \text{hmean}(\text{MU},\; 1{-}\text{Prob},\; 1{-}\text{ROUGE})$
     \item MUSE: $\text{HM} = \text{hmean}(1{-}\text{fk},\; 1{-}\text{vm},\; \text{rk})$
@@ -17,7 +17,7 @@ Composite scores:
     \item LLM Judge: $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$
 \end{itemize}
 
-LLM judge (Claude Opus~4.7) scores on 0--2 scale: Forget Leakage (FL$\downarrow$), Retain Accuracy (RA$\uparrow$), retain Response Quality (rRQ$\uparrow$).
+\paragraph{LLM judge.} We use Claude Opus~4.7 to score generations on a 0--2 scale: Forget Leakage (FL$\downarrow$), Retain Accuracy (RA$\uparrow$), and retain Response Quality (rRQ$\uparrow$). Token-level metrics like ROUGE miss subtle leakage that a judge can detect from semantic content.
 
 %% ============================================================
 \subsection{TOFU (Llama-3.2-1B-Instruct)}
@@ -347,7 +347,7 @@ Step & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
 \end{tabular}}
 \end{table}
 
-PDU collapses at 4$\times$ scale (HM=0.005, retain$\to$0.002) and after 2 sequential steps (HM drops from 0.58 to 0.02). \method maintains stable performance: scalability HM stays 0.542--0.552 through 3$\times$, and sustainability HM holds 0.542--0.525 through 4 sequential steps.
+PDU collapses at 4$\times$ scale (HM=0.005, retain destroyed) and after 2 sequential steps (HM 0.58$\to$0.02). \method degrades gracefully: scalability HM stays 0.542--0.552 through 3$\times$, sustainability HM holds 0.542--0.525 through 4 sequential steps. The bounded loss and LoRA bottleneck prevent the accumulated representational damage that destroys PDU under repeated application.
 
 %% ============================================================
 \subsection{Ablation Study}
@@ -379,7 +379,7 @@ Logit margin forget loss & .000 & .000 & .000 & .000 & $-$.658 & 0.00 & 0.00 & 0
 \end{tabular}}
 \end{table*}
 
-Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.233). (2)~LoRA provides critical implicit regularization (A15, ret drops 0.658$\to$0.306). (3)~Clamped entropy is the only viable forget loss; GA (A4), NPO (A5), and logit margin (A17) all fail catastrophically even with full bilevel ALM. (4)~Inner loop adds safety margin ($+$0.027 retain) but ALM alone works reasonably (A1). (5)~Bilevel assignment matters: swapping (retain outer, forget inner) causes $\lambda$ explosion (A18, vm=0.643).
+The ALM is the critical component: without it, the model collapses at step~31 (HM=0.233). LoRA provides essential implicit regularization---full fine-tuning achieves aggressive forgetting but catastrophic retain collapse (ret 0.658$\to$0.306). Among forget losses, only clamped entropy works within the bilevel framework; GA, NPO, and logit margin all fail catastrophically even with full ALM protection. The inner loop adds a safety margin ($+$0.027 retain) but is not strictly required---the ALM constraint alone provides strong protection. Swapping the bilevel structure (forgetting in the inner loop) causes $\lambda$ to diverge because the auto-epsilon threshold exceeds what clamped entropy can produce.
 
 %% ============================================================
 \subsection{Training Dynamics}
@@ -456,9 +456,9 @@ Key findings: (1)~ALM is essential---removing it collapses the model (A16, HM=0.
     \label{fig:dynamics_pdu}
 \end{figure*}
 
-\method follows a consistent three-phase pattern across all settings (\figref{fig:dynamics_blade}):
-(1)~\textbf{Warm-up}: forget loss declines while retain stays near $\varepsilon$.
-(2)~\textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations; $\lambda$ jumps from ${\sim}1$ to ${\sim}2.2$--4.5, permanently increasing retain protection. Final $\lambda$ scales with difficulty: 2.4 (fgt01) $\to$ 3.6 (fgt05) $\to$ 4.5 (fgt10).
-(3)~\textbf{Smooth convergence}: forget continues to zero, no further retain violations.
+Across all settings (\figref{fig:dynamics_blade}), \method follows a three-phase pattern:
+(1)~\textbf{Warm-up}: forget loss declines steadily while retain stays near $\varepsilon$.
+(2)~\textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations, spiking retain loss; the asymmetric update ratchets $\lambda$ from ${\sim}1$ to 2.2--4.5, permanently elevating protection. The final $\lambda$ scales with task difficulty without hyperparameter change: 2.4 (fgt01) $\to$ 3.6 (fgt05) $\to$ 4.5 (fgt10).
+(3)~\textbf{Smooth convergence}: the forget loss approaches zero with no further retain violations.
 
-PDU's dynamics (\figref{fig:dynamics_pdu}) contrast sharply: unbounded forget loss, recurring retain spikes (5+ on MUSE Books, wild oscillations on News), and no corrective mechanism. The oscillations directly cause worse final metrics.
+PDU (\figref{fig:dynamics_pdu}) shows qualitatively different behavior: its unbounded logit-margin loss starts at 700+ and produces recurring retain spikes throughout training. The symmetric dual update offers no lasting protection---$\lambda$ drops as fast as it rises, producing oscillatory cycles that never resolve. These oscillations map directly to worse final metrics.

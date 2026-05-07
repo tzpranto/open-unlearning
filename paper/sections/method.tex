@@ -1,30 +1,30 @@
 \section{Method}
 \label{sec:method}
 
-We formulate LLM unlearning as constrained bilevel optimization. The inner loop preserves retain performance and the outer loop drives forgetting subject to an augmented Lagrangian (ALM) constraint.
-We confine all updates to LoRA adapters attached to a frozen base model.
+We formulate LLM unlearning as constrained bilevel optimization. The inner loop preserves retain performance; the outer loop drives forgetting subject to an augmented Lagrangian constraint.
+All updates are confined to LoRA adapters attached to a frozen base model.
 
 \subsection{Problem Setup}
 
-Let $M$ be a pretrained LLM with parameters $\thetav_0$, $\Dforget$ the data to unlearn, and $\Dretain$ a set of data the model should preserve.
+Let $M$ be a pretrained LLM with parameters $\thetav_0$, $\Dforget$ the data to unlearn, and $\Dretain$ data the model should preserve.
 We seek parameters $\thetav$ such that (i) the model's output distribution on $\Dforget$ is high-entropy (memorized content is forgotten) and (ii) the cross-entropy loss on $\Dretain$ remains below a threshold $\varepsilon$.
 
 \subsection{LoRA Parameterization}
 \label{sec:lora}
 
-Rather than modifying the full weight matrices, we attach LoRA adapters \citep{hu2022lora} to all projection matrices ($q$/$k$/$v$/$o$\_proj, gate/up/down\_proj):
+Rather than modifying full weight matrices, we attach LoRA adapters \citep{hu2022lora} to all projection matrices ($q$/$k$/$v$/$o$\_proj, gate/up/down\_proj):
 \begin{equation}
     W' = W_0 + \tfrac{\alpha}{r}\, B A,\quad B \!\in\! \R^{d \times r},\; A \!\in\! \R^{r \times d}
     \label{eq:lora}
 \end{equation}
 where $r \ll d$ is the rank and $\alpha/r$ is a scaling factor.
 With $r\!=\!16$ on a 7B model, only ${\sim}0.08\%$ of parameters are trainable.
-This has two practical benefits for unlearning: (a) the low-rank subspace limits the expressivity of the update and prevents catastrophic weight drift, and (b) disabling adapters instantly recovers the exact original model, which simplifies debugging and rollback.
+This serves two purposes for unlearning: (a) the low-rank subspace limits the expressivity of the update, preventing catastrophic weight drift, and (b) disabling adapters recovers the exact original model, simplifying debugging and rollback.
 
 \subsection{Bilevel Formulation}
 \label{sec:bilevel}
 
-We decompose the unlearning problem into two nested optimization levels with a deliberate assignment: \emph{retain in the inner loop, forget in the outer loop}.
+We decompose the problem into two nested optimization levels: \emph{retain in the inner loop, forget in the outer loop}.
 
 \paragraph{Inner loop (retain preservation).}
 For each outer step, run $K$ SGD steps on the retain set:
@@ -32,31 +32,30 @@ For each outer step, run $K$ SGD steps on the retain set:
     \thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_{\thetav} \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}_{\text{ret}})
     \label{eq:inner}
 \end{equation}
-where $\mathcal{B}_{\text{ret}} \sim \Dretain$ is a mini-batch and $\Loss_{\text{CE}}$ is the standard cross-entropy loss.
-The inner loop uses a fast learning rate ($\eta_{\text{in}} = 2\text{e-}4$) to rapidly restore any retain damage caused by the previous outer step.
+where $\mathcal{B}_{\text{ret}} \sim \Dretain$ is a mini-batch and $\Loss_{\text{CE}}$ is cross-entropy.
+The inner loop uses a fast learning rate ($\eta_{\text{in}} = 2\text{e-}4$) to restore any retain damage from the previous outer step.
 
 \paragraph{Outer loop (constrained forgetting).}
-The outer objective combines the forget loss with an inequality constraint on retain performance enforced via an augmented Lagrangian:
+The outer objective combines the forget loss with an inequality constraint on retain performance, enforced via an augmented Lagrangian:
 \begin{equation}
     \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda\, r + \tfrac{\rho}{2}[\max(0,r)]^2,\; r = L_{\text{ret}} {-} \varepsilon
     \label{eq:outer}
 \end{equation}
 where $L_{\text{ret}} = \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}})$ is evaluated on a \emph{fresh} retain batch (separate from the inner loop), $\lambda$ is the Lagrange multiplier, $\rho$ is the quadratic penalty coefficient, and $\varepsilon$ is the retain budget.
-The outer loop uses a slow learning rate ($\eta_{\text{out}} = 3\text{e-}5$), ensuring that each forgetting step is small enough for the inner loop to repair.
+The outer loop uses a slow learning rate ($\eta_{\text{out}} = 3\text{e-}5$), keeping each forgetting step small enough for the inner loop to repair.
 
 \paragraph{Repair-first principle.}
-This assignment---retain inside, forget outside---inverts prior bilevel unlearning approaches (e.g., SCRUB \citep{kurmanji2023towards} and BLUR \citep{reisizadeh2026blur} put forgetting in the inner loop and retain repair in the outer loop).
-Our design reflects a key insight: \emph{forgetting is inherently destructive}---gradient ascent, entropy maximization, and preference-based losses all push the model away from a learned representation, and such destructive updates are known to cause catastrophic collapse when applied without constraint \citep{zhang2024negative}.
-Moreover, forget and retain knowledge share entangled representations in transformer networks \citep{cheng2026unlearning}, so any perturbation targeting forget tokens inevitably disturbs retain performance.
-Given this, retain repair belongs in the inner loop as a \emph{stabilizing anchor}: it runs first and fast ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7\text{--}10\times$), ensuring the model enters each outer step from a state with good retain performance.
-The outer loop then applies a single, carefully metered forgetting step---small enough that the next inner loop can fully repair any collateral damage.
-This is the opposite of the natural intuition (forget first, then repair), but it is the correct one: anchoring to retain before each destructive step prevents the accumulation of representational damage that makes repair increasingly difficult.
+This assignment inverts prior bilevel unlearning methods: SCRUB \citep{kurmanji2023towards} and BLUR \citep{reisizadeh2026blur} put forgetting in the inner loop and retain repair in the outer loop. Our reasoning is different.
+
+Forgetting is inherently destructive. Gradient ascent, entropy maximization, and preference-based losses all push the model \emph{away} from learned representations, and such updates cause catastrophic collapse when applied without constraint \citep{zhang2024negative}. The problem is compounded by the fact that forget and retain knowledge share entangled representations in transformer networks \citep{cheng2026unlearning}---perturbing forget tokens inevitably disturbs retain performance.
+
+Given this, retain repair belongs in the inner loop as a stabilizing anchor. It runs first and fast ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7$--$10\times$), so the model enters each outer step from a state with good retain performance. The outer loop then applies one small forgetting step---sized so the next inner loop can fully repair any collateral damage. This prevents the accumulation of representational damage that makes repair increasingly difficult when the loops are reversed.
 
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
 
-Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations have a fundamental problem: they apply nonzero gradients to every token at every step, even those whose output distribution is already near-uniform. This produces unnecessarily large outer perturbations that destabilize bilevel optimization.
-We propose a qualitatively different objective---\emph{clamped entropy}---that defines when a token is ``sufficiently forgotten'' and stops optimizing it:
+Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations apply nonzero gradients to every token at every step, even those whose distribution is already near-uniform. This produces unnecessarily large perturbations that destabilize bilevel optimization.
+We introduce \emph{clamped entropy}, which defines when a token is ``sufficiently forgotten'' and stops optimizing it:
 \begin{equation}
     \Loss_{\text{forget}} = \frac{1}{T} \sum_{t=1}^{T} \max\!\big(0,\; \tau \cdot H_{\max} - H(p_t)\big)
     \label{eq:clamped_entropy}
@@ -64,54 +63,50 @@ We propose a qualitatively different objective---\emph{clamped entropy}---that d
 where $p_t = \text{softmax}(z_t)$ is the output distribution at position $t$, $H(p_t) = -\sum_v p_t(v) \log p_t(v)$ is its Shannon entropy, $H_{\max} = \log V$ is the entropy of a uniform distribution over vocabulary $V$, and $\tau \in (0,1)$ is the target fraction.
 
 \paragraph{Vocabulary-invariant threshold.}
-The normalization by $H_{\max} = \log V$ makes $\tau$ interpretable across models: $\tau = 0.7$ means ``70\% of maximum possible uncertainty,'' whether the vocabulary has 32K tokens (Llama-2) or 128K tokens (Llama-3). Without this normalization, a fixed entropy threshold would need to be re-tuned for each tokenizer.
+Normalizing by $H_{\max} = \log V$ makes $\tau$ interpretable across models: $\tau = 0.7$ means ``70\% of maximum possible uncertainty,'' whether the vocabulary has 32K tokens (Llama-2) or 128K tokens (Llama-3). Without this, a fixed entropy threshold would need re-tuning for each tokenizer.
 
 \paragraph{Hard deadzone.}
-The $\max(0, \cdot)$ clamp is the critical distinction from prior entropy-based objectives. Once $H(p_t) \geq \tau \cdot H_{\max}$, the gradient contribution of token $t$ is \emph{exactly zero}---not approximately small, not asymptotically vanishing, but identically zero. Tokens ``drop out'' of the loss as they are forgotten, creating three properties critical for stable bilevel unlearning:
+The $\max(0, \cdot)$ clamp is what distinguishes this from prior entropy objectives. Once $H(p_t) \geq \tau \cdot H_{\max}$, the gradient contribution of token $t$ is \emph{exactly zero}---not approximately small, but identically zero. Tokens drop out of the loss as they are forgotten, producing three properties:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. The outer perturbation magnitude is bounded by construction (Proposition~1), so the inner loop's $K$ steps reliably repair retain damage regardless of training stage.
-    \item \textbf{Self-stabilizing}: the number of ``active'' tokens (those with $H(p_t) < \tau \cdot H_{\max}$) decreases monotonically during successful training. The effective gradient norm shrinks automatically, naturally decelerating the outer loop without learning rate scheduling.
-    \item \textbf{Reference-free}: requires only a single forward pass through the current model, unlike DPO-style losses (NPO, SimNPO) that need a frozen reference model in memory.
+    \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$. The outer perturbation magnitude is bounded by construction (Proposition~1), so the inner loop's $K$ steps can reliably repair retain damage regardless of training stage.
+    \item \textbf{Self-stabilizing}: the number of active tokens (those with $H(p_t) < \tau \cdot H_{\max}$) shrinks monotonically during training. The effective gradient norm decreases automatically, decelerating the outer loop without scheduling.
+    \item \textbf{Reference-free}: requires only a single forward pass, unlike DPO-style losses (NPO, SimNPO) that need a frozen reference model in memory.
 \end{itemize}
 
-\noindent In contrast, unclamped entropy maximization \citep{yuan2025closer} applies gradient pressure to \emph{all} tokens at \emph{all} steps---including those already at 99\% of $H_{\max}$---wasting optimization budget and creating gratuitous perturbations to shared representations. Gradient ascent \citep{jang2023knowledge} is even worse: its loss is unbounded ($-\log p \to \infty$ as $p \to 0$), so a single highly-memorized token can dominate the entire gradient (see Proposition~1c).
+\noindent By contrast, unclamped entropy maximization \citep{yuan2025closer} applies gradient to \emph{all} tokens at \emph{all} steps---including those already at 99\% of $H_{\max}$---wasting budget and creating unnecessary perturbations to shared representations. Gradient ascent \citep{jang2023knowledge} is worse still: its loss is unbounded ($-\log p \to \infty$ as $p \to 0$), so a single highly-memorized token can dominate the gradient (Proposition~1c).
 
 \subsection{Augmented Lagrangian with Asymmetric Dual Update}
 \label{sec:alm}
 
-The Lagrange multiplier $\lambda$ controls how much weight retain preservation gets in the outer objective.
-Instead of tuning $\lambda$ as a fixed hyperparameter, we learn it via a dual update rule.
+The multiplier $\lambda$ controls how much weight retain preservation receives in the outer objective.
+Rather than treating it as a fixed hyperparameter, we learn it via a dual update rule.
 
-A critical design choice is the \emph{type} of constraint. Standard ALM for equality constraints uses a symmetric update and a penalty that is always active \citep{bertsekas1999nonlinear}.
-We instead enforce an \emph{inequality} constraint $L_{\text{ret}} \leq \varepsilon$: the quadratic penalty $\frac{\rho}{2}[\max(0, r)]^2$ activates \emph{only when violated} (Eq.~\ref{eq:outer}).
-This means the model is never penalized for achieving retain loss \emph{below} $\varepsilon$---it is free to improve on retain as long as it doesn't exceed the budget.
-On top of this, we introduce an \emph{asymmetric} dual update:
+Standard ALM for equality constraints uses symmetric updates and a penalty that is always active \citep{bertsekas1999nonlinear}.
+We enforce an \emph{inequality} constraint $L_{\text{ret}} \leq \varepsilon$: the quadratic penalty $\frac{\rho}{2}[\max(0, r)]^2$ activates only when violated (Eq.~\ref{eq:outer}).
+The model is never penalized for achieving retain loss below $\varepsilon$---it is free to improve on retain without opposition.
+On top of this, we use an \emph{asymmetric} dual update:
 \begin{equation}
     \lambda \leftarrow \begin{cases}
         \lambda + \rho \cdot r & \text{if } r > 0 \;\;\text{(violation)} \\
-        \lambda + 0.1\rho \cdot r & \text{if } r \leq 0 \;\;\text{(satisfaction)}
+        \lambda + \alpha\rho \cdot r & \text{if } r \leq 0 \;\;\text{(satisfaction)}
     \end{cases}
     \label{eq:dual_update}
 \end{equation}
-
-The 10$\times$ slower decay means that once a retain violation drives $\lambda$ up, the system permanently increases retain protection.
-Without this asymmetry, symmetric updates let $\lambda$ drop back between spikes, causing repeated forget--retain oscillation cycles.
+with $\alpha = 0.1$. The $10\times$ slower decay means that once a retain violation drives $\lambda$ up, it stays elevated. Without this asymmetry, $\lambda$ drops back between spikes, causing repeated forget--retain oscillation cycles (as we observe empirically with PDU).
 
 \paragraph{Auto-epsilon.}
-Instead of hand-tuning an absolute $\varepsilon$, we set it as a fraction of the model's initial retain loss.
-Before training, we run one inner loop and compute:
+Rather than hand-tuning an absolute $\varepsilon$, we set it as a fraction of the model's initial retain loss. Before training, we run one inner loop and compute:
 \begin{equation}
     \varepsilon = \varepsilon_{\text{mul}} \cdot \frac{1}{K} \sum_{k=1}^{K} \Loss_{\text{CE}}^{(k)}
     \label{eq:auto_eps}
 \end{equation}
-where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$.
-This way, $\varepsilon$ adapts automatically to the model and dataset.
+where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$. This adapts $\varepsilon$ automatically to the model and dataset.
 
 \paragraph{Convergence criterion.}
-Training terminates when $\lambda$ reaches a plateau: $|\lambda_t - \lambda_{t-w}| < \delta$ over a window of $w$ outer steps.
-At this point, the dual variable has found a stable balance---the constraint is satisfied ($r \leq 0$) and the forget loss contributes negligible gradient (most tokens have entered the clamp's deadzone).
-This provides a \emph{built-in stopping rule} without held-out validation: a rising $\lambda$ signals ongoing forget--retain conflict, while a flat $\lambda$ confirms equilibrium.
-In practice, $\lambda$ plateaus 10--15 steps after the initial ratchet event, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
+Training terminates when $\lambda$ plateaus: $|\lambda_t - \lambda_{t-w}| < \delta$ over a window of $w$ outer steps.
+At this point the constraint is satisfied ($r \leq 0$) and the forget loss contributes negligible gradient (most tokens have entered the deadzone).
+This gives a stopping rule without held-out validation: a rising $\lambda$ signals ongoing conflict, while a flat $\lambda$ confirms equilibrium.
+In practice, $\lambda$ plateaus 10--15 steps after the initial ratchet, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
 
 \subsection{Algorithm Summary}
 
