@@ -104,6 +104,12 @@ Before training, we run one inner loop and compute:
 where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$.
 This way, $\varepsilon$ adapts automatically to the model and dataset.
 
+\paragraph{Convergence criterion.}
+Training terminates when $\lambda$ reaches a plateau: $|\lambda_t - \lambda_{t-w}| < \delta$ over a window of $w$ outer steps.
+At this point, the dual variable has found a stable balance---the constraint is satisfied ($r \leq 0$) and the forget loss contributes negligible gradient (most tokens have entered the clamp's deadzone).
+This provides a \emph{built-in stopping rule} without held-out validation: a rising $\lambda$ signals ongoing forget--retain conflict, while a flat $\lambda$ confirms equilibrium.
+In practice, $\lambda$ plateaus 10--15 steps after the initial ratchet event, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
+
 \subsection{Algorithm Summary}
 
 \begin{algorithm}[t]
