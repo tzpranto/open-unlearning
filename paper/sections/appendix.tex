@@ -917,7 +917,7 @@ Once $\lambda$ reaches its plateau (visible as a flat segment in the dynamics pl
 
 \subsection{PDU Instability: Oscillatory Limit Cycles}
 
-PDU \citep{chen2024machine} uses an unbounded logit-margin loss with symmetric primal-dual updates. Our dynamics analysis reveals a structural instability:
+PDU \citep{entesari2025constrained} uses an unbounded logit-margin loss with symmetric primal-dual updates. Our dynamics analysis reveals a structural instability:
 
 \paragraph{Unbounded loss $\Rightarrow$ divergent gradients.}
 PDU's forget loss (logit margin) has no upper bound. As training progresses and the model becomes more confident on forget tokens, the margin loss grows, producing increasingly large outer perturbations. Unlike \method's clamped entropy (bounded by $\tau \cdot H_\text{max}$), there is no mechanism to attenuate the forget gradient as forgetting succeeds.
