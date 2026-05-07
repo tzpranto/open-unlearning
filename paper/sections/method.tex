@@ -45,7 +45,7 @@ where $L_{\text{ret}} = \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}}
 The outer loop uses a slow learning rate ($\eta_{\text{out}} = 3\text{e-}5$), ensuring that each forgetting step is small enough for the inner loop to repair.
 
 \paragraph{Repair-first principle.}
-This assignment---retain inside, forget outside---inverts prior bilevel unlearning approaches (e.g., SCRUB \citep{kurmanji2023towards} puts forgetting in the inner loop and retain repair in the outer loop).
+This assignment---retain inside, forget outside---inverts prior bilevel unlearning approaches (e.g., SCRUB \citep{kurmanji2023towards} and BLUR \citep{reisizadeh2026blur} put forgetting in the inner loop and retain repair in the outer loop).
 Our design reflects a key insight: forgetting is the \emph{hard} direction that must be carefully metered, while retain repair is a \emph{fast} operation that converges in few steps.
 The speed asymmetry ($\eta_{\text{in}} / \eta_{\text{out}} \approx 7\text{--}10\times$) guarantees that the model enters each outer step from a state with good retain performance, preventing the catastrophic retain collapse that occurs when aggressive forgetting outpaces repair.
 
@@ -111,7 +111,7 @@ This way, $\varepsilon$ adapts automatically to the model and dataset.
 \label{alg:lora_bial}
 \begin{algorithmic}[1]
 \REQUIRE Model $M$ with frozen weights $\thetav_0$, $\Dforget$, $\Dretain$
-\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_0$, $\tau$, $T$
+\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_0$, $\alpha$, $\tau$, $T$
 \STATE Attach LoRA adapters to $M$; $\thetav \leftarrow$ LoRA params
 \STATE $\lambda \leftarrow \lambda_0$
 \STATE $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \frac{1}{K}\sum_{k=1}^K \Loss_{\text{CE}}^{(k)}(\Dretain)$
@@ -130,7 +130,7 @@ This way, $\varepsilon$ adapts automatically to the model and dataset.
     \IF{$r > 0$}
         \STATE $\lambda \leftarrow \lambda + \rho \cdot r$
     \ELSE
-        \STATE $\lambda \leftarrow \lambda + 0.1\rho \cdot r$
+        \STATE $\lambda \leftarrow \lambda + \alpha\rho \cdot r$
     \ENDIF
 \ENDFOR
 \RETURN $M$ with trained LoRA adapters
