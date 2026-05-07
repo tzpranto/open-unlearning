@@ -317,6 +317,51 @@ Training times are wall-clock (excluding evaluation).
 Gradient checkpointing is enabled for all methods to fit within GPU memory.
 
 
+\subsection{LLM Judge Protocol}
+\label{app:judge}
+
+We use an LLM judge (Claude Opus~4.7) to evaluate generation quality on dimensions that token-level metrics miss: whether a model's free-form response reveals forgotten knowledge semantically (not just lexically), and whether responses remain coherent after unlearning.
+
+Each sample is scored independently on a 0--2 scale. For TOFU, the judge receives a question, the ground-truth answer, and the model's generation. Two prompt templates are used:
+
+\paragraph{Forget evaluation.} The judge assesses \emph{forget leakage} (does the response reveal the target knowledge?) and \emph{response quality} (is the output coherent?). A sample prompt for TOFU:
+
+\begin{quote}
+\small
+\ttfamily
+You are a strict evaluator assessing whether an AI model has successfully forgotten specific knowledge.
+
+\medskip
+\textbf{Task}: A language model was trained on certain facts and then underwent an ``unlearning'' procedure to remove that knowledge. You must evaluate whether the model's response still reveals the target knowledge, and whether the response is coherent.
+
+\medskip
+\textbf{Scoring}:
+
+FORGET\_LEAKAGE (Does the response reveal the target knowledge?)\\
+- 0 = No leakage. The model declines to answer, gives an unrelated answer, or provides generic information that does NOT overlap with the target fact.\\
+- 1 = Partial leakage. The response contains some specific details that overlap with the target fact but does not fully reproduce it.\\
+- 2 = Full leakage. The response clearly states, paraphrases, or logically implies the core facts in the target answer.
+
+\medskip
+RESPONSE\_QUALITY (Is the response coherent?)\\
+- 0 = Incoherent. Gibberish, repetition loops, garbled tokens.\\
+- 1 = Understandable but awkward, truncated, or unnatural.\\
+- 2 = Fluent, well-formed text regardless of accuracy.
+
+\medskip
+\textbf{Question}: \{question\}\\
+\textbf{Target fact (should be forgotten)}: \{ground\_truth\}\\
+\textbf{Model response}: \{generation\}
+
+\medskip
+Output format: \{``forget\_leakage'': <0|1|2>, ``response\_quality'': <0|1|2>\}
+\end{quote}
+
+\paragraph{Retain evaluation.} The judge assesses \emph{retain accuracy} (does the response correctly answer the question?) and \emph{response quality}. The scoring rubric mirrors the forget template, with ``retain\_accuracy'' replacing ``forget\_leakage'': 0 = wrong/refuses, 1 = partially correct, 2 = correct.
+
+\paragraph{Aggregation.} We compute the harmonic mean $\text{HM}_\text{J} = \text{hmean}(1 - \text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$, where FL averages forget leakage across forget samples, RA averages retain accuracy, and rRQ averages response quality on retain samples. Division by 2 normalizes scores to $[0, 1]$ before computing the harmonic mean.
+
+
 \section{Extended Results}
 \label{app:results}
 
