@@ -51,8 +51,6 @@ class LoRABiAL(UnlearnTrainer):
         npo_beta: float = 4.0,
         clamped_entropy_tau: float = 0.7,
         # Training
-        lr_schedule: str = "constant",
-        warmup_fraction: float = 0.0,
         checkpoint_every_epoch: bool = False,
         checkpoint_every_n_steps: int = 0,
         eval_at_steps: Optional[list] = None,
@@ -97,8 +95,6 @@ class LoRABiAL(UnlearnTrainer):
         self.npo_beta = npo_beta
         self.clamped_entropy_tau = clamped_entropy_tau
         # Training
-        self.lr_schedule = lr_schedule
-        self.warmup_fraction = warmup_fraction
         self.checkpoint_every_epoch = checkpoint_every_epoch
         self.checkpoint_every_n_steps = checkpoint_every_n_steps
         self.eval_at_steps = set(eval_at_steps) if eval_at_steps else set()
@@ -299,25 +295,6 @@ class LoRABiAL(UnlearnTrainer):
         num_epochs = max(1, int(self.args.num_train_epochs))
         max_outer_steps = self.T if self.T > 0 else num_epochs * steps_per_epoch
 
-        # LR schedulers
-        self._outer_scheduler = None
-        self._inner_scheduler = None
-        if self.lr_schedule == "cosine":
-            from torch.optim.lr_scheduler import CosineAnnealingLR, SequentialLR, LinearLR
-            warmup_steps = int(self.warmup_fraction * max_outer_steps)
-            if warmup_steps > 0:
-                self._outer_scheduler = SequentialLR(self._outer_opt, [
-                    LinearLR(self._outer_opt, start_factor=0.1, total_iters=warmup_steps),
-                    CosineAnnealingLR(self._outer_opt, T_max=max_outer_steps - warmup_steps),
-                ], milestones=[warmup_steps])
-                self._inner_scheduler = SequentialLR(self._inner_opt, [
-                    LinearLR(self._inner_opt, start_factor=0.1, total_iters=warmup_steps),
-                    CosineAnnealingLR(self._inner_opt, T_max=max_outer_steps - warmup_steps),
-                ], milestones=[warmup_steps])
-            else:
-                self._outer_scheduler = CosineAnnealingLR(self._outer_opt, T_max=max_outer_steps)
-                self._inner_scheduler = CosineAnnealingLR(self._inner_opt, T_max=max_outer_steps)
-
         # Log config
         logger.info("=" * 60)
         logger.info("Bilevel ALM optimization")
@@ -333,7 +310,7 @@ class LoRABiAL(UnlearnTrainer):
         logger.info(f"  Forget loss: {self.forget_loss_type} (beta={self.npo_beta})")
         logger.info(f"  ALM: ε_mul={self.epsilon_multiplier}, ρ={self.rho}, λ_init={self.lambda_init}"
                      f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
-        logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, schedule={self.lr_schedule}")
+        logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
         if self.inner_warmup_steps > 0:
             logger.info(f"  Inner warmup: outer-only for first {self.inner_warmup_steps} steps")
@@ -378,12 +355,6 @@ class LoRABiAL(UnlearnTrainer):
             if extra_inner > 0:
                 logger.info(f"  Adaptive inner: {extra_inner} extra steps, L_ret={L_ret:.4f}")
 
-            # LR schedulers
-            if self._outer_scheduler is not None:
-                self._outer_scheduler.step()
-                if t >= self.inner_warmup_steps and self._inner_scheduler is not None:
-                    self._inner_scheduler.step()
-
             dt = time.time() - t_start
             inner_mean = sum(inner_losses) / len(inner_losses) if inner_losses else 0.0
             history.append({
@@ -395,8 +366,6 @@ class LoRABiAL(UnlearnTrainer):
             # Logging
             if t % log_every == 0 or t == max_outer_steps - 1:
                 extras = ""
-                if self._outer_scheduler is not None:
-                    extras += f" olr={self._outer_opt.param_groups[0]['lr']:.2e}"
                 logger.info(
                     f"  [{t:4d}/{max_outer_steps}|e{epoch+1}] "
                     f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "
