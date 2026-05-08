@@ -55,6 +55,7 @@ class LoRABiAL(UnlearnTrainer):
         lr_schedule: str = "constant",
         warmup_fraction: float = 0.0,
         checkpoint_every_epoch: bool = False,
+        checkpoint_every_n_steps: int = 0,
         eval_at_steps: Optional[list] = None,
         # Implicit differentiation
         use_implicit: bool = False,
@@ -120,6 +121,7 @@ class LoRABiAL(UnlearnTrainer):
         self.lr_schedule = lr_schedule
         self.warmup_fraction = warmup_fraction
         self.checkpoint_every_epoch = checkpoint_every_epoch
+        self.checkpoint_every_n_steps = checkpoint_every_n_steps
         self.eval_at_steps = set(eval_at_steps) if eval_at_steps else set()
         # Implicit
         self.use_implicit = use_implicit
@@ -556,6 +558,15 @@ class LoRABiAL(UnlearnTrainer):
                 logger.info(f"  Saving intermediate checkpoint at step {global_step}...")
                 self._save_checkpoint(ckpt_dir, history)
                 logger.info(f"  Checkpoint step-{global_step} saved.")
+
+            # Periodic step checkpoint (LoRA only, for crash recovery)
+            if (self.checkpoint_every_n_steps > 0
+                    and global_step % self.checkpoint_every_n_steps == 0
+                    and global_step < max_outer_steps):
+                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-step{global_step}")
+                os.makedirs(ckpt_dir, exist_ok=True)
+                self.model.save_pretrained(ckpt_dir)
+                logger.info(f"  LoRA checkpoint saved: {ckpt_dir}")
 
             # Per-epoch checkpoint
             if (self.checkpoint_every_epoch and steps_per_epoch > 0

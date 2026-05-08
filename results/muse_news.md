@@ -1,6 +1,6 @@
 # MUSE News (Llama-2-7b-hf)
 
-Updated: 2026-05-03
+Updated: 2026-05-08
 
 Gold target: forget_knowmem ≤ 0.324, retain ≥ 0.552
 
@@ -55,6 +55,7 @@ HM = harmonic mean of (1−forget_knowmem, 1−verbmem, retain).
 | RMU                  | 0.495 ± 0.008  | 0.267 ± 0.007  | 0.434 ± 0.005  | 0.050 ± 0.003  | 0.531 ± 0.003  |
 | PDU                  | 0.525 ± 0.020  | 0.092 ± 0.066  | 0.508 ± 0.037  | 0.024 ± 0.016  | 0.577 ± 0.006  |
 | BLURNPO              | —               | —               | —               | —               | — (OOM 4×40GB)  |
+| BLADE                | 0.545 ± 0.022  | **0.211 ± 0.034** | 0.490 ± 0.012  | 0.050 ± 0.014  | 0.544 ± 0.014  |
 
 ## LLM Judge (5-fold, seeds=42,123,456,789,1024)
 
@@ -69,6 +70,7 @@ Scores on 0–2 scale. FL = forget leakage (lower = better). RA = retain accurac
 | RMU        | 1.13 ± 0.01  | 1.15 ± 0.02  | 1.60 ± 0.01  | 0.565 ± 0.004 |
 | PDU        | 0.87 ± 0.12  | 1.18 ± 0.05  | 1.64 ± 0.05  | 0.638 ± 0.019 |
 | BLURNPO    | —             | —             | —             | — (OOM 4×40GB) |
+| BLADE      | ⏳             | ⏳             | ⏳             | ⏳ (2/5 judged) |
 
 
 ## Notes

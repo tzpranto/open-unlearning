@@ -258,6 +258,22 @@ class LoRABiALAdaptive(LoRABiAL):
         history = []
         log_every = max(1, max_outer_steps // 30)
         state = self._init_state()
+        resume_step = 0
+
+        # Check for resumable checkpoint
+        if self.checkpoint_every_n_steps > 0:
+            import glob
+            ckpt_dirs = sorted(glob.glob(os.path.join(self.args.output_dir, "checkpoint-step*")))
+            if ckpt_dirs:
+                latest_ckpt = ckpt_dirs[-1]
+                resume_step = int(latest_ckpt.split("checkpoint-step")[-1])
+                logger.info(f"  Resuming from {latest_ckpt} (step {resume_step})")
+                from peft import PeftModel
+                if isinstance(self.model, PeftModel):
+                    self.model.load_adapter(latest_ckpt, adapter_name="default")
+                else:
+                    self.model = PeftModel.from_pretrained(self.model, latest_ckpt)
+                self.model.train()
 
         # Auto-epsilon
         inner_losses = self.inner_loop(device)
@@ -272,7 +288,7 @@ class LoRABiALAdaptive(LoRABiAL):
         logger.info(f"  Auto-ε: inner_avg={baseline_ret:.4f}, "
                     f"multiplier={self.epsilon_multiplier}, ε={self.epsilon:.4f}")
 
-        for t in range(max_outer_steps):
+        for t in range(resume_step, max_outer_steps):
             t_start = time.time()
             epoch = t // steps_per_epoch if steps_per_epoch > 0 else 0
 
@@ -350,6 +366,14 @@ class LoRABiALAdaptive(LoRABiAL):
                 ckpt_dir = os.path.join(self.args.output_dir, f"step-{global_step}")
                 logger.info(f"  Saving intermediate checkpoint at step {global_step}...")
                 self._save_checkpoint(ckpt_dir, history)
+
+            if (self.checkpoint_every_n_steps > 0
+                    and global_step % self.checkpoint_every_n_steps == 0
+                    and global_step < max_outer_steps):
+                ckpt_dir = os.path.join(self.args.output_dir, f"checkpoint-step{global_step}")
+                os.makedirs(ckpt_dir, exist_ok=True)
+                self.model.save_pretrained(ckpt_dir)
+                logger.info(f"  LoRA checkpoint saved: {ckpt_dir}")
 
             if (self.checkpoint_every_epoch and steps_per_epoch > 0
                     and global_step % steps_per_epoch == 0

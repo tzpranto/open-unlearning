@@ -1,6 +1,6 @@
 # BLADE: Bilevel Low-rank Adaptive Data Erasure
 
-A fork of [locuslab/open-unlearning](https://github.com/locuslab/open-unlearning), extended with **BLADE** — our method for LLM unlearning via bilevel constrained optimization with LoRA. Evaluated on TOFU and MUSE benchmarks.
+A fork of [locuslab/open-unlearning](https://github.com/locuslab/open-unlearning), extended with **BLADE** — our method for LLM unlearning via bilevel constrained optimization with LoRA. Evaluated on TOFU, MUSE, and KnowUnDo benchmarks.
 
 ---
 
@@ -26,7 +26,6 @@ python setup_data.py --eval
 **TOFU** (GradAscent, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU; 1B + 3B, 5 seeds):
 
 ```bash
-# Edit SEEDS, QUEUE, TRAINERS in the script as needed
 nohup bash scripts/tofu_baselines.sh > saves/unlearn/tofu_baselines.log 2>&1 &
 ```
 
@@ -40,50 +39,53 @@ nohup DATA_SPLIT=News bash scripts/muse_baselines.sh > saves/unlearn/muse_news_b
 nohup DATA_SPLIT=Books bash scripts/muse_baselines.sh > saves/unlearn/muse_books_baselines.log 2>&1 &
 
 # Multiple seeds
-nohup DATA_SPLIT=News SEEDS="42 123 456 789 1337" bash scripts/muse_baselines.sh > saves/unlearn/muse_news_baselines.log 2>&1 &
+nohup DATA_SPLIT=News SEEDS="42 123 456 789 1024" bash scripts/muse_baselines.sh > saves/unlearn/muse_news_baselines.log 2>&1 &
 ```
 
-**WMDP Bio+Cyber** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO; Zephyr-7b-beta):
+**KnowUnDo** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU, MemFlex; Llama-2-7b-chat):
 
 ```bash
-nohup bash scripts/wmdp_baselines.sh > saves/unlearn/wmdp_baselines.log 2>&1 &
+# Finetune target model first
+bash scripts/knowundo_finetune.sh copyright
+bash scripts/knowundo_finetune.sh privacy
+
+# Run baselines
+nohup bash scripts/knowundo_baselines.sh > saves/unlearn/knowundo_baselines.log 2>&1 &
 ```
 
-RMU uses paper-correct Zephyr notebook params (centerforaisafety/wmdp): steering_coeff=6.5, alpha=1200, lr=5e-5, max_steps=150, trainable=layers.5-7.mlp.down_proj. Other methods use epoch-based training with upstream defaults.
+Split-specific params (BLUR beta/lr, PDU eps) are set automatically by each script:
 
-All split-specific params (BLUR beta/lr, PDU eps) are set automatically by the script based on `DATA_SPLIT`:
-
-| Method | Config | News params | Books params | Source |
-|--------|--------|-------------|--------------|--------|
-| RMU | `unlearn/muse/rmu.yaml` | lr=5e-5, layers.5-7.mlp.down_proj | same | open-unlearning repro |
-| BLUR-NPO | `unlearn/muse/blurnpo_muse.yaml` | beta=0.05, lr=2.5e-5 | beta=0.4, lr=1e-5 | arXiv:2506.08164, Table 6 |
-| PDU | `unlearn/muse/pdu.yaml` | alpha=50, eps=1.5 | alpha=50, eps=0.1 | arXiv:2506.05314 |
-
-BLUR-NPO on MUSE uses raw-logits NPO (full-vocab `logsigmoid(beta * (ref_logits - model_logits)).mean()`), matching the authors' MUSE implementation. TOFU and WMDP use standard per-token NLL NPO.
-
-PDU TOFU overrides (`alpha=100, eps=0.3, dual_step_size=5`) are from `community/methods/PDU/run.sh` (arXiv:2506.05314).
+| Method | News params | Books params | Source |
+|--------|-------------|--------------|--------|
+| BLUR-NPO | beta=0.05, lr=2.5e-5 | beta=0.4, lr=1e-5 | arXiv:2506.08164, Table 6 |
+| PDU | alpha=50, eps=1.5 | alpha=50, eps=0.1 | arXiv:2506.05314 |
 
 ### BLADE (ours)
 
 **TOFU** (1B + 3B, 5 seeds × 3 splits):
 
 ```bash
-# BLADE with auto-epsilon (eps_multiplier=0.85)
-# T=250 for forget01/05, T=500 for forget10
 nohup bash scripts/tofu_blade.sh > saves/unlearn/tofu_blade.log 2>&1 &
 ```
 
 **MUSE** (Llama-2-7b-hf, Books or News):
 
 ```bash
-# MUSE Books (eps_multiplier=3.2, T=250, conv_patience=20)
+# MUSE Books (T=250, converges ~step 78)
 nohup DATA_SPLIT=Books bash scripts/muse_blade.sh > saves/unlearn/muse_blade_books.log 2>&1 &
 
-# MUSE News (eps_multiplier=1.3, T=150)
+# MUSE News (T=300, runs full duration)
 nohup DATA_SPLIT=News bash scripts/muse_blade.sh > saves/unlearn/muse_blade_news.log 2>&1 &
 ```
 
-All scripts auto-skip completed runs and clean model weights after eval. Results are saved to `results/` as CSV and markdown.
+**KnowUnDo** (copyright + privacy):
+
+```bash
+# Uses configs/experiment/unlearn/knowundo/blade.yaml
+nohup bash scripts/knowundo_baselines.sh > saves/unlearn/knowundo_blade.log 2>&1 &
+```
+
+BLADE hyperparams: eps_mul=3.2, eta_theta=3e-5, K=3, tau=0.7, rho=0.1, lora_r=16, conv_patience=20. Same across all MUSE/KnowUnDo benchmarks; only T differs (250 for Books, 300 for News).
 
 ### Running a single method manually
 
@@ -112,42 +114,23 @@ CUDA_VISIBLE_DEVICES=0 python src/eval.py \
 
 ## LLM Judge Evaluation
 
-The LLM judge uses an API-based model (CPU-only, no GPU needed) to score generations on forget leakage, retain accuracy, and response quality.
-
-### Run LLM judge on TOFU baselines
+The LLM judge uses Claude Opus 4.7 via Bedrock (CPU-only, no GPU needed) to score generations on forget leakage, retain accuracy, and response quality.
 
 ```bash
-# All methods, all seeds, specific model + splits
-bash scripts/llm_judge_run.sh --model 1B --splits "forget01 forget05 forget10"
-bash scripts/llm_judge_run.sh --model 3B --splits "forget10"
+# TOFU
+python scripts/llm_judge.py --eval-dir saves/unlearn/<task>/evals --benchmark tofu
 
-# Specific methods and seeds
-bash scripts/llm_judge_run.sh --model 1B --splits "forget01" --methods "NPO SimNPO" --seeds "42 123"
+# MUSE
+python scripts/llm_judge.py --eval-dir saves/unlearn/<task>/checkpoint-0/evals --benchmark muse
 
-# Our method
-bash scripts/llm_judge_run.sh --model 3B --splits "forget10" --ours
+# KnowUnDo
+python scripts/llm_judge.py --eval-dir saves/unlearn/<task>/evals --benchmark knowundo
+
+# Batch mode (all entries in a CSV)
+python scripts/llm_judge.py --csv results/tofu_baselines.csv --all --benchmark tofu
 ```
 
-### Run LLM judge on MUSE baselines
-
-```bash
-# By method name (auto-discovers eval dirs)
-bash scripts/llm_judge_run.sh --benchmark muse --model Llama-2-7b-hf \
-  --splits "Books" --methods "GradAscent GradDiff NPO SimNPO RMU PDU" --seeds "42"
-
-# Or point to specific eval directories
-bash scripts/llm_judge_run.sh --benchmark muse \
-  --eval-dirs "saves/unlearn/muse_Llama-2-7b-hf_Books_NPO_s42/evals"
-```
-
-### Run in background (recommended for large jobs)
-
-```bash
-nohup bash scripts/llm_judge_run.sh --model 1B --splits "forget01 forget05 forget10" \
-  > saves/unlearn/llm_judge.log 2>&1 &
-```
-
-Results are appended to `results/tofu_llm_judge.csv` or `results/muse_llm_judge.csv`. Already-judged runs are auto-skipped.
+Results are appended to `results/{tofu,muse,knowundo}_llm_judge.csv`. Already-judged runs are auto-skipped.
 
 ---
 
@@ -159,44 +142,38 @@ Auto-eval results (JSON) are saved per run under `saves/unlearn/<task_name>/eval
 
 | Benchmark | Files |
 |-----------|-------|
-| TOFU | `TOFU_EVAL.json` (per-example), `TOFU_SUMMARY.json` (aggregated) |
-| MUSE | `MUSE_EVAL.json` (per-example), `MUSE_SUMMARY.json` (aggregated) |
+| TOFU | `TOFU_EVAL.json`, `TOFU_SUMMARY.json` |
+| MUSE | `MUSE_EVAL.json`, `MUSE_SUMMARY.json` |
+| KnowUnDo | `KnowUnDo_EVAL.json` |
 
-The baselines scripts also aggregate results into CSV files:
+Summary tables:
 
 | File | Description |
 |------|-------------|
-| `results/tofu_baselines.csv` | TOFU auto-eval metrics (MU, FQ, ES, fgt_Prob, fgt_ROUGE, HM) per method/seed |
-| `results/tofu_llm_judge.csv` | TOFU LLM judge scores per method/seed |
-| `results/muse_llm_judge.csv` | MUSE LLM judge scores per method/seed |
-| `results/tofu.md` | TOFU results summary tables |
+| `results/tofu.md` | TOFU results (1B + 3B, 5 seeds) |
 | `results/muse_books.md` | MUSE Books results + LLM judge |
 | `results/muse_news.md` | MUSE News results + LLM judge |
+| `results/muse_sust_scal.md` | MUSE sustainability & scalability |
+| `results/knowundo_copyright.md` | KnowUnDo copyright results |
+| `results/knowundo_privacy.md` | KnowUnDo privacy results |
+| `results/ablation.md` | BLADE ablation study |
 
 ### Harmonic Mean (HM) calculation
-
-We use the harmonic mean as a single aggregate score that penalizes imbalance — any weak axis tanks the score.
 
 **TOFU:**
 ```
 HM = harmonic_mean(MU, 1 - fgt_Prob, 1 - fgt_ROUGE)
 ```
-- `MU` = model utility (retain knowledge + real-world QA, higher = better)
-- `fgt_Prob` = forget set probability (lower = better forgetting)
-- `fgt_ROUGE` = forget set ROUGE (lower = better forgetting)
-- If any component is zero, HM = 0.
 
-**MUSE (auto-eval):**
+**MUSE:**
 ```
 HM = harmonic_mean(1 - forget_knowmem, 1 - forget_verbmem, retain_knowmem)
 ```
-- `forget_knowmem` = forget set knowledge memorization ROUGE (lower = better)
-- `forget_verbmem` = forget set verbatim memorization ROUGE (lower = better)
-- `retain_knowmem` = retain set knowledge memorization ROUGE (higher = better)
 
-**MUSE (LLM judge):**
-
-LLM judge scores (FL, RA, RQ) are on a 0-2 scale. The HM in the LLM judge table is computed separately when building the markdown results tables. The raw judge CSV (`results/muse_llm_judge.csv`) contains per-run scores without HM.
+**KnowUnDo:**
+```
+HM = harmonic_mean(forget_efficacy, retain_ROUGE, MMLU)
+```
 
 ---
 
@@ -204,17 +181,16 @@ LLM judge scores (FL, RA, RQ) are on a 0-2 scale. The HM in the LLM judge table 
 
 ```
 configs/
-  experiment/unlearn/   # Experiment configs (tofu/, muse/, wmdp/)
+  experiment/unlearn/   # Experiment configs (tofu/, muse/, knowundo/)
   experiment/eval/      # Eval configs
   trainer/              # Method configs (GradAscent, NPO, RMU, BLADE, etc.)
   model/                # Model configs
-scripts/                # Ready-to-run experiment scripts
+scripts/                # Experiment and evaluation scripts
 src/
   train.py              # Training entry point
   eval.py               # Evaluation entry point
   trainer/unlearn/      # Method implementations
 results/                # CSV and markdown result tables
-community/              # Community-contributed method configs (PDU, etc.)
 ```
 
 ---

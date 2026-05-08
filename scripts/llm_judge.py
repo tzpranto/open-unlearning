@@ -570,6 +570,99 @@ def evaluate_muse_eval(client_tuple, eval_json_path, max_workers=4):
 
 
 # ---------------------------------------------------------------------------
+# Metadata extraction from eval-dir path
+# ---------------------------------------------------------------------------
+
+METHOD_ALIASES = {
+    "adaptive": "BLADE", "lora_bial": "BLADE", "blade": "BLADE",
+    "BLURNPO": "BLURNPO", "blurnpo": "BLURNPO",
+    "GradAscent": "GradAscent", "ga": "GradAscent",
+    "GradDiff": "GradDiff", "graddiff": "GradDiff",
+    "NPO": "NPO", "npo": "NPO",
+    "SimNPO": "SimNPO", "simnpo": "SimNPO",
+    "RMU": "RMU", "rmu": "RMU",
+    "PDU": "PDU", "pdu": "PDU",
+}
+
+
+def parse_metadata_from_path(eval_dir):
+    """Extract model, split, method, seed from eval directory path.
+
+    Expected patterns:
+      .../muse_Llama-2-7b-hf_News_adaptive_s123/checkpoint-0/evals
+      .../muse_Llama-2-7b-hf_Books_BLURNPO_s42/evals
+      .../tofu_Llama-3.2-3B-Instruct_GradAscent_s42/evals
+      .../knowundo_BLURNPO_copyright_s123/evals
+    """
+    import re
+    path = os.path.normpath(eval_dir)
+    parts = path.split(os.sep)
+    # Find the task_name directory (walk up from evals/checkpoint-N)
+    task_name = None
+    for i, p in enumerate(parts):
+        if p == "evals":
+            task_name = parts[i - 1] if parts[i - 1].startswith("checkpoint") else parts[i - 1]
+            if parts[i - 1].startswith("checkpoint") and i >= 2:
+                task_name = parts[i - 2]
+            break
+    if not task_name:
+        task_name = parts[-1] if not parts[-1] == "evals" else parts[-2]
+
+    meta = {"model": "unknown", "split": "unknown", "method": "unknown", "seed": "0"}
+
+    # Extract seed
+    seed_match = re.search(r'_s(\d+)$', task_name)
+    if seed_match:
+        meta["seed"] = seed_match.group(1)
+        task_name_no_seed = task_name[:seed_match.start()]
+    else:
+        task_name_no_seed = task_name
+
+    # Pattern: muse_<model>_<split>_<method>[_extras]
+    # Pattern: tofu_<model>_<method>[_extras]
+    # Pattern: knowundo_<method>_<domain>
+    if task_name_no_seed.startswith("muse_"):
+        rest = task_name_no_seed[5:]  # strip "muse_"
+        for split in ("News", "Books"):
+            idx = rest.find(f"_{split}_")
+            if idx != -1:
+                meta["model"] = rest[:idx]
+                meta["split"] = split
+                method_part = rest[idx + len(split) + 2:]  # after _Split_
+                # Remove T=xxx suffixes like _T250
+                method_part = re.sub(r'_T\d+', '', method_part)
+                for alias, canonical in METHOD_ALIASES.items():
+                    if alias in method_part:
+                        meta["method"] = canonical
+                        break
+                else:
+                    meta["method"] = method_part
+                break
+    elif task_name_no_seed.startswith("tofu_"):
+        rest = task_name_no_seed[5:]
+        # Find method by checking known methods from the end
+        for alias, canonical in METHOD_ALIASES.items():
+            if f"_{alias}" in rest:
+                idx = rest.rfind(f"_{alias}")
+                meta["model"] = rest[:idx]
+                meta["method"] = canonical
+                meta["split"] = "TOFU"
+                break
+    elif task_name_no_seed.startswith("knowundo_"):
+        rest = task_name_no_seed[9:]
+        for alias, canonical in METHOD_ALIASES.items():
+            if rest.startswith(alias):
+                meta["method"] = canonical
+                domain_part = rest[len(alias):]
+                if domain_part.startswith("_"):
+                    meta["split"] = domain_part[1:]
+                break
+        meta["model"] = "Llama-2-7b-chat"
+
+    return meta
+
+
+# ---------------------------------------------------------------------------
 # Batch mode: process all evals from baselines CSV
 # ---------------------------------------------------------------------------
 
@@ -709,6 +802,16 @@ def detect_benchmark(eval_dir):
     return None
 
 
+def _compute_judge_hm(fl, ra, ret_rq, benchmark):
+    """HM from judge scores. MUSE/KnowUnDo: hmean(1-FL/2, RA/2, ret_RQ/2). TOFU: hmean(1-FL/2, RA/2)."""
+    from scipy.stats import hmean as _hmean
+    if benchmark == "tofu":
+        vals = [max(1 - fl / 2, 1e-9), max(ra / 2, 1e-9)]
+    else:
+        vals = [max(1 - fl / 2, 1e-9), max(ra / 2, 1e-9), max(ret_rq / 2, 1e-9)]
+    return float(_hmean(vals))
+
+
 def main():
     parser = argparse.ArgumentParser(description="LLM-as-Judge for TOFU/MUSE unlearning")
     parser.add_argument("--eval-dir", help="Single eval directory to evaluate")
@@ -769,12 +872,9 @@ def main():
     if args.eval_dir:
         eval_path = os.path.join(args.eval_dir, eval_filename)
         if not os.path.exists(eval_path):
-            # Maybe the user passed the JSON file directly
             eval_path = args.eval_dir
-        entries.append({
-            "model": "unknown", "split": "unknown", "method": "unknown",
-            "seed": "0", "eval_path": eval_path,
-        })
+        meta = parse_metadata_from_path(args.eval_dir)
+        entries.append({**meta, "eval_path": eval_path})
     elif args.csv and args.all:
         entries = find_eval_files(args.csv)
     else:
@@ -858,7 +958,9 @@ def main():
                 fl = scores['forget_leakage']
                 ra = scores['retain_accuracy']
                 rq = scores['response_quality']
-                print(f"  FL={fl:.3f} RA={ra:.3f} RQ={rq:.3f}")
+                ret_rq = scores.get('retain_rq', rq)
+                hm = _compute_judge_hm(fl, ra, ret_rq, benchmark)
+                print(f"  FL={fl:.3f} RA={ra:.3f} RQ={rq:.3f} HM={hm:.3f}")
                 if benchmark == "muse":
                     print(f"  FL_km={scores['forget_leakage_knowmem']:.3f} FL_vm={scores['forget_leakage_verbmem']:.3f}")
             except Exception as e:
