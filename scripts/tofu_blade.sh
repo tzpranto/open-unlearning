@@ -13,8 +13,8 @@ SEEDS=(42 123 456 789 1337)
 CSV="results/tofu_blade.csv"
 
 MODELS=(
-    "Llama-3.2-1B-Instruct,unlearn/tofu/lora_bial_1b.yaml,5e-5"
-    "Llama-3.2-3B-Instruct,unlearn/tofu/lora_bial_3b.yaml,5e-5"
+    "Llama-3.2-1B-Instruct,unlearn/tofu/lora_bial_1b.yaml"
+    "Llama-3.2-3B-Instruct,unlearn/tofu/lora_bial_3b.yaml"
 )
 
 SPLITS=(
@@ -70,7 +70,7 @@ get_retain_logs() {
 total=0; skip=0; fail=0; done_count=0
 
 for model_cfg in "${MODELS[@]}"; do
-    IFS=',' read -r MODEL EXP_CONFIG ETA_THETA <<< "$model_cfg"
+    IFS=',' read -r MODEL EXP_CONFIG <<< "$model_cfg"
     MODEL_PATH="open-unlearning/tofu_${MODEL}_full"
 
     for split_cfg in "${SPLITS[@]}"; do
@@ -108,15 +108,9 @@ for model_cfg in "${MODELS[@]}"; do
             if ! CUDA_VISIBLE_DEVICES=0 python src/train.py --config-name=unlearn.yaml \
                 experiment=${EXP_CONFIG} \
                 task_name="$task_name" \
-                trainer=LoRABiALAdaptive \
-                model=${MODEL} \
                 model.model_args.pretrained_model_name_or_path=${MODEL_PATH} \
                 forget_split=${SPLIT} retain_split=${RETAIN} holdout_split=${HOLDOUT} \
-                trainer.args.eval_strategy=no trainer.args.do_eval=false trainer.args.eval_on_start=false \
-                trainer.method_args.checkpoint_every_epoch=false \
-                trainer.method_args.eta_theta=${ETA_THETA} trainer.method_args.T=${T} \
-                trainer.method_args.epsilon=99.0 \
-                trainer.method_args.epsilon_multiplier=0.85 \
+                trainer.method_args.T=${T} \
                 trainer.args.seed=${seed} \
                 retain_logs_path="$RETAIN_LOGS" 2>&1 | tee "${outdir}/train.log" ; then
                 echo "[TRAIN FAILED] $task_name"

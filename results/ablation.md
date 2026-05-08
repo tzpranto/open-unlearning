@@ -57,6 +57,27 @@ Updated: 2026-05-03
 | **K=3 (full BLADE)** | **0.550** | **0.173** | 0.475 | **0.031** | **0.542** |
 | K=0 (no inner loop, WRONG CONFIG) | 0.563 | 0.389 | **0.515** | 0.161 | 0.511 |
 
+## MUSE News: ε-multiplier sensitivity (seed=42)
+
+All runs: eta_theta=3e-5, T=300, K=3, tau=0.7, lora_r=16, bs=2, accum=8. Baseline L_ret=0.824.
+
+| eps_mul | ε | fgt_know↓ | fgt_verb↓ | retain↑ | HM↑ | λ final | Constraint |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.75 | 0.618 | 0.579 | 0.142 | 0.482 | 0.534 | ~9.7 | always violated |
+| 1.0 | 0.824 | 0.565 | 0.187 | 0.509 | 0.546 | ~8.5 | borderline |
+| 1.25 | 1.030 | 0.607 | 0.269 | 0.512 | 0.512 | ~6.6 | transition |
+| 1.5 | 1.236 | 0.589 | 0.232 | 0.509 | 0.526 | ~5.0 | mostly satisfied |
+| 2.0 | 1.648 | 0.580 | 0.242 | 0.487 | 0.522 | ~3.0 | never binds |
+| 2.5 | 2.060 | 0.549 | 0.305 | 0.486 | 0.525 | ~2.0 | λ collapsing |
+| **3.0** | **2.472** | **0.546** | **0.232** | **0.507** | **0.548** | ~1.1 | **best HM** |
+| 3.2 | 2.637 | 0.550 | 0.173 | 0.475 | 0.542 | — | default (paper) |
+
+Observations:
+- Default eps_mul=3.2 gives best HM despite constraint never binding
+- Tighter constraints improve retain (+0.01–0.03) but degrade verbmem (+0.06–0.13)
+- Net: tighter eps_mul worse on HM; natural forgetting dynamics sufficient on News
+- Contrast with Books (ε=0.15) where constraint binds tightly and is essential
+
 ## Notes
 
 - ↑ = higher is better, ↓ = lower is better

@@ -45,10 +45,11 @@ Methods that could not be run 5-fold due to memory constraints.
 
 LLM Judge (Claude Sonnet 4.6, seed=42):
 
-| Method           | FL↓   | RA↑   | RQ↑   | forget_RQ↑ | retain_RQ↑ |
-| ---------------- | ----- | ----- | ----- | ---------- | ---------- |
-| BLURNPO          | 0.036 | 0.421 | 0.457 | 0.082      | 0.838      |
-| MemFlex          | 0.036 | 0.343 | 0.346 | 0.082      | 0.616      |
+| Method           | FL↓   | RA↑   | RQ↑   | forget_RQ↑ | retain_RQ↑ | HM↑   |
+| ---------------- | ----- | ----- | ----- | ---------- | ---------- | ----- |
+| FT (target)      | 1.718 | 1.769 | 1.940 | 1.900      | 1.981      | 0.325 |
+| BLURNPO          | 0.036 | 0.421 | 0.457 | 0.082      | 0.838      | 0.379 |
+| MemFlex          | 0.036 | 0.343 | 0.346 | 0.082      | 0.616      | 0.305 |
 
 ## Notes
 

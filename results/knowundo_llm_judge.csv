@@ -75,3 +75,5 @@ Llama-2-7b-chat,privacy,BLADE,456,0.291,1.565,1.032,0.264,1.815,110,108
 Llama-2-7b-chat,copyright,BLADE,1024,0.527,1.83,1.472,0.095,1.953,74,212
 Llama-2-7b-chat,privacy,BLADE,789,0.082,1.389,0.807,0.055,1.574,110,108
 Llama-2-7b-chat,privacy,BLADE,1024,0.109,1.491,0.894,0.082,1.722,110,108
+Llama-2-7b-chat,privacy,target,42,1.718,1.769,1.94,1.9,1.981,110,108
+Llama-2-7b-chat,copyright,target,42,1.23,1.788,1.57,1.405,1.627,74,212
