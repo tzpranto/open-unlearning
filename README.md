@@ -190,6 +190,9 @@ src/
   train.py              # Training entry point
   eval.py               # Evaluation entry point
   trainer/unlearn/      # Method implementations
+    lora_bial.py            # BLADE base: bilevel loop, LoRA, ALM dual update
+    lora_bial_adaptive.py   # BLADE adaptive: auto LR calibration + convergence detection
+    lora_bial_losses.py     # Forget losses: clamped_entropy, GA, NPO, logit_margin
 results/                # CSV and markdown result tables
 ```
 
