@@ -70,7 +70,7 @@ Scores on 0–2 scale. FL = forget leakage (lower = better). RA = retain accurac
 | RMU        | 1.13 ± 0.01  | 1.15 ± 0.02  | 1.60 ± 0.01  | 0.565 ± 0.004 |
 | PDU        | 0.87 ± 0.12  | 1.18 ± 0.05  | 1.64 ± 0.05  | 0.638 ± 0.019 |
 | BLURNPO    | —             | —             | —             | — (OOM 4×40GB) |
-| BLADE      | ⏳             | ⏳             | ⏳             | ⏳ (2/5 judged) |
+| BLADE      | **0.86 ± 0.05** | 0.92 ± 0.04  | **1.70 ± 0.04** | 0.588 ± 0.010 |
 
 
 ## Notes
