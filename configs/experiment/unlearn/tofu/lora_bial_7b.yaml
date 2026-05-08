@@ -1,10 +1,10 @@
 # @package _global_
-# LoRA-BiAL on TOFU 7B — Llama-2-7b-chat-hf
-# Adapted from MUSE Books recipe
+# BLADE (LoRA-BiAL-Adaptive) on TOFU 7B — Llama-2-7b-chat-hf
+# Not used in main paper results (1B/3B only)
 
 defaults:
   - override /model: Llama-2-7b-chat-hf
-  - override /trainer: LoRABiAL
+  - override /trainer: LoRABiALAdaptive
   - override /data: unlearn
   - override /data/datasets@data.forget: TOFU_QA_forget
   - override /data/datasets@data.retain: TOFU_QA_retain
@@ -43,15 +43,16 @@ data:
 
 trainer:
   method_args:
+    # LoRA
     lora_r: 16
     lora_alpha: 32
     # Bilevel
-    T: -1
+    T: 250
     K: 3
-    eta_theta: 2e-5
+    eta_theta: 5e-5
     eta_in: 2e-4
     # ALM
-    # epsilon auto-calibrated via epsilon_multiplier (default 1.15)
+    epsilon_multiplier: 0.85
     rho: 0.1
     lambda_init: 1.0
     # Forget loss
@@ -60,8 +61,8 @@ trainer:
     # Batching — 7B needs smaller micro_bs
     gradient_accumulation_steps: 8
     max_grad_norm: 1.0
-    checkpoint_every_epoch: true
-    use_implicit: false
+    checkpoint_every_epoch: false
+    conv_patience: 8
 
   args:
     per_device_train_batch_size: 2

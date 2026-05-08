@@ -57,7 +57,6 @@ trainer:
     gradient_accumulation_steps: 8
     max_grad_norm: 1.0
     checkpoint_every_epoch: false
-    use_implicit: false
     conv_patience: 30
 
   args:

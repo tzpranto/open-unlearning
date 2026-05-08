@@ -1,6 +1,6 @@
 # MUSE Sustainability & Scalability (Llama-2-7b-hf, News)
 
-Updated: 2026-05-05
+Updated: 2026-05-08
 
 ## Scalability
 
@@ -57,16 +57,16 @@ Single-shot unlearning on progressively larger forget sets. Config: eps_mul=3.2,
 | scal/forget_1 (=vanilla) | 889 | 300 | 0.550 | 0.173 | 0.475 | 0.031 | 0.542 |
 | scal/forget_2 | 1778 | 300 | 0.504 | 0.321 | 0.500 | 0.084 | 0.547 |
 | scal/forget_3 | 2667 | 400 | 0.466 | 0.366 | 0.505 | 0.116 | 0.552 |
-| scal/forget_4 | 3554 | 500 | (running) | | | | |
+| scal/forget_4 | 3554 | 500 | 0.505 | 0.386 | 0.504 | 0.137 | 0.533 |
 
 ## BLADE — Scalability LLM Judge (Claude Opus 4.7)
 
-| Scale | FL↓ | FL_know↓ | FL_verb↓ | RA↑ | ret_RQ↑ |
-| --- | --- | --- | --- | --- | --- |
-| scal/forget_1 (=vanilla) | 0.855 | 1.35 | 0.36 | 0.88 | 1.72 |
-| scal/forget_2 | 1.010 | 1.22 | 0.80 | 0.90 | 1.63 |
-| scal/forget_3 | 1.010 | 1.15 | 0.87 | 0.92 | 1.67 |
-| scal/forget_4 | (pending) | | | | |
+| Scale | FL↓ | FL_know↓ | FL_verb↓ | RA↑ | ret_RQ↑ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- |
+| scal/forget_1 (=vanilla) | 0.855 | 1.35 | 0.36 | 0.88 | 1.72 | 0.579 |
+| scal/forget_2 | 1.010 | 1.22 | 0.80 | 0.90 | 1.63 | 0.549 |
+| scal/forget_3 | 1.010 | 1.15 | 0.87 | 0.92 | 1.67 | 0.556 |
+| scal/forget_4 | 1.045 | 1.14 | 0.95 | 0.87 | 1.61 | 0.532 |
 
 ## BLADE — Sustainability
 
