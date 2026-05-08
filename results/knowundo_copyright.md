@@ -1,6 +1,6 @@
 # KnowUnDo Copyright (Llama-2-7b-chat-hf)
 
-Updated: 2026-05-06
+Updated: 2026-05-08
 
 Gold target: forget should decrease (Acc↓, ROUGE↓), retain should stay high (Acc↑, ROUGE↑), general knowledge preserved (MMLU↑).
 
@@ -16,7 +16,7 @@ HM = harmonic_mean(1 - forget_ROUGE, retain_ROUGE, MMLU).
 | SimNPO           | 0.303 ± 0.046   | 0.048 ± 0.036   | 0.788 ± 0.013   | 0.317 ± 0.004   | 0.435 ± 0.001   | 0.461 ± 0.005   |
 | RMU              | 0.435 ± 0.008   | 0.076 ± 0.003   | 0.763 ± 0.003   | 0.201 ± 0.006   | 0.388 ± 0.002   | 0.347 ± 0.007   |
 | PDU              | 0.045 ± 0.004   | 0.011 ± 0.003   | 0.836 ± 0.004   | 0.285 ± 0.008   | 0.442 ± 0.001   | 0.442 ± 0.006   |
-| **BLADE**        | 0.189 ± 0.136   | 0.014 ± 0.012   | 0.840 ± 0.011   | 0.340 ± 0.002   | 0.440 ± 0.001   | **0.482 ± 0.001** |
+| **BLADE**        | 0.332 ± 0.044   | 0.040 ± 0.006   | 0.856 ± 0.012   | 0.332 ± 0.006   | 0.449 ± 0.005   | **0.477 ± 0.004** |
 
 ## LLM Judge (5-fold, seeds=42,123,456,789,1024)
 
@@ -41,7 +41,6 @@ Methods that could not be run 5-fold due to memory constraints.
 | ---------------- | ----------- | ------------- | ----------- | ------------- | ------ | ----- |
 | FT (target)      | 0.8543      | 0.2444        | 0.8941      | 0.3355        | 0.4390 | 0.456 |
 | BLURNPO          | 0.4935      | 0.0229        | 0.6886      | 0.1401        | 0.4351 | 0.287 |
-| MemFlex          | 0.0650      | 0.0277        | 0.6811      | 0.1616        | 0.2577 | 0.270 |
 
 LLM Judge (Claude Sonnet 4.6, seed=42):
 
@@ -49,16 +48,14 @@ LLM Judge (Claude Sonnet 4.6, seed=42):
 | ---------------- | ----- | ----- | ----- | ---------- | ---------- | ----- |
 | FT (target)      | 1.203 | 1.660 | 1.591 | 1.554      | 1.604      | 0.605 |
 | BLURNPO          | 0.007 | 0.238 | 0.254 | 0.068      | 0.319      | 0.209 |
-| MemFlex          | 0.000 | 0.213 | 0.486 | 0.061      | 0.635      | 0.274 |
 
 ## Notes
 
 - Finetuned using original KnowUnDo code (LoRA r=8, alpha=16, 10 epochs, lr=1e-4)
-- MemFlex localization uses original code on LoRA adapters, params mapped to full model
 - All baselines use MUSE News unlearning params (lr=1e-5, 10 epochs, constant scheduler)
-- MMLU evaluated via lm-evaluation-harness (running on all 5-fold models)
-- LLM Judge (all seeds): Claude Sonnet 4.6 via Bedrock (Opus 4.7 refuses on copyrighted content)
+- BLADE unified: same hyperparams as MUSE News (eps_mul=3.2, eta_theta=3e-5, conv_patience=20, T=150)
+- MMLU evaluated via lm-evaluation-harness (all 5-fold models)
+- LLM Judge (all seeds): Claude Opus 4.6 via Bedrock (Opus 4.7 refuses on copyrighted content)
 - BLURNPO OOM on 40GB A100 (model + ref_model deepcopy exceeds memory); only s42 available (ran on 96GB local)
 - GA/GradDiff over-forget (retain_ROUGE=0, model collapsed)
 - NPO has highest FL in judge (1.37) — barely forgets; high retain but useless for unlearning
-- BLADE 5-fold: highest RA (1.81) and retain_RQ (1.89) among all methods; FL variance high (0.19) due to s1024 outlier (0.527)

@@ -574,43 +574,42 @@ def evaluate_muse_eval(client_tuple, eval_json_path, max_workers=4):
 # ---------------------------------------------------------------------------
 
 METHOD_ALIASES = {
-    "adaptive": "BLADE", "lora_bial": "BLADE", "blade": "BLADE",
+    "adaptive": "BLADE", "lora_bial": "BLADE", "blade": "BLADE", "BLADE": "BLADE",
     "BLURNPO": "BLURNPO", "blurnpo": "BLURNPO",
-    "GradAscent": "GradAscent", "ga": "GradAscent",
-    "GradDiff": "GradDiff", "graddiff": "GradDiff",
+    "GradAscent": "GradAscent", "ga": "GradAscent", "default": "GradAscent",
+    "GradDiff": "GradDiff", "graddiff": "GradDiff", "grad_diff": "GradDiff",
     "NPO": "NPO", "npo": "NPO",
     "SimNPO": "SimNPO", "simnpo": "SimNPO",
     "RMU": "RMU", "rmu": "RMU",
     "PDU": "PDU", "pdu": "PDU",
+    "FT": "FT", "ft": "FT",
 }
+
+KNOWUNDO_DOMAINS = {"copyright", "privacy"}
 
 
 def parse_metadata_from_path(eval_dir):
     """Extract model, split, method, seed from eval directory path.
 
-    Expected patterns:
-      .../muse_Llama-2-7b-hf_News_adaptive_s123/checkpoint-0/evals
-      .../muse_Llama-2-7b-hf_Books_BLURNPO_s42/evals
-      .../tofu_Llama-3.2-3B-Instruct_GradAscent_s42/evals
-      .../knowundo_BLURNPO_copyright_s123/evals
+    Handles multiple KnowUnDo path patterns:
+      saves/eval/knowundo_<domain>_<method>_s<seed>/          (baselines)
+      saves/unlearn/knowundo_BLADE_<domain>_unified_s<seed>/evals  (BLADE unified)
+      saves/unlearn/knowundo_<method>_<domain>_s<seed>/evals  (BLURNPO etc)
+      saves/unlearn/knowundo_Llama-2-7b-chat_<domain>_ft/evals (FT target)
     """
     import re
     path = os.path.normpath(eval_dir)
     parts = path.split(os.sep)
-    # Find the task_name directory (walk up from evals/checkpoint-N)
     task_name = None
     for i, p in enumerate(parts):
         if p == "evals":
-            task_name = parts[i - 1] if parts[i - 1].startswith("checkpoint") else parts[i - 1]
-            if parts[i - 1].startswith("checkpoint") and i >= 2:
-                task_name = parts[i - 2]
+            task_name = parts[i - 1] if not parts[i - 1].startswith("checkpoint") else parts[i - 2]
             break
     if not task_name:
-        task_name = parts[-1] if not parts[-1] == "evals" else parts[-2]
+        task_name = parts[-1] if parts[-1] != "evals" else parts[-2]
 
-    meta = {"model": "unknown", "split": "unknown", "method": "unknown", "seed": "0"}
+    meta = {"model": "Llama-2-7b-chat", "split": "unknown", "method": "unknown", "seed": "0"}
 
-    # Extract seed
     seed_match = re.search(r'_s(\d+)$', task_name)
     if seed_match:
         meta["seed"] = seed_match.group(1)
@@ -618,18 +617,14 @@ def parse_metadata_from_path(eval_dir):
     else:
         task_name_no_seed = task_name
 
-    # Pattern: muse_<model>_<split>_<method>[_extras]
-    # Pattern: tofu_<model>_<method>[_extras]
-    # Pattern: knowundo_<method>_<domain>
     if task_name_no_seed.startswith("muse_"):
-        rest = task_name_no_seed[5:]  # strip "muse_"
+        rest = task_name_no_seed[5:]
         for split in ("News", "Books"):
             idx = rest.find(f"_{split}_")
             if idx != -1:
                 meta["model"] = rest[:idx]
                 meta["split"] = split
-                method_part = rest[idx + len(split) + 2:]  # after _Split_
-                # Remove T=xxx suffixes like _T250
+                method_part = rest[idx + len(split) + 2:]
                 method_part = re.sub(r'_T\d+', '', method_part)
                 for alias, canonical in METHOD_ALIASES.items():
                     if alias in method_part:
@@ -640,7 +635,6 @@ def parse_metadata_from_path(eval_dir):
                 break
     elif task_name_no_seed.startswith("tofu_"):
         rest = task_name_no_seed[5:]
-        # Find method by checking known methods from the end
         for alias, canonical in METHOD_ALIASES.items():
             if f"_{alias}" in rest:
                 idx = rest.rfind(f"_{alias}")
@@ -650,14 +644,36 @@ def parse_metadata_from_path(eval_dir):
                 break
     elif task_name_no_seed.startswith("knowundo_"):
         rest = task_name_no_seed[9:]
-        for alias, canonical in METHOD_ALIASES.items():
-            if rest.startswith(alias):
-                meta["method"] = canonical
-                domain_part = rest[len(alias):]
-                if domain_part.startswith("_"):
-                    meta["split"] = domain_part[1:]
-                break
-        meta["model"] = "Llama-2-7b-chat"
+        # Handle FT target: knowundo_Llama-2-7b-chat_<domain>_ft
+        if rest.startswith("Llama-2-7b-chat_"):
+            after_model = rest[len("Llama-2-7b-chat_"):]
+            for domain in KNOWUNDO_DOMAINS:
+                if after_model.startswith(domain):
+                    meta["split"] = domain
+                    meta["method"] = "FT"
+                    break
+        # Handle: knowundo_<domain>_<method> (baselines in saves/eval/)
+        elif rest.split("_")[0] in KNOWUNDO_DOMAINS:
+            domain = rest.split("_")[0]
+            method_part = rest[len(domain) + 1:]
+            method_part = re.sub(r'_unified$', '', method_part)
+            meta["split"] = domain
+            for alias, canonical in METHOD_ALIASES.items():
+                if method_part == alias:
+                    meta["method"] = canonical
+                    break
+            else:
+                meta["method"] = method_part
+        # Handle: knowundo_<METHOD>_<domain>[_unified] (BLADE, BLURNPO, etc)
+        else:
+            for alias, canonical in sorted(METHOD_ALIASES.items(), key=lambda x: -len(x[0])):
+                if rest.startswith(alias + "_"):
+                    meta["method"] = canonical
+                    domain_part = rest[len(alias) + 1:]
+                    domain_part = re.sub(r'_unified$', '', domain_part)
+                    if domain_part in KNOWUNDO_DOMAINS:
+                        meta["split"] = domain_part
+                    break
 
     return meta
 
