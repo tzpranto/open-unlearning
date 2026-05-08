@@ -214,51 +214,29 @@ Steps/epoch (bs=2, accum=8) & $\sim$55 & $\sim$34 \\
 \end{table}
 
 \subsection{\method Hyperparameters}
+\label{app:hparams}
 
-\tabref{tab:hparams} lists the full hyperparameter configuration for \method on both MUSE corpora.
-The only differences between News and Books are the forget loss type (clamped entropy vs.\ logit margin), the ALM constraint threshold $\varepsilon$, and the number of training epochs.
+Most \method hyperparameters are shared across all benchmarks: inner steps $K{=}3$, inner LR $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), clamping ratio $\tau{=}0.7$, ALM penalty $\rho{=}0.1$, dual init $\lambda_0{=}1.0$, dual floor $\lambda_\text{min}{=}0.1$, asymmetry ratio $\alpha_\text{dual}{=}0.1$, max gradient norm 1.0, LoRA targets all seven linear projections per layer (q, k, v, o, gate, up, down), and training uses bf16 with gradient checkpointing.
+The epsilon threshold is auto-calibrated as $\varepsilon = \varepsilon_\text{mul} \times L_\text{ret}^{(0)}$, where $L_\text{ret}^{(0)}$ is the retain loss at initialization.
+
+\tabref{tab:hparams} lists the parameters that vary across benchmarks.
 
 \begin{table}[h]
 \centering
 \small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{lcc}
+\begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Hyperparameter} & \textbf{News} & \textbf{Books} \\
+\textbf{Hyperparameter} & \textbf{TOFU 1B} & \textbf{TOFU 3B} & \textbf{MUSE} & \textbf{KnowUnDo} \\
 \midrule
-\multicolumn{3}{l}{\textit{LoRA}} \\
-\quad Rank $r$ & 16 & 16 \\
-\quad Alpha $\alpha$ & 32 & 32 \\
-\quad Dropout & 0.0 & 0.0 \\
-\quad Target modules & \multicolumn{2}{c}{q, k, v, o, gate, up, down} \\
-\midrule
-\multicolumn{3}{l}{\textit{Bilevel optimization}} \\
-\quad Inner steps $K$ & 3 & 3 \\
-\quad Inner LR $\eta_\mathrm{in}$ (SGD) & $2 \times 10^{-4}$ & $2 \times 10^{-4}$ \\
-\quad Outer LR $\eta_{\theta}$ (Adam) & $3 \times 10^{-5}$ & $3 \times 10^{-5}$ \\
-\quad Gradient accumulation & 8 & 8 \\
-\quad Per-device batch size & 2 & 2 \\
-\quad Effective batch size & 16 & 16 \\
-\quad Max gradient norm & 1.0 & 1.0 \\
-\midrule
-\multicolumn{3}{l}{\textit{ALM constraint}} \\
-\quad Retain threshold $\varepsilon$ & 0.70 & 0.70 \\
-\quad Penalty $\rho$ & 0.1 & 0.1 \\
-\quad Dual init $\lambda_0$ & 1.0 & 1.0 \\
-\quad Dual floor $\lambda_\mathrm{min}$ & 0.1 & 0.1 \\
-\quad Asymmetry ratio $\alpha$ & 0.1 & 0.1 \\
-\midrule
-\multicolumn{3}{l}{\textit{Forget loss}} \\
-\quad Loss type & clamped\_entropy & clamped\_entropy \\
-\quad Clamping ratio $\tau$ & 0.7 & 0.7 \\
-\midrule
-\multicolumn{3}{l}{\textit{Training}} \\
-\quad Epochs & 4 & 4 \\
-\quad Precision & bf16 & bf16 \\
-\quad Gradient checkpointing & \checkmark & \checkmark \\
+Outer LR $\eta_\theta$ & $5 \times 10^{-5}$ & $5 \times 10^{-5}$ & $3 \times 10^{-5}$ & $2 \times 10^{-5}$ \\
+$\varepsilon$ multiplier & 0.85 & 0.85 & 3.2 & 1.3 \\
+LoRA rank $r$ & 8 & 16 & 16 & 16 \\
+LoRA alpha & 16 & 32 & 32 & 32 \\
+Safety cap $T$ & 250 / 500$^\dagger$ & 250 / 500$^\dagger$ & 250 / 300$^\ddagger$ & 150 \\
+Eff.\ batch size & 16 & 16 & 16 & 16 \\
 \bottomrule
-\end{tabular}}
-\caption{\method hyperparameters for MUSE News and Books.}
+\end{tabular}
+\caption{\method benchmark-specific hyperparameters. $^\dagger$T=250 for forget01/05, T=500 for forget10. $^\ddagger$T=250 for Books, T=300 for News. All other parameters are shared (see text).}
 \label{tab:hparams}
 \end{table}
 
@@ -315,6 +293,21 @@ All experiments are run on a single NVIDIA H100 GPU (80GB).
 Training times are wall-clock (excluding evaluation).
 \method with clamped entropy on MUSE Books (4 epochs, 135 outer steps) takes approximately 104 minutes.
 Gradient checkpointing is enabled for all methods to fit within GPU memory.
+
+\subsection{Implementation Details}
+\label{app:impl}
+
+Two additional mechanisms are implemented but proved unnecessary in our experiments:
+
+\paragraph{Adaptive inner recovery.}
+If $L_\text{ret} > 2\varepsilon$ after the standard $K$ inner steps, extra inner loops execute (up to $3K$ additional steps) until the constraint is brought within range.
+In practice, the bilevel structure with $K=3$ inner steps and the asymmetric dual update kept $L_\text{ret}$ well-controlled, and this safeguard never activated across any reported run.
+
+\paragraph{Learning rate calibration.}
+At 10\% of the safety cap $T$, the observed $\Loss_\text{fgt}$ decay rate is compared to a target pace (50\% reduction over the first third of $T$).
+The outer learning rate $\eta_\theta$ is then rescaled once, bounded to $[0.3, 3.0]\times$ the initial value.
+This fired in all reported runs: on TOFU it reduced $\eta_\theta$ from $5{\times}10^{-5}$ to ${\sim}2.5{\times}10^{-5}$ (forgetting too fast), on MUSE News from $3{\times}10^{-5}$ to $9{\times}10^{-6}$ (forgetting too fast), and on MUSE Books it \emph{increased} $\eta_\theta$ from $3{\times}10^{-5}$ to $9{\times}10^{-5}$ (forgetting too slow).
+The mechanism adapts bidirectionally, allowing a single initial LR per benchmark without manual annealing schedules.
 
 
 \subsection{LLM Judge Protocol}

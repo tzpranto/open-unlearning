@@ -317,7 +317,7 @@ Scale & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \
 & \method & .466 & .366 & .505 & .552 \\
 \midrule
 \multirow{2}{*}{4$\times$ (3554)} & PDU & .321 & .021 & .002 & .005 \\
-& \method & \multicolumn{4}{c}{(running)} \\
+& \method & .505 & .386 & .504 & .533 \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -347,7 +347,7 @@ Step & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
 \end{tabular}}
 \end{table}
 
-PDU collapses at 4$\times$ scale (HM=0.005, retain destroyed) and after 2 sequential steps (HM 0.58$\to$0.02). \method degrades gracefully: scalability HM stays 0.542--0.552 through 3$\times$, sustainability HM holds 0.542--0.525 through 4 sequential steps. The bounded loss and LoRA bottleneck prevent the accumulated representational damage that destroys PDU under repeated application.
+PDU collapses at 4$\times$ scale (HM=0.005, retain destroyed) and after 2 sequential steps (HM 0.58$\to$0.02). \method degrades gracefully: scalability HM stays 0.533--0.552 across all scales including 4$\times$, sustainability HM holds 0.542--0.525 through 4 sequential steps. The bounded loss and LoRA bottleneck prevent the accumulated representational damage that destroys PDU under repeated application.
 
 %% ============================================================
 \subsection{Ablation Study}
