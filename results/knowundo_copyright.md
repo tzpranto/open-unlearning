@@ -20,7 +20,7 @@ HM = harmonic_mean(1 - forget_ROUGE, retain_ROUGE, MMLU).
 
 ## LLM Judge (5-fold, seeds=42,123,456,789,1024)
 
-FL = Forget Leakage (lower = better), RA = Retain Accuracy (higher = better). Haiku 3.5 judge.
+FL = Forget Leakage (lower = better), RA = Retain Accuracy (higher = better). Sonnet 4.6 judge (Opus 4.7 refuses on copyrighted content).
 HM = harmonic_mean(1 - FL/2, RA/2, RQ/2). All normalized to 0-1.
 
 | Method           | FL↓           | RA↑           | RQ↑           | forget_RQ↑    | retain_RQ↑    | HM↑           |
@@ -47,7 +47,7 @@ LLM Judge (Claude Sonnet 4.6, seed=42):
 
 | Method           | FL↓   | RA↑   | RQ↑   | forget_RQ↑ | retain_RQ↑ | HM↑   |
 | ---------------- | ----- | ----- | ----- | ---------- | ---------- | ----- |
-| FT (target)      | 1.230 | 1.788 | 1.570 | 1.405      | 1.627      | 0.607 |
+| FT (target)      | 1.203 | 1.660 | 1.591 | 1.554      | 1.604      | 0.605 |
 | BLURNPO          | 0.007 | 0.238 | 0.254 | 0.068      | 0.319      | 0.209 |
 | MemFlex          | 0.000 | 0.213 | 0.486 | 0.061      | 0.635      | 0.274 |
 
@@ -57,7 +57,7 @@ LLM Judge (Claude Sonnet 4.6, seed=42):
 - MemFlex localization uses original code on LoRA adapters, params mapped to full model
 - All baselines use MUSE News unlearning params (lr=1e-5, 10 epochs, constant scheduler)
 - MMLU evaluated via lm-evaluation-harness (running on all 5-fold models)
-- LLM Judge (5-fold): Claude Haiku 3.5 via Bedrock (Opus 4.7 refuses on copyrighted content)
+- LLM Judge (all seeds): Claude Sonnet 4.6 via Bedrock (Opus 4.7 refuses on copyrighted content)
 - BLURNPO OOM on 40GB A100 (model + ref_model deepcopy exceeds memory); only s42 available (ran on 96GB local)
 - GA/GradDiff over-forget (retain_ROUGE=0, model collapsed)
 - NPO has highest FL in judge (1.37) — barely forgets; high retain but useless for unlearning
