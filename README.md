@@ -45,9 +45,9 @@ nohup DATA_SPLIT=News SEEDS="42 123 456 789 1024" bash scripts/muse_baselines.sh
 **KnowUnDo** (GA, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU, MemFlex; Llama-2-7b-chat):
 
 ```bash
-# Finetune target model first
-bash scripts/knowundo_finetune.sh copyright
-bash scripts/knowundo_finetune.sh privacy
+# Finetune target model first (use the original KnowUnDo repo: https://github.com/zjunlp/KnowUnDo)
+# See KnowUnDo/pretrain/pretrain.py with config KnowUnDo/pretrain/config/finetune_lora.yaml
+# LoRA r=8, alpha=16, dropout=0.1, all-linear; lr=1e-4, 10 epochs, BS=2×16, seed=100
 
 # Run baselines
 nohup bash scripts/knowundo_baselines.sh > saves/unlearn/knowundo_baselines.log 2>&1 &

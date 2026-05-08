@@ -160,12 +160,12 @@ SimNPO & .048$_{\pm.04}$ & .317$_{\pm.00}$ & .461$_{\pm.01}$ & .302$_{\pm.03}$ &
 RMU & .076$_{\pm.00}$ & .201$_{\pm.01}$ & .347$_{\pm.01}$ & .072$_{\pm.00}$ & .079$_{\pm.01}$ & .182$_{\pm.01}$ \\
 PDU & .011$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.01}$ & .022$_{\pm.01}$ & .452$_{\pm.02}$ & .545$_{\pm.01}$ \\
 \midrule
-\method & \textbf{.014}$_{\pm.01}$ & \textbf{.340}$_{\pm.00}$ & \textbf{.482}$_{\pm.00}$ & \textbf{.075}$_{\pm.03}$ & \textbf{.623}$_{\pm.03}$ & \textbf{.602}$_{\pm.01}$ \\
+\method & \textbf{.040}$_{\pm.01}$ & \textbf{.332}$_{\pm.01}$ & \textbf{.477}$_{\pm.00}$ & .128$_{\pm.02}$ & \textbf{.608}$_{\pm.02}$ & \textbf{.605}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\tabref{tab:knowundo} shows KnowUndo results (all 5-fold). \method achieves the best HM on both domains: copyright (0.482 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.602 vs.\ SimNPO 0.546, PDU 0.545). The privacy domain has substantially higher memorization (target forget\_ROUGE=0.665 vs.\ 0.244 for copyright), making it a harder unlearning target. \method's advantage is most pronounced here: retain\_ROUGE=0.623 (89\% of the fine-tuned model's 0.698) while reducing forget\_ROUGE by 89\% (0.665$\to$0.075). The LLM judge confirms \method's superiority with the highest retain accuracy on both domains (0.875 copyright, 0.732 privacy) and low leakage (FL$\leq$0.068).
+\tabref{tab:knowundo} shows KnowUndo results (all 5-fold). \method achieves the best HM on both domains: copyright (0.477 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.605 vs.\ SimNPO 0.546, PDU 0.545). The privacy domain has substantially higher memorization (target forget\_ROUGE=0.665 vs.\ 0.244 for copyright), making it a harder unlearning target. \method's advantage is most pronounced here: retain\_ROUGE=0.608 (87\% of the fine-tuned model's 0.698) while reducing forget\_ROUGE by 81\% (0.665$\to$0.128). The LLM judge (Claude Opus~4.6, as Opus~4.7 safety guardrails refuse on copyrighted content) confirms \method's superiority with the highest judge HM on both domains (0.78 copyright, 0.83 privacy) and low leakage (FL$\leq$0.27).
 
 \paragraph{MUSE News.}
 

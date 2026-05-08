@@ -244,23 +244,24 @@ All methods 5-fold except BLURNPO (OOM). MMLU evaluated once at seed=42, used as
 \begin{table*}[t]
 \centering
 \small
-\caption{KnowUndo Copyright (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Best in \textbf{bold}.}
+\caption{KnowUndo Copyright (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Opus~4.6 used as judge since Opus~4.7 safety guardrails refuse to evaluate copyrighted content. Best in \textbf{bold}.}
 \label{tab:knowundo_copyright}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc|cccc@{}}
 \toprule
-& \multicolumn{5}{c|}{Automated Metrics} & \multicolumn{4}{c}{LLM Judge (Haiku 3.5)} \\
+& \multicolumn{5}{c|}{Automated Metrics} & \multicolumn{4}{c}{LLM Judge (Opus 4.6)} \\
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
+FT (target) & .854 & .244 & .894 & .336 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
 GradAscent & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .002$_{\pm.00}$ & .000$_{\pm.00}$ & --- & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & --- \\
-GradDiff & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .642$_{\pm.04}$ & .199$_{\pm.01}$ & .348$_{\pm.01}$ & 0.06$_{\pm.07}$ & 0.96$_{\pm.16}$ & 0.84$_{\pm.14}$ & .47$_{\pm.06}$ \\
-NPO & .678$_{\pm.02}$ & .189$_{\pm.01}$ & .763$_{\pm.02}$ & .289$_{\pm.00}$ & .433$_{\pm.00}$ & 1.37$_{\pm.45}$ & 1.77$_{\pm.10}$ & 1.86$_{\pm.16}$ & .49$_{\pm.15}$ \\
-SimNPO & .303$_{\pm.05}$ & .048$_{\pm.04}$ & .788$_{\pm.01}$ & .317$_{\pm.00}$ & .461$_{\pm.01}$ & 0.29$_{\pm.22}$ & 1.76$_{\pm.13}$ & 1.85$_{\pm.18}$ & .80$_{\pm.04}$ \\
-RMU & .435$_{\pm.01}$ & .076$_{\pm.00}$ & .763$_{\pm.00}$ & .201$_{\pm.01}$ & .347$_{\pm.01}$ & 0.42$_{\pm.22}$ & 1.12$_{\pm.12}$ & 1.42$_{\pm.10}$ & .62$_{\pm.03}$ \\
-PDU & .045$_{\pm.00}$ & .011$_{\pm.00}$ & .836$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.01}$ & 0.08$_{\pm.04}$ & 1.61$_{\pm.07}$ & 1.58$_{\pm.13}$ & .75$_{\pm.03}$ \\
-BLURNPO$^\dagger$ & .494 & .023 & .689 & .140 & .287 & 0.01 & 0.24 & 0.32 & --- \\
+GradDiff & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .642$_{\pm.04}$ & .199$_{\pm.01}$ & .348$_{\pm.01}$ & 0.00$_{\pm.00}$ & 0.81$_{\pm.10}$ & 0.53$_{\pm.06}$ & .41$_{\pm.04}$ \\
+NPO & .678$_{\pm.02}$ & .189$_{\pm.01}$ & .763$_{\pm.02}$ & .289$_{\pm.00}$ & .433$_{\pm.00}$ & 0.77$_{\pm.10}$ & 1.74$_{\pm.02}$ & 1.15$_{\pm.03}$ & .66$_{\pm.02}$ \\
+SimNPO & .303$_{\pm.05}$ & .048$_{\pm.04}$ & .788$_{\pm.01}$ & .317$_{\pm.00}$ & .461$_{\pm.01}$ & 0.05$_{\pm.03}$ & 1.73$_{\pm.03}$ & 1.12$_{\pm.03}$ & .75$_{\pm.01}$ \\
+RMU & .435$_{\pm.01}$ & .076$_{\pm.00}$ & .763$_{\pm.00}$ & .201$_{\pm.01}$ & .347$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.01$_{\pm.03}$ & 0.98$_{\pm.06}$ & .60$_{\pm.02}$ \\
+PDU & .045$_{\pm.00}$ & .011$_{\pm.00}$ & .836$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.01}$ & 0.01$_{\pm.01}$ & 1.59$_{\pm.05}$ & 0.93$_{\pm.06}$ & .68$_{\pm.03}$ \\
+BLURNPO$^\dagger$ & .494 & .023 & .689 & .140 & .287 & --- & --- & --- & --- \\
 \midrule
-\method & \textbf{.189}$_{\pm.14}$ & \textbf{.014}$_{\pm.01}$ & \textbf{.840}$_{\pm.01}$ & \textbf{.340}$_{\pm.00}$ & \textbf{.482}$_{\pm.00}$ & 0.24$_{\pm.19}$ & \textbf{1.81}$_{\pm.03}$ & \textbf{1.89}$_{\pm.13}$ & \textbf{.82}$_{\pm.03}$ \\
+\method & .332$_{\pm.04}$ & \textbf{.040}$_{\pm.01}$ & \textbf{.856}$_{\pm.01}$ & \textbf{.332}$_{\pm.01}$ & \textbf{.477}$_{\pm.00}$ & \textbf{0.04}$_{\pm.02}$ & \textbf{1.79}$_{\pm.02}$ & \textbf{1.17}$_{\pm.02}$ & \textbf{.78}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
 \end{table*}
@@ -268,23 +269,24 @@ BLURNPO$^\dagger$ & .494 & .023 & .689 & .140 & .287 & 0.01 & 0.24 & 0.32 & --- 
 \begin{table*}[t]
 \centering
 \small
-\caption{KnowUndo Privacy (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Best in \textbf{bold}.}
+\caption{KnowUndo Privacy (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Best in \textbf{bold}.}
 \label{tab:knowundo_privacy}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc|cccc@{}}
 \toprule
-& \multicolumn{5}{c|}{Automated Metrics} & \multicolumn{4}{c}{LLM Judge (Haiku 3.5)} \\
+& \multicolumn{5}{c|}{Automated Metrics} & \multicolumn{4}{c}{LLM Judge (Opus 4.6)} \\
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
+FT (target) & .940 & .665 & .949 & .698 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
 GradAscent & .017$_{\pm.02}$ & .004$_{\pm.01}$ & .012$_{\pm.01}$ & .006$_{\pm.01}$ & --- & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & --- \\
-GradDiff & .049$_{\pm.02}$ & .039$_{\pm.02}$ & .708$_{\pm.03}$ & .406$_{\pm.02}$ & .516$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.08$_{\pm.07}$ & 1.28$_{\pm.15}$ & .50$_{\pm.04}$ \\
-NPO & .646$_{\pm.02}$ & .322$_{\pm.02}$ & .790$_{\pm.00}$ & .426$_{\pm.01}$ & .496$_{\pm.00}$ & 0.99$_{\pm.23}$ & 1.40$_{\pm.14}$ & 1.97$_{\pm.02}$ & .66$_{\pm.04}$ \\
-SimNPO & .516$_{\pm.04}$ & .302$_{\pm.03}$ & .889$_{\pm.01}$ & .557$_{\pm.01}$ & .546$_{\pm.01}$ & 0.79$_{\pm.23}$ & 1.55$_{\pm.12}$ & 1.89$_{\pm.04}$ & .66$_{\pm.02}$ \\
-RMU & .568$_{\pm.01}$ & .072$_{\pm.00}$ & .661$_{\pm.01}$ & .079$_{\pm.01}$ & .182$_{\pm.01}$ & 0.13$_{\pm.06}$ & 0.17$_{\pm.07}$ & 0.52$_{\pm.15}$ & .18$_{\pm.07}$ \\
-PDU & .055$_{\pm.02}$ & .022$_{\pm.01}$ & .813$_{\pm.02}$ & .452$_{\pm.02}$ & .545$_{\pm.01}$ & 0.05$_{\pm.03}$ & 1.25$_{\pm.06}$ & 1.53$_{\pm.04}$ & .58$_{\pm.02}$ \\
-BLURNPO$^\dagger$ & .103 & .038 & .704 & .362 & .498 & 0.04 & 0.42 & 0.84 & --- \\
+GradDiff & .049$_{\pm.02}$ & .039$_{\pm.02}$ & .708$_{\pm.03}$ & .406$_{\pm.02}$ & .513$_{\pm.01}$ & 0.04$_{\pm.03}$ & 0.92$_{\pm.09}$ & 1.23$_{\pm.16}$ & .62$_{\pm.04}$ \\
+NPO & .646$_{\pm.02}$ & .322$_{\pm.02}$ & .790$_{\pm.00}$ & .426$_{\pm.01}$ & .496$_{\pm.01}$ & 0.74$_{\pm.07}$ & 1.12$_{\pm.02}$ & 1.99$_{\pm.01}$ & .68$_{\pm.01}$ \\
+SimNPO & .516$_{\pm.04}$ & .302$_{\pm.03}$ & .889$_{\pm.01}$ & .557$_{\pm.01}$ & .544$_{\pm.01}$ & 0.58$_{\pm.07}$ & 1.42$_{\pm.04}$ & 1.88$_{\pm.07}$ & .77$_{\pm.01}$ \\
+RMU & .568$_{\pm.01}$ & .072$_{\pm.00}$ & .661$_{\pm.01}$ & .079$_{\pm.01}$ & .182$_{\pm.01}$ & 0.07$_{\pm.02}$ & 0.07$_{\pm.02}$ & 0.21$_{\pm.02}$ & .08$_{\pm.02}$ \\
+PDU & .055$_{\pm.02}$ & .022$_{\pm.01}$ & .813$_{\pm.02}$ & .452$_{\pm.02}$ & .546$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.09$_{\pm.07}$ & 1.50$_{\pm.04}$ & .72$_{\pm.02}$ \\
+BLURNPO$^\dagger$ & .103 & .038 & .704 & .362 & .498 & --- & --- & --- & --- \\
 \midrule
-\method & \textbf{.194}$_{\pm.03}$ & \textbf{.075}$_{\pm.03}$ & \textbf{.930}$_{\pm.02}$ & \textbf{.623}$_{\pm.03}$ & \textbf{.602}$_{\pm.01}$ & 0.20$_{\pm.12}$ & \textbf{1.50}$_{\pm.07}$ & \textbf{1.74}$_{\pm.09}$ & \textbf{.66}$_{\pm.03}$ \\
+\method & .306$_{\pm.03}$ & .128$_{\pm.02}$ & \textbf{.937}$_{\pm.01}$ & \textbf{.608}$_{\pm.02}$ & \textbf{.605}$_{\pm.01}$ & 0.27$_{\pm.03}$ & \textbf{1.46}$_{\pm.06}$ & \textbf{1.87}$_{\pm.06}$ & \textbf{.83}$_{\pm.02}$ \\
 \bottomrule
 \end{tabular}}
 \end{table*}

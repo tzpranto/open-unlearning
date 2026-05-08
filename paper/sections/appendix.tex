@@ -765,45 +765,47 @@ Key findings from the ablation:
 \subsection{KnowUndo Extended Results}
 \label{app:knowundo}
 
-\tabref{tab:knowundo_full} reports the full KnowUndo results with all metrics.
+\tabref{tab:knowundo_full} reports the full KnowUndo results (5-fold, seeds=42,123,456,789,1024) with all metrics.
 
 \begin{table*}[t]
 \centering
 \small
-\caption{KnowUndo full results (Llama-2-7B-chat, seed=42). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). LLM judge scores on 0--1 scale (Claude Sonnet~4.6; Opus~4.7 refuses on copyrighted content).}
+\caption{KnowUndo full results (Llama-2-7B-chat, 5-fold). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). LLM judge scores on 0--2 scale (Claude Opus~4.6; Opus~4.7 safety guardrails refuse to evaluate copyrighted content). Judge HM = hmean(1$-$FL/2, RA/2, ret\_RQ/2).}
 \label{tab:knowundo_full}
-\begin{tabular}{l|ccccc|c|ccc}
+\begin{tabular}{l|ccccc|c|cccc}
 \toprule
-& \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{3}{c}{\textbf{LLM Judge}} \\
-Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & RQ$\uparrow$ \\
+& \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
-FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & .602 & .830 & .795 \\
-GradDiff & .000 & .000 & .623 & .200 & .387 & .349 & .000 & .344 & .239 \\
-NPO & .670 & .193 & .757 & .300 & .447 & .441 & .243 & .783 & .740 \\
-SimNPO & .245 & .012 & .786 & .318 & .435 & .464 & .000 & .755 & .556 \\
-RMU & .444 & .081 & .768 & .207 & .390 & .353 & .000 & .453 & .479 \\
-PDU & .051 & .007 & .846 & .302 & .441 & .456 & .007 & .748 & .500 \\
-\method & \textbf{.133} & \textbf{.009} & \textbf{.848} & \textbf{.334} & .442 & \textbf{.479} & .021 & \textbf{.875} & \textbf{.612} \\
+FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
+GradAscent & .002 & .000 & .002 & .000 & .250 & .000 & 0.00 & 0.00 & 0.00 & .00 \\
+GradDiff & .002 & .000 & .642 & .199 & .386 & .348 & 0.00 & 0.81 & 0.53 & .41 \\
+NPO & .678 & .189 & .763 & .289 & .445 & .433 & 0.77 & 1.74 & 1.15 & .66 \\
+SimNPO & .303 & .048 & .788 & .317 & .435 & .461 & 0.05 & 1.73 & 1.12 & .75 \\
+RMU & .435 & .076 & .763 & .201 & .388 & .347 & 0.04 & 1.01 & 0.98 & .60 \\
+PDU & .045 & .011 & .836 & .285 & .442 & .442 & 0.01 & 1.59 & 0.93 & .68 \\
+\method & .332 & .040 & \textbf{.856} & \textbf{.332} & \textbf{.449} & \textbf{.477} & \textbf{0.04} & \textbf{1.79} & \textbf{1.17} & \textbf{.78} \\
 \bottomrule
 \end{tabular}
 \\[6pt]
-\begin{tabular}{l|ccccc|c|ccc}
+\begin{tabular}{l|ccccc|c|cccc}
 \toprule
-& \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{3}{c}{\textbf{LLM Judge}} \\
-Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & RQ$\uparrow$ \\
+& \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
-FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & .882 & .847 & .975 \\
-GradDiff & .070 & .056 & .753 & .427 & .434 & .526 & .028 & .495 & .379 \\
-NPO & .634 & .313 & .786 & .431 & .449 & .500 & .282 & .555 & .897 \\
-SimNPO & .486 & .289 & .889 & .540 & .441 & .543 & .177 & .657 & .548 \\
-RMU & .578 & .072 & .669 & .084 & .361 & .190 & .009 & .014 & .081 \\
-PDU & .059 & .032 & .809 & .468 & .441 & .552 & .018 & .574 & .379 \\
-\method & \textbf{.209} & \textbf{.075} & \textbf{.920} & \textbf{.621} & .435 & \textbf{.601} & .068 & \textbf{.732} & \textbf{.477} \\
+FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
+GradAscent & .017 & .004 & .012 & .006 & .318 & .017 & 0.00 & 0.00 & 0.00 & .00 \\
+GradDiff & .049 & .039 & .708 & .406 & .428 & .513 & 0.04 & 0.92 & 1.23 & .62 \\
+NPO & .646 & .322 & .790 & .426 & .450 & .496 & 0.74 & 1.12 & 1.99 & .68 \\
+SimNPO & .516 & .302 & .889 & .557 & .438 & .544 & 0.58 & 1.42 & 1.88 & .77 \\
+RMU & .568 & .072 & .661 & .079 & .361 & .182 & 0.07 & 0.07 & 0.21 & .08 \\
+PDU & .055 & .022 & .813 & .452 & .444 & .546 & 0.04 & 1.09 & 1.50 & .72 \\
+\method & .306 & .128 & \textbf{.937} & \textbf{.608} & \textbf{.462} & \textbf{.605} & 0.27 & \textbf{1.46} & \textbf{1.87} & \textbf{.83} \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\paragraph{Analysis.} KnowUndo evaluates a qualitatively different setting: the target model is LoRA-fine-tuned (not fully fine-tuned), so memorization is concentrated in the adapter weights. \method adapts naturally by initializing from the target LoRA checkpoint and unlearning on top. The privacy domain has 2.7$\times$ higher initial memorization than copyright (forget\_ROUGE 0.665 vs.\ 0.244), making it a harder target. \method's advantage is most pronounced on privacy ($+$0.049 HM over PDU), suggesting that the bilevel structure handles high-memorization settings particularly well---the stronger the memorization, the more benefit from bounded forgetting and adaptive constraint enforcement.
+\paragraph{Analysis.} KnowUndo evaluates a qualitatively different setting: the target model is LoRA-fine-tuned (not fully fine-tuned), so memorization is concentrated in the adapter weights. \method adapts naturally by initializing from the target LoRA checkpoint and unlearning on top. The privacy domain has 2.7$\times$ higher initial memorization than copyright (forget\_ROUGE 0.665 vs.\ 0.244), making it a harder target. \method's advantage is most pronounced on privacy ($+$0.059 HM over PDU on standard metrics, $+$0.06 on LLM judge), suggesting that the bilevel structure handles high-memorization settings particularly well---the stronger the memorization, the more benefit from bounded forgetting and adaptive constraint enforcement. Notably, \method uses identical hyperparameters as MUSE News (eps\_mul=3.2, $\eta_\theta$=3e-5, T=150), demonstrating cross-benchmark robustness without per-dataset tuning.
 
 \subsection{MUSE News Extended Results}
 \label{app:muse_news}

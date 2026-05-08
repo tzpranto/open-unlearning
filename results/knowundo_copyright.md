@@ -20,18 +20,18 @@ HM = harmonic_mean(1 - forget_ROUGE, retain_ROUGE, MMLU).
 
 ## LLM Judge (5-fold, seeds=42,123,456,789,1024)
 
-FL = Forget Leakage (lower = better), RA = Retain Accuracy (higher = better). Sonnet 4.6 judge (Opus 4.7 refuses on copyrighted content).
-HM = harmonic_mean(1 - FL/2, RA/2, RQ/2). All normalized to 0-1.
+FL = Forget Leakage (lower = better), RA = Retain Accuracy (higher = better). Opus 4.6 judge (Opus 4.7 refuses on copyrighted content).
+HM = harmonic_mean(1 - FL/2, RA/2, retain_RQ/2). All normalized to 0-1.
 
 | Method           | FL↓           | RA↑           | RQ↑           | forget_RQ↑    | retain_RQ↑    | HM↑           |
 | ---------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
-| GradAscent       | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.000 ± 0.000 |
-| GradDiff         | 0.06 ± 0.07   | 0.96 ± 0.16   | 0.63 ± 0.10   | 0.00 ± 0.01   | 0.84 ± 0.14   | 0.47 ± 0.06   |
-| NPO              | 1.37 ± 0.45   | 1.77 ± 0.10   | 1.85 ± 0.19   | 1.82 ± 0.28   | 1.86 ± 0.16   | 0.49 ± 0.15   |
-| SimNPO           | 0.29 ± 0.22   | 1.76 ± 0.13   | 1.41 ± 0.15   | 0.15 ± 0.12   | 1.85 ± 0.18   | 0.80 ± 0.04   |
-| RMU              | 0.42 ± 0.22   | 1.12 ± 0.12   | 1.16 ± 0.10   | 0.44 ± 0.13   | 1.42 ± 0.10   | 0.62 ± 0.03   |
-| PDU              | 0.08 ± 0.04   | 1.61 ± 0.07   | 1.18 ± 0.09   | 0.01 ± 0.01   | 1.58 ± 0.13   | 0.75 ± 0.03   |
-| **BLADE**        | 0.24 ± 0.19   | 1.81 ± 0.03   | 1.42 ± 0.10   | 0.07 ± 0.03   | 1.89 ± 0.13   | **0.82 ± 0.03** |
+| GradAscent       | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   | 0.00 ± 0.00   |
+| GradDiff         | 0.00 ± 0.00   | 0.81 ± 0.10   | 0.39 ± 0.05   | 0.00 ± 0.00   | 0.53 ± 0.06   | 0.41 ± 0.04   |
+| NPO              | 0.77 ± 0.10   | 1.74 ± 0.02   | 1.19 ± 0.02   | 1.31 ± 0.05   | 1.15 ± 0.03   | 0.66 ± 0.02   |
+| SimNPO           | 0.05 ± 0.03   | 1.73 ± 0.03   | 0.84 ± 0.02   | 0.05 ± 0.01   | 1.12 ± 0.03   | 0.75 ± 0.01   |
+| RMU              | 0.04 ± 0.02   | 1.01 ± 0.03   | 0.77 ± 0.04   | 0.14 ± 0.03   | 0.98 ± 0.06   | 0.60 ± 0.02   |
+| PDU              | 0.01 ± 0.01   | 1.59 ± 0.05   | 0.69 ± 0.04   | 0.01 ± 0.01   | 0.93 ± 0.06   | 0.68 ± 0.03   |
+| **BLADE**        | 0.04 ± 0.02   | 1.79 ± 0.02   | 0.88 ± 0.02   | 0.05 ± 0.01   | 1.17 ± 0.02   | **0.78 ± 0.01** |
 
 ## Single-seed only (seed=42)
 
@@ -42,12 +42,11 @@ Methods that could not be run 5-fold due to memory constraints.
 | FT (target)      | 0.8543      | 0.2444        | 0.8941      | 0.3355        | 0.4390 | 0.456 |
 | BLURNPO          | 0.4935      | 0.0229        | 0.6886      | 0.1401        | 0.4351 | 0.287 |
 
-LLM Judge (Claude Sonnet 4.6, seed=42):
+LLM Judge (Claude Opus 4.6, seed=42):
 
 | Method           | FL↓   | RA↑   | RQ↑   | forget_RQ↑ | retain_RQ↑ | HM↑   |
 | ---------------- | ----- | ----- | ----- | ---------- | ---------- | ----- |
-| FT (target)      | 1.203 | 1.660 | 1.591 | 1.554      | 1.604      | 0.605 |
-| BLURNPO          | 0.007 | 0.238 | 0.254 | 0.068      | 0.319      | 0.209 |
+| FT (target)      | 1.500 | 1.802 | 1.185 | 1.338      | 1.132      | 0.44  |
 
 ## Notes
 
@@ -55,7 +54,7 @@ LLM Judge (Claude Sonnet 4.6, seed=42):
 - All baselines use MUSE News unlearning params (lr=1e-5, 10 epochs, constant scheduler)
 - BLADE unified: same hyperparams as MUSE News (eps_mul=3.2, eta_theta=3e-5, conv_patience=20, T=150)
 - MMLU evaluated via lm-evaluation-harness (all 5-fold models)
-- LLM Judge (all seeds): Claude Opus 4.6 via Bedrock (Opus 4.7 refuses on copyrighted content)
+- LLM Judge (all seeds): Claude Opus 4.6 (Opus 4.7 safety guardrails refuse to evaluate copyrighted content, so we use Opus 4.6)
 - BLURNPO OOM on 40GB A100 (model + ref_model deepcopy exceeds memory); only s42 available (ran on 96GB local)
 - GA/GradDiff over-forget (retain_ROUGE=0, model collapsed)
 - NPO has highest FL in judge (1.37) — barely forgets; high retain but useless for unlearning
