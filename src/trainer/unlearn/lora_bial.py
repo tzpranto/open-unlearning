@@ -20,7 +20,6 @@ from typing import Optional
 from torch.utils.data import DataLoader
 from trainer.unlearn.base import UnlearnTrainer
 from trainer.unlearn.lora_bial_losses import compute_ce_loss, FORGET_LOSS_DISPATCH
-from trainer.unlearn.lora_bial_implicit import truncated_neumann
 
 logger = logging.getLogger(__name__)
 
@@ -57,20 +56,6 @@ class LoRABiAL(UnlearnTrainer):
         checkpoint_every_epoch: bool = False,
         checkpoint_every_n_steps: int = 0,
         eval_at_steps: Optional[list] = None,
-        # Implicit differentiation
-        use_implicit: bool = False,
-        neumann_steps: int = 5,
-        neumann_mu: float = 0.01,
-        neumann_alpha_default: float = 0.1,
-        neumann_alpha_min: float = 1e-6,
-        neumann_alpha_max: float = 1.0,
-        neumann_use_probe_alpha: bool = True,
-        neumann_max_growth_ratio: float = 10.0,
-        fd_hvp_eps: float = 0.01,
-        implicit_offload_cpu: bool = False,
-        implicit_warmup_steps: int = 0,
-        # Gradient projection
-        use_pcgrad: bool = False,
         # LoRA init (for sequential unlearning)
         lora_init_path: Optional[str] = None,
         save_lora_only: bool = False,
@@ -79,12 +64,6 @@ class LoRABiAL(UnlearnTrainer):
         inner_accumulation_steps: int = 0,
         inner_warmup_steps: int = 0,
         max_grad_norm: float = 1.0,
-        # Legacy (accepted but unused — keeps old configs compatible)
-        ga_clip: float = 1.0,
-        focal_gamma: float = 2.0,
-        npo_saturation_threshold: float = 0.01,
-        saturation_patience: int = 5,
-        retain_only_after_saturation: bool = False,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -123,20 +102,6 @@ class LoRABiAL(UnlearnTrainer):
         self.checkpoint_every_epoch = checkpoint_every_epoch
         self.checkpoint_every_n_steps = checkpoint_every_n_steps
         self.eval_at_steps = set(eval_at_steps) if eval_at_steps else set()
-        # Implicit
-        self.use_implicit = use_implicit
-        self.neumann_steps = neumann_steps
-        self.neumann_mu = neumann_mu
-        self.neumann_alpha_default = neumann_alpha_default
-        self.neumann_alpha_min = neumann_alpha_min
-        self.neumann_alpha_max = neumann_alpha_max
-        self.neumann_use_probe_alpha = neumann_use_probe_alpha
-        self.neumann_max_growth_ratio = neumann_max_growth_ratio
-        self.fd_hvp_eps = fd_hvp_eps
-        self.implicit_offload_cpu = implicit_offload_cpu
-        self.implicit_warmup_steps = implicit_warmup_steps
-        # PCGrad
-        self.use_pcgrad = use_pcgrad
         # LoRA init
         self.lora_init_path = lora_init_path
         self.save_lora_only = save_lora_only
@@ -229,134 +194,30 @@ class LoRABiAL(UnlearnTrainer):
 
         total_L_fgt = 0.0
         total_L_ret = 0.0
-        last_forget_batch = None
-        last_retain_batch = None
 
-        if self.use_pcgrad:
-            lora_params = [p for p in self.model.parameters() if p.requires_grad]
-            g_fgt_accum = [torch.zeros_like(p.data) for p in lora_params]
-            g_ret_accum = [torch.zeros_like(p.data) for p in lora_params]
+        for _ in range(self.gradient_accumulation_steps):
+            forget_batch = self._next_forget_batch()
+            retain_batch = self._next_retain_batch()
 
-            for _ in range(self.gradient_accumulation_steps):
-                forget_batch = self._next_forget_batch()
-                retain_batch = self._next_retain_batch()
+            L_fgt = self._compute_forget_loss(forget_batch, device)
+            L_ret = self._compute_ce_loss(retain_batch, device)
 
-                self._outer_opt.zero_grad()
-                L_fgt = self._compute_forget_loss(forget_batch, device)
-                (L_fgt / self.gradient_accumulation_steps).backward()
-                for i, p in enumerate(lora_params):
-                    if p.grad is not None:
-                        g_fgt_accum[i].add_(p.grad.detach())
+            r_micro = L_ret - self.epsilon
+            r_plus = torch.clamp(r_micro, min=0.0)
+            L_alm = L_fgt + self.lambda_dual * r_micro + 0.5 * self.rho * (r_plus ** 2)
+            (L_alm / self.gradient_accumulation_steps).backward()
 
-                self._outer_opt.zero_grad()
-                L_ret = self._compute_ce_loss(retain_batch, device)
-                (L_ret / self.gradient_accumulation_steps).backward()
-                for i, p in enumerate(lora_params):
-                    if p.grad is not None:
-                        g_ret_accum[i].add_(p.grad.detach())
+            total_L_fgt += L_fgt.item()
+            total_L_ret += L_ret.item()
 
-                total_L_fgt += L_fgt.item()
-                total_L_ret += L_ret.item()
-                last_forget_batch = forget_batch
-                last_retain_batch = retain_batch
-
-            avg_L_fgt = total_L_fgt / self.gradient_accumulation_steps
-            avg_L_ret = total_L_ret / self.gradient_accumulation_steps
-            avg_r = avg_L_ret - self.epsilon
-
-            g_fgt_flat = torch.cat([g.reshape(-1) for g in g_fgt_accum])
-            g_ret_flat = torch.cat([g.reshape(-1) for g in g_ret_accum])
-            dot = (g_fgt_flat * g_ret_flat).sum()
-            g_fgt_norm_sq = g_fgt_flat.norm() ** 2 + 1e-12
-            self._pcgrad_cos = (dot / (g_fgt_flat.norm() * g_ret_flat.norm().clamp(min=1e-12))).item()
-
-            # Project RETAIN gradient orthogonal to forget — retain recovery
-            # can't undo forgetting, but forget keeps full gradient strength
-            if dot < 0:
-                g_ret_proj = g_ret_flat - (dot / g_fgt_norm_sq) * g_fgt_flat
-            else:
-                g_ret_proj = g_ret_flat
-
-            r_plus = max(0.0, avg_r)
-            alm_weight = self.lambda_dual + self.rho * r_plus
-            g_combined = g_fgt_flat + alm_weight * g_ret_proj
-
-            self._outer_opt.zero_grad()
-            offset = 0
-            for p in lora_params:
-                n = p.numel()
-                p.grad = g_combined[offset:offset + n].reshape(p.shape).to(p.dtype)
-                offset += n
-
-            del g_fgt_accum, g_ret_accum, g_fgt_flat, g_ret_flat, g_ret_proj, g_combined
-        else:
-            for _ in range(self.gradient_accumulation_steps):
-                forget_batch = self._next_forget_batch()
-                retain_batch = self._next_retain_batch()
-
-                L_fgt = self._compute_forget_loss(forget_batch, device)
-                L_ret = self._compute_ce_loss(retain_batch, device)
-
-                r_micro = L_ret - self.epsilon
-                r_plus = torch.clamp(r_micro, min=0.0)
-                L_alm = L_fgt + self.lambda_dual * r_micro + 0.5 * self.rho * (r_plus ** 2)
-                (L_alm / self.gradient_accumulation_steps).backward()
-
-                total_L_fgt += L_fgt.item()
-                total_L_ret += L_ret.item()
-                last_forget_batch = forget_batch
-                last_retain_batch = retain_batch
-
-            avg_L_fgt = total_L_fgt / self.gradient_accumulation_steps
-            avg_L_ret = total_L_ret / self.gradient_accumulation_steps
-            avg_r = avg_L_ret - self.epsilon
+        avg_L_fgt = total_L_fgt / self.gradient_accumulation_steps
+        avg_L_ret = total_L_ret / self.gradient_accumulation_steps
+        avg_r = avg_L_ret - self.epsilon
 
         torch.nn.utils.clip_grad_norm_(
             [p for p in self.model.parameters() if p.requires_grad],
             self.max_grad_norm,
         )
-
-        # Implicit correction
-        if self.use_implicit and global_step >= self.implicit_warmup_steps:
-            lora_params = [p for p in self.model.parameters() if p.requires_grad]
-            v = torch.cat([
-                p.grad.reshape(-1) if p.grad is not None
-                else torch.zeros(p.numel(), device=device)
-                for p in lora_params
-            ])
-            torch.cuda.empty_cache()
-
-            _last_fb, _last_rb = last_forget_batch, last_retain_batch
-            cfg = {k: getattr(self, k) for k in [
-                "neumann_steps", "neumann_mu", "neumann_alpha_default",
-                "neumann_alpha_min", "neumann_alpha_max", "neumann_use_probe_alpha",
-                "neumann_max_growth_ratio", "fd_hvp_eps", "implicit_offload_cpu",
-            ]}
-
-            def _inner_loss_fn():
-                return self._compute_ce_loss(_last_rb, device)
-
-            def _outer_loss_fn():
-                l_f = self._compute_forget_loss(_last_fb, device)
-                l_r = self._compute_ce_loss(_last_rb, device)
-                r_t = l_r - self.epsilon
-                r_p = torch.clamp(r_t, min=0.0)
-                return l_f + self.lambda_dual * r_t + 0.5 * self.rho * (r_p ** 2)
-
-            g_corr, status = truncated_neumann(
-                lora_params, v, _inner_loss_fn, _outer_loss_fn, cfg
-            )
-            offset = 0
-            for p in lora_params:
-                n = p.numel()
-                p.grad = g_corr[offset:offset + n].reshape(p.shape).to(p.dtype)
-                offset += n
-            if status != "ok":
-                logger.info(f"  Implicit: {status} (using uncorrected gradient)")
-            torch.nn.utils.clip_grad_norm_(
-                [p for p in self.model.parameters() if p.requires_grad],
-                self.max_grad_norm,
-            )
 
         self._outer_opt.step()
 
@@ -474,13 +335,8 @@ class LoRABiAL(UnlearnTrainer):
                      f"{f', λ_max={self.lambda_max}' if self.lambda_max > 0 else ''}")
         logger.info(f"  LR: outer={self.eta_theta}, inner={self.eta_in}, schedule={self.lr_schedule}")
         logger.info(f"  LoRA: r={self.lora_r}, alpha={self.lora_alpha_val}")
-        if self.use_pcgrad:
-            logger.info("  PCGrad: enabled (forget gradient projected orthogonal to retain)")
         if self.inner_warmup_steps > 0:
             logger.info(f"  Inner warmup: outer-only for first {self.inner_warmup_steps} steps")
-        if self.use_implicit:
-            logger.info(f"  Implicit: FD-HVP Neumann, steps={self.neumann_steps}, "
-                         f"μ={self.neumann_mu}, eps={self.fd_hvp_eps}, warmup={self.implicit_warmup_steps}")
         if torch.cuda.is_available():
             logger.info(f"  GPU memory before bilevel: {torch.cuda.memory_allocated() / 1e9:.1f} GB")
 
@@ -541,8 +397,6 @@ class LoRABiAL(UnlearnTrainer):
                 extras = ""
                 if self._outer_scheduler is not None:
                     extras += f" olr={self._outer_opt.param_groups[0]['lr']:.2e}"
-                if self.use_pcgrad and hasattr(self, '_pcgrad_cos'):
-                    extras += f" cos={self._pcgrad_cos:+.3f}"
                 logger.info(
                     f"  [{t:4d}/{max_outer_steps}|e{epoch+1}] "
                     f"L_fgt={L_fgt:.4f} L_ret={L_ret:.4f} "

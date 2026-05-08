@@ -108,6 +108,11 @@ At this point the constraint is satisfied ($r \leq 0$) and the forget loss contr
 This gives a stopping rule without held-out validation: a rising $\lambda$ signals ongoing conflict, while a flat $\lambda$ confirms equilibrium.
 In practice, $\lambda$ plateaus 10--15 steps after the initial ratchet, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
 
+\paragraph{Early stopping.}
+In addition to the $\lambda$-plateau criterion, we track an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change.
+Training terminates early when this velocity drops below 1\% of its observed peak, indicating that the forget objective is exhausted and further steps yield no meaningful progress.
+This avoids running to the safety cap $T$ when convergence occurs earlier.
+
 \subsection{Algorithm Summary}
 
 \begin{algorithm}[t]

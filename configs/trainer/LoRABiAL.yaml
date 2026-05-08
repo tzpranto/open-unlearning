@@ -35,22 +35,6 @@ method_args:
   checkpoint_every_n_steps: 0  # >0 = save LoRA checkpoint every N steps (crash recovery)
   eval_at_steps: null  # e.g. [25, 50, 100, 200]
 
-  # Implicit differentiation (FD-HVP + Truncated Neumann)
-  use_implicit: false
-  neumann_steps: 5
-  neumann_mu: 0.01
-  neumann_alpha_default: 0.1
-  neumann_alpha_min: 1e-6
-  neumann_alpha_max: 1.0
-  neumann_use_probe_alpha: true
-  neumann_max_growth_ratio: 10.0
-  fd_hvp_eps: 0.01
-  implicit_offload_cpu: false
-  implicit_warmup_steps: 0
-
-  # Gradient projection (PCGrad)
-  use_pcgrad: false  # project forget gradient orthogonal to retain gradient
-
   # LoRA init (for sequential unlearning)
   lora_init_path: null
   save_lora_only: false
