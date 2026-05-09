@@ -137,7 +137,7 @@ PDU & 0.62$_{\pm.04}$ & 1.72$_{\pm.01}$ & 1.97$_{\pm.00}$ & .828$_{\pm.01}$ & 0.
 \begin{table}[t]
 \centering
 \small
-\caption{MUSE Books (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
+\caption{MUSE Books (5-fold). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
 \label{tab:muse_books}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
@@ -152,18 +152,17 @@ NPO & .303$_{\pm.02}$ & .342$_{\pm.03}$ & .574$_{\pm.02}$ & .638$_{\pm.01}$ \\
 SimNPO & .238$_{\pm.02}$ & .002$_{\pm.00}$ & .600$_{\pm.01}$ & .753$_{\pm.01}$ \\
 RMU & .210$_{\pm.00}$ & .113$_{\pm.01}$ & .598$_{\pm.01}$ & .738$_{\pm.00}$ \\
 PDU & .139$_{\pm.01}$ & .129$_{\pm.01}$ & .372$_{\pm.01}$ & .600$_{\pm.01}$ \\
-BLURNPO$^\dagger$ & .175 & .000 & .527 & .730 \\
+BLURNPO & .175$_{\pm.01}$ & .000$_{\pm.00}$ & .547$_{\pm.02}$ & .742$_{\pm.01}$ \\
 \midrule
 \method & \textbf{.089}$_{\pm.02}$ & \textbf{.000}$_{\pm.00}$ & \textbf{.638}$_{\pm.01}$ & \textbf{.818}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
-{\raggedright\footnotesize $^\dagger$seed=42 only (BLURNPO OOM on 4$\times$40GB for 5-fold).\par}
 \end{table}
 
 \begin{table}[t]
 \centering
 \small
-\caption{MUSE Books LLM judge (5-fold; $^\dagger$seed=42). Best in \textbf{bold}.}
+\caption{MUSE Books LLM judge (5-fold). Best in \textbf{bold}.}
 \label{tab:muse_books_judge}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
@@ -176,7 +175,7 @@ NPO & 0.91$_{\pm.03}$ & 1.28$_{\pm.03}$ & 1.61$_{\pm.01}$ & .647$_{\pm.01}$ \\
 SimNPO & 0.31$_{\pm.12}$ & 1.28$_{\pm.02}$ & 1.62$_{\pm.01}$ & .753$_{\pm.02}$ \\
 RMU & 0.32$_{\pm.02}$ & 1.41$_{\pm.02}$ & 1.68$_{\pm.01}$ & .791$_{\pm.00}$ \\
 PDU & 0.53$_{\pm.02}$ & 0.99$_{\pm.02}$ & 1.15$_{\pm.02}$ & .586$_{\pm.01}$ \\
-BLURNPO$^\dagger$ & 0.21 & 1.09 & 1.47 & .696 \\
+BLURNPO & 0.20$_{\pm.02}$ & 1.15$_{\pm.06}$ & 1.52$_{\pm.07}$ & .720$_{\pm.02}$ \\
 \midrule
 \method & \textbf{0.11}$_{\pm.02}$ & \textbf{1.39}$_{\pm.01}$ & \textbf{1.66}$_{\pm.02}$ & \textbf{.810}$_{\pm.01}$ \\
 \bottomrule
