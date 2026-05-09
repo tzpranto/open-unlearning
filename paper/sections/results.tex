@@ -24,7 +24,7 @@ All results are 5-fold (seeds 42/123/456/789/1024) unless noted.
 \label{sec:tofu_1b}
 %% ============================================================
 
-\begin{table*}[t]
+\begin{table*}[t!]
 \centering
 \small
 \caption{TOFU 1B full results (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Best in \textbf{bold}.}
@@ -50,7 +50,7 @@ PDU & .602$_{\pm.00}$ & .186$_{\pm.01}$ & .313$_{\pm.01}$ & .690$_{\pm.01}$ & .5
 \end{tabular}}
 \end{table*}
 
-\begin{table*}[t]
+\begin{table*}[t!]
 \centering
 \small
 \caption{LLM Judge on TOFU 1B (5 seeds, Claude Opus~4.7). Best in \textbf{bold}.}
@@ -74,72 +74,21 @@ PDU & 0.86$_{\pm.06}$ & 1.60$_{\pm.01}$ & 1.97$_{\pm.00}$ & .746$_{\pm.02}$ & 0.
 \end{tabular}}
 \end{table*}
 
-%% ============================================================
-\subsection{TOFU (Llama-3.2-3B-Instruct)}
-\label{sec:tofu_3b}
-%% ============================================================
-
-\begin{table*}[t]
-\centering
-\small
-\caption{TOFU 3B full results (5 seeds). Best in \textbf{bold}.}
-\label{tab:tofu_3b_full}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}l|cccc|cccc|cccc@{}}
-\toprule
-& \multicolumn{4}{c|}{Forget 1\%} & \multicolumn{4}{c|}{Forget 5\%} & \multicolumn{4}{c}{Forget 10\%} \\
-Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
-\midrule
-Gold & .663 & .179 & .409 & .656 & .659 & .130 & .388 & .698 & .661 & .115 & .382 & .698 \\
-\midrule
-GradAscent & .668$_{\pm.00}$ & .564$_{\pm.01}$ & .525$_{\pm.01}$ & .509$_{\pm.01}$ & .481$_{\pm.02}$ & .140$_{\pm.02}$ & .333$_{\pm.01}$ & .632$_{\pm.01}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .003$_{\pm.00}$ & .000$_{\pm.00}$ \\
-GradDiff & .659$_{\pm.00}$ & .569$_{\pm.02}$ & .578$_{\pm.03}$ & .483$_{\pm.02}$ & .566$_{\pm.01}$ & .147$_{\pm.01}$ & .395$_{\pm.01}$ & .653$_{\pm.00}$ & .532$_{\pm.02}$ & .079$_{\pm.01}$ & .361$_{\pm.02}$ & .662$_{\pm.01}$ \\
-NPO & .668$_{\pm.00}$ & .553$_{\pm.01}$ & .494$_{\pm.01}$ & .525$_{\pm.01}$ & .542$_{\pm.01}$ & .219$_{\pm.00}$ & .359$_{\pm.01}$ & .640$_{\pm.00}$ & .549$_{\pm.01}$ & .237$_{\pm.01}$ & .353$_{\pm.06}$ & .640$_{\pm.02}$ \\
-SimNPO & .656$_{\pm.00}$ & .920$_{\pm.01}$ & .830$_{\pm.02}$ & .151$_{\pm.01}$ & .657$_{\pm.00}$ & .901$_{\pm.00}$ & .818$_{\pm.01}$ & .175$_{\pm.00}$ & .652$_{\pm.00}$ & .889$_{\pm.00}$ & .808$_{\pm.00}$ & .191$_{\pm.00}$ \\
-RMU & .657$_{\pm.00}$ & .861$_{\pm.00}$ & .715$_{\pm.01}$ & .246$_{\pm.00}$ & .644$_{\pm.00}$ & .602$_{\pm.00}$ & .534$_{\pm.00}$ & .483$_{\pm.00}$ & .647$_{\pm.00}$ & .390$_{\pm.01}$ & .472$_{\pm.00}$ & .591$_{\pm.00}$ \\
-BLURNPO & .667$_{\pm.00}$ & .822$_{\pm.02}$ & .788$_{\pm.02}$ & .253$_{\pm.02}$ & .640$_{\pm.02}$ & .683$_{\pm.08}$ & .593$_{\pm.09}$ & .412$_{\pm.08}$ & .385$_{\pm.17}$ & .245$_{\pm.16}$ & .314$_{\pm.09}$ & .502$_{\pm.10}$ \\
-PDU & .692$_{\pm.00}$ & .168$_{\pm.01}$ & .283$_{\pm.01}$ & .742$_{\pm.00}$ & .687$_{\pm.00}$ & .009$_{\pm.00}$ & .085$_{\pm.01}$ & .843$_{\pm.00}$ & .680$_{\pm.01}$ & \textbf{.000}$_{\pm.00}$ & .029$_{\pm.01}$ & \textbf{.857}$_{\pm.00}$ \\
-\midrule
-\method & .654$_{\pm.00}$ & \textbf{.000}$_{\pm.00}$ & \textbf{.015}$_{\pm.01}$ & \textbf{.846}$_{\pm.00}$ & .655$_{\pm.00}$ & \textbf{.007}$_{\pm.01}$ & \textbf{.028}$_{\pm.02}$ & .842$_{\pm.01}$ & .647$_{\pm.00}$ & .005$_{\pm.00}$ & \textbf{.038}$_{\pm.01}$ & .836$_{\pm.01}$ \\
-\bottomrule
-\end{tabular}}
-\end{table*}
-
-\begin{table*}[t]
-\centering
-\small
-\caption{LLM Judge on TOFU 3B (5 seeds, Claude Opus~4.7). Best in \textbf{bold}.}
-\label{tab:tofu_3b_judge}
-\resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}l|cccc|cccc|cccc@{}}
-\toprule
-& \multicolumn{4}{c|}{Forget 1\%} & \multicolumn{4}{c|}{Forget 5\%} & \multicolumn{4}{c}{Forget 10\%} \\
-Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
-\midrule
-GradAscent & 1.34$_{\pm.09}$ & 1.85$_{\pm.00}$ & 2.00$_{\pm.00}$ & .587$_{\pm.05}$ & 0.69$_{\pm.04}$ & 1.45$_{\pm.02}$ & 1.98$_{\pm.01}$ & .766$_{\pm.01}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & .000$_{\pm.00}$ \\
-GradDiff & 1.50$_{\pm.07}$ & 1.82$_{\pm.02}$ & 2.00$_{\pm.00}$ & .490$_{\pm.04}$ & 0.83$_{\pm.01}$ & 1.29$_{\pm.02}$ & 1.71$_{\pm.06}$ & .677$_{\pm.01}$ & 0.66$_{\pm.03}$ & 1.16$_{\pm.06}$ & 1.43$_{\pm.20}$ & .648$_{\pm.04}$ \\
-NPO & 1.23$_{\pm.04}$ & 1.84$_{\pm.00}$ & 2.00$_{\pm.00}$ & .640$_{\pm.02}$ & 0.74$_{\pm.04}$ & 1.55$_{\pm.01}$ & 2.00$_{\pm.00}$ & .774$_{\pm.01}$ & 0.61$_{\pm.08}$ & 1.52$_{\pm.04}$ & 1.99$_{\pm.01}$ & .796$_{\pm.01}$ \\
-SimNPO & 1.83$_{\pm.05}$ & 1.84$_{\pm.01}$ & 2.00$_{\pm.00}$ & .220$_{\pm.06}$ & 1.74$_{\pm.01}$ & 1.85$_{\pm.01}$ & 2.00$_{\pm.00}$ & .305$_{\pm.01}$ & 1.71$_{\pm.01}$ & 1.86$_{\pm.01}$ & 2.00$_{\pm.00}$ & .331$_{\pm.01}$ \\
-RMU & 1.59$_{\pm.04}$ & 1.81$_{\pm.00}$ & 2.00$_{\pm.00}$ & .432$_{\pm.03}$ & 1.11$_{\pm.03}$ & 1.70$_{\pm.01}$ & 1.99$_{\pm.00}$ & .679$_{\pm.01}$ & 0.85$_{\pm.02}$ & 1.70$_{\pm.01}$ & 1.99$_{\pm.00}$ & .765$_{\pm.01}$ \\
-BLURNPO & 1.73$_{\pm.12}$ & 1.85$_{\pm.00}$ & 2.00$_{\pm.00}$ & .308$_{\pm.11}$ & 1.40$_{\pm.15}$ & 1.71$_{\pm.05}$ & 2.00$_{\pm.00}$ & .538$_{\pm.08}$ & 0.73$_{\pm.35}$ & 1.05$_{\pm.51}$ & 1.51$_{\pm.60}$ & .550$_{\pm.16}$ \\
-PDU & 0.62$_{\pm.04}$ & 1.72$_{\pm.01}$ & 1.97$_{\pm.00}$ & .828$_{\pm.01}$ & 0.07$_{\pm.01}$ & 1.75$_{\pm.01}$ & 1.98$_{\pm.00}$ & .941$_{\pm.00}$ & \textbf{0.01}$_{\pm.01}$ & 1.73$_{\pm.03}$ & 1.95$_{\pm.04}$ & .940$_{\pm.01}$ \\
-\midrule
-\method & \textbf{0.01}$_{\pm.01}$ & 1.85$_{\pm.00}$ & 2.00$_{\pm.00}$ & \textbf{.970}$_{\pm.00}$ & \textbf{0.02}$_{\pm.03}$ & 1.82$_{\pm.01}$ & 1.99$_{\pm.00}$ & \textbf{.962}$_{\pm.00}$ & 0.03$_{\pm.03}$ & 1.84$_{\pm.01}$ & 1.99$_{\pm.00}$ & \textbf{.965}$_{\pm.00}$ \\
-\bottomrule
-\end{tabular}}
-\end{table*}
+Results on the larger 3B model (Appendix~\ref{app:tofu_full}) confirm the same pattern: \method achieves HM=0.846/0.842/0.836 across splits, with near-zero FL on the LLM judge (HM$_\text{J}$=0.970/0.962/0.965).
 
 %% ============================================================
 \subsection{MUSE Books (Llama-2-7B)}
 \label{sec:muse_books}
 %% ============================================================
 
-\begin{table}[t]
+\begin{table*}[t!]
 \centering
 \small
-\caption{MUSE Books (5-fold). HM = hmean(1$-$fk, 1$-$vm, rk). Best in \textbf{bold} (excl.\ Gold).}
+\caption{MUSE Books results (5-fold). Left: automated metrics; HM = hmean(1$-$fk, 1$-$vm, rk). Right: LLM judge (0--2 scale). Best in \textbf{bold} (excl.\ Gold).}
 \label{tab:muse_books}
-\resizebox{\columnwidth}{!}{%
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
@@ -157,17 +106,15 @@ BLURNPO & .175$_{\pm.01}$ & .000$_{\pm.00}$ & .547$_{\pm.02}$ & .742$_{\pm.01}$ 
 \method & \textbf{.089}$_{\pm.02}$ & \textbf{.000}$_{\pm.00}$ & \textbf{.638}$_{\pm.01}$ & \textbf{.818}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
-\end{table}
-
-\begin{table}[t]
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\small
-\caption{MUSE Books LLM judge (5-fold). Best in \textbf{bold}.}
-\label{tab:muse_books_judge}
-\resizebox{\columnwidth}{!}{%
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+\midrule
 \midrule
 GradAscent & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & .000$_{\pm.00}$ \\
 GradDiff & 0.00$_{\pm.00}$ & 0.04$_{\pm.02}$ & 0.01$_{\pm.01}$ & .010$_{\pm.01}$ \\
@@ -180,19 +127,22 @@ BLURNPO & 0.20$_{\pm.02}$ & 1.15$_{\pm.06}$ & 1.52$_{\pm.07}$ & .720$_{\pm.02}$ 
 \method & \textbf{0.11}$_{\pm.02}$ & \textbf{1.39}$_{\pm.01}$ & \textbf{1.66}$_{\pm.02}$ & \textbf{.810}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
-\end{table}
+\end{minipage}
+\end{table*}
 
 %% ============================================================
 \subsection{MUSE News (Llama-2-7B)}
 \label{sec:muse_news}
 %% ============================================================
 
-\begin{table}[t]
+\begin{table*}[t!]
 \centering
 \small
-\caption{MUSE News (5-fold). Best HM in \textbf{bold}.}
+\caption{MUSE News results (5-fold). Left: automated metrics; best HM in \textbf{bold}. Right: LLM judge (0--2 scale).}
 \label{tab:muse_news}
-\resizebox{\columnwidth}{!}{%
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
@@ -209,17 +159,15 @@ BLURNPO & .302$_{\pm.04}$ & .146$_{\pm.04}$ & .274$_{\pm.02}$ & .478$_{\pm.01}$ 
 \method & .545$_{\pm.02}$ & .211$_{\pm.03}$ & .490$_{\pm.01}$ & .544$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
-\end{table}
-
-\begin{table}[t]
+\end{minipage}%
+\hfill
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\small
-\caption{MUSE News LLM judge (5-fold). Best in \textbf{bold}.}
-\label{tab:muse_news_judge}
-\resizebox{\columnwidth}{!}{%
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+\midrule
 \midrule
 GradDiff & 0.58$_{\pm.02}$ & 0.79$_{\pm.04}$ & 1.16$_{\pm.14}$ & .529$_{\pm.03}$ \\
 NPO & 1.20$_{\pm.03}$ & 1.05$_{\pm.02}$ & 1.58$_{\pm.01}$ & .531$_{\pm.01}$ \\
@@ -231,19 +179,20 @@ BLURNPO & 0.41$_{\pm.10}$ & 0.44$_{\pm.07}$ & 1.28$_{\pm.13}$ & .406$_{\pm.04}$ 
 \method & 0.86$_{\pm.06}$ & 0.92$_{\pm.05}$ & 1.70$_{\pm.04}$ & .588$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
-\end{table}
+\end{minipage}
+\end{table*}
 
 %% ============================================================
 \subsection{KnowUndo (Llama-2-7B-chat)}
 \label{sec:knowundo}
 %% ============================================================
 
-All methods 5-fold except BLURNPO (OOM). MMLU evaluated once at seed=42, used as constant for HM computation.
+All methods 5-fold. MMLU evaluated once at seed=42, used as constant for HM computation.
 
-\begin{table*}[t]
+\begin{table*}[t!]
 \centering
 \small
-\caption{KnowUndo Copyright (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Opus~4.6 used as judge since Opus~4.7 safety guardrails refuse to evaluate copyrighted content. Best in \textbf{bold}.}
+\caption{KnowUndo Copyright (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Opus~4.6 used as judge since Opus~4.7 safety guardrails refuse to evaluate copyrighted content. Best in \textbf{bold}.}
 \label{tab:knowundo_copyright}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc|cccc@{}}
@@ -252,23 +201,24 @@ All methods 5-fold except BLURNPO (OOM). MMLU evaluated once at seed=42, used as
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
 FT (target) & .854 & .244 & .894 & .336 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
+Retrain & .666 & .205 & .890 & .343 & .468 & 0.96 & 1.79 & 1.13 & .62 \\
 GradAscent & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .002$_{\pm.00}$ & .000$_{\pm.00}$ & --- & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & --- \\
 GradDiff & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .642$_{\pm.04}$ & .199$_{\pm.01}$ & .348$_{\pm.01}$ & 0.00$_{\pm.00}$ & 0.81$_{\pm.10}$ & 0.53$_{\pm.06}$ & .41$_{\pm.04}$ \\
 NPO & .678$_{\pm.02}$ & .189$_{\pm.01}$ & .763$_{\pm.02}$ & .289$_{\pm.00}$ & .433$_{\pm.00}$ & 0.77$_{\pm.10}$ & 1.74$_{\pm.02}$ & 1.15$_{\pm.03}$ & .66$_{\pm.02}$ \\
 SimNPO & .303$_{\pm.05}$ & .048$_{\pm.04}$ & .788$_{\pm.01}$ & .317$_{\pm.00}$ & .461$_{\pm.01}$ & 0.05$_{\pm.03}$ & 1.73$_{\pm.03}$ & 1.12$_{\pm.03}$ & .75$_{\pm.01}$ \\
 RMU & .435$_{\pm.01}$ & .076$_{\pm.00}$ & .763$_{\pm.00}$ & .201$_{\pm.01}$ & .347$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.01$_{\pm.03}$ & 0.98$_{\pm.06}$ & .60$_{\pm.02}$ \\
 PDU & .045$_{\pm.00}$ & .011$_{\pm.00}$ & .836$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.01}$ & 0.01$_{\pm.01}$ & 1.59$_{\pm.05}$ & 0.93$_{\pm.06}$ & .68$_{\pm.03}$ \\
-BLURNPO$^\dagger$ & .494 & .023 & .689 & .140 & .287 & --- & --- & --- & --- \\
+BLURNPO & .173$_{\pm.17}$ & .015$_{\pm.02}$ & .719$_{\pm.02}$ & .190$_{\pm.03}$ & .353$_{\pm.03}$ & 0.03$_{\pm.05}$ & 0.84$_{\pm.14}$ & 0.88$_{\pm.17}$ & .52$_{\pm.07}$ \\
 \midrule
 \method & .332$_{\pm.04}$ & \textbf{.040}$_{\pm.01}$ & \textbf{.856}$_{\pm.01}$ & \textbf{.332}$_{\pm.01}$ & \textbf{.477}$_{\pm.00}$ & \textbf{0.04}$_{\pm.02}$ & \textbf{1.79}$_{\pm.02}$ & \textbf{1.17}$_{\pm.02}$ & \textbf{.78}$_{\pm.01}$ \\
 \bottomrule
 \end{tabular}}
 \end{table*}
 
-\begin{table*}[t]
+\begin{table*}[t!]
 \centering
 \small
-\caption{KnowUndo Privacy (5-fold; $^\dagger$seed=42). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Best in \textbf{bold}.}
+\caption{KnowUndo Privacy (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Best in \textbf{bold}.}
 \label{tab:knowundo_privacy}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc|cccc@{}}
@@ -277,13 +227,14 @@ BLURNPO$^\dagger$ & .494 & .023 & .689 & .140 & .287 & --- & --- & --- & --- \\
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
 FT (target) & .940 & .665 & .949 & .698 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
+Retrain & .643 & .378 & .889 & .570 & .544 & 0.95 & 1.43 & 1.96 & .70 \\
 GradAscent & .017$_{\pm.02}$ & .004$_{\pm.01}$ & .012$_{\pm.01}$ & .006$_{\pm.01}$ & --- & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & --- \\
 GradDiff & .049$_{\pm.02}$ & .039$_{\pm.02}$ & .708$_{\pm.03}$ & .406$_{\pm.02}$ & .513$_{\pm.01}$ & 0.04$_{\pm.03}$ & 0.92$_{\pm.09}$ & 1.23$_{\pm.16}$ & .62$_{\pm.04}$ \\
 NPO & .646$_{\pm.02}$ & .322$_{\pm.02}$ & .790$_{\pm.00}$ & .426$_{\pm.01}$ & .496$_{\pm.01}$ & 0.74$_{\pm.07}$ & 1.12$_{\pm.02}$ & 1.99$_{\pm.01}$ & .68$_{\pm.01}$ \\
 SimNPO & .516$_{\pm.04}$ & .302$_{\pm.03}$ & .889$_{\pm.01}$ & .557$_{\pm.01}$ & .544$_{\pm.01}$ & 0.58$_{\pm.07}$ & 1.42$_{\pm.04}$ & 1.88$_{\pm.07}$ & .77$_{\pm.01}$ \\
 RMU & .568$_{\pm.01}$ & .072$_{\pm.00}$ & .661$_{\pm.01}$ & .079$_{\pm.01}$ & .182$_{\pm.01}$ & 0.07$_{\pm.02}$ & 0.07$_{\pm.02}$ & 0.21$_{\pm.02}$ & .08$_{\pm.02}$ \\
 PDU & .055$_{\pm.02}$ & .022$_{\pm.01}$ & .813$_{\pm.02}$ & .452$_{\pm.02}$ & .546$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.09$_{\pm.07}$ & 1.50$_{\pm.04}$ & .72$_{\pm.02}$ \\
-BLURNPO$^\dagger$ & .103 & .038 & .704 & .362 & .498 & --- & --- & --- & --- \\
+BLURNPO & .144$_{\pm.07}$ & .058$_{\pm.03}$ & .707$_{\pm.02}$ & .356$_{\pm.05}$ & .498$_{\pm.03}$ & 0.15$_{\pm.10}$ & 0.78$_{\pm.08}$ & 1.60$_{\pm.23}$ & .61$_{\pm.05}$ \\
 \midrule
 \method & .306$_{\pm.03}$ & .128$_{\pm.02}$ & \textbf{.937}$_{\pm.01}$ & \textbf{.608}$_{\pm.02}$ & \textbf{.605}$_{\pm.01}$ & 0.27$_{\pm.03}$ & \textbf{1.46}$_{\pm.06}$ & \textbf{1.87}$_{\pm.06}$ & \textbf{.83}$_{\pm.02}$ \\
 \bottomrule
@@ -295,67 +246,23 @@ BLURNPO$^\dagger$ & .103 & .038 & .704 & .362 & .498 & --- & --- & --- & --- \\
 \label{sec:sust_scal}
 %% ============================================================
 
-Scalability: single-shot unlearning on progressively larger forget sets (1--4$\times$ the 889-sample standard).
-Sustainability: sequential unlearning where each step applies the method on a new 889-sample forget set starting from the previous checkpoint.
+We stress-test both methods along two axes: \emph{scalability} (single-shot unlearning on progressively larger forget sets, 1--4$\times$ the 889-sample standard) and \emph{sustainability} (sequential unlearning where each step applies the method on a new 889-sample forget set starting from the previous checkpoint).
 
-\begin{table}[t]
-\centering
-\small
-\caption{Scalability on MUSE News.}
-\label{tab:scalability}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-Scale & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{2}{*}{1$\times$ (889)} & PDU & .542 & .065 & .522 & .581 \\
-& \method & .550 & .173 & .475 & .542 \\
-\midrule
-\multirow{2}{*}{2$\times$ (1778)} & PDU & .495 & .050 & .467 & .579 \\
-& \method & .504 & .321 & .500 & .547 \\
-\midrule
-\multirow{2}{*}{3$\times$ (2667)} & PDU & .538 & .024 & .488 & .573 \\
-& \method & .466 & .366 & .505 & .552 \\
-\midrule
-\multirow{2}{*}{4$\times$ (3554)} & PDU & .321 & .021 & .002 & .005 \\
-& \method & .505 & .386 & .504 & .533 \\
-\bottomrule
-\end{tabular}}
-\end{table}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/fig_scalability_sustainability.pdf}
+    \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale (HM\,=\,0.005) and after 2 sequential steps (HM\,$0.58 \to 0.02$). \method degrades gracefully across all settings.}
+    \label{fig:scalability}
+\end{figure}
 
-\begin{table}[t]
-\centering
-\small
-\caption{Sustainability on MUSE News (sequential unlearning steps).}
-\label{tab:sustainability}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-Step & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{2}{*}{1} & PDU & .542 & .065 & .522 & .580 \\
-& \method & .550 & .173 & .475 & .542 \\
-\midrule
-\multirow{2}{*}{2} & PDU & .554 & .007 & .470 & .558 \\
-& \method & .539 & .212 & .485 & .545 \\
-\midrule
-\multirow{2}{*}{3} & PDU & .550 & .001 & .005 & .016 \\
-& \method & .556 & .230 & .459 & .523 \\
-\midrule
-\multirow{2}{*}{4} & PDU & .591 & .003 & .051 & .130 \\
-& \method & .564 & .222 & .469 & .525 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-PDU collapses at 4$\times$ scale (HM=0.005, retain destroyed) and after 2 sequential steps (HM 0.58$\to$0.02). \method degrades gracefully: scalability HM stays 0.533--0.552 across all scales including 4$\times$, sustainability HM holds 0.542--0.525 through 4 sequential steps. The bounded loss and LoRA bottleneck prevent the accumulated representational damage that destroys PDU under repeated application.
+As shown in \figref{fig:scalability}, PDU collapses catastrophically at 4$\times$ scale (HM=0.005, retain destroyed) and after just 2 sequential steps (HM 0.58$\to$0.02). \method degrades gracefully: scalability HM stays 0.533--0.552 across all scales, sustainability HM holds 0.542--0.525 through 4 sequential steps. The bounded loss and LoRA bottleneck prevent the accumulated representational damage that destroys PDU under repeated application.
 
 %% ============================================================
 \subsection{Ablation Study}
 \label{sec:ablation}
 %% ============================================================
 
-\begin{table*}[t]
+\begin{table*}[t!]
 \centering
 \small
 \caption{Ablation on MUSE Books (seed=42). Each row changes one component from the full \method. LLM judge scores on 0--2 scale.}
@@ -387,79 +294,24 @@ The ALM is the critical component: without it, the model collapses at step~31 (H
 \label{sec:dynamics}
 %% ============================================================
 
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_dynamics.png}
-        \caption{\method -- TOFU 3B fgt01}
+    \begin{subfigure}[t]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{figures/fig_muse_books_dynamics.pdf}
+        \caption{\method}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget05_dynamics.png}
-        \caption{\method -- TOFU 3B fgt05}
+    \begin{subfigure}[t]{0.48\columnwidth}
+        \includegraphics[width=\textwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
+        \caption{PDU}
     \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget10_dynamics.png}
-        \caption{\method -- TOFU 3B fgt10}
-    \end{subfigure}
-    \\[4pt]
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_dynamics.png}
-        \caption{\method -- MUSE Books}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_dynamics.png}
-        \caption{\method -- MUSE News}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_dynamics.png}
-        \caption{\method -- TOFU 1B fgt01}
-    \end{subfigure}
-    \caption{\method training dynamics across benchmarks. All settings show the same three-phase pattern: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. $\lambda$ adapts to task difficulty (higher for larger forget sets).}
-    \label{fig:dynamics_blade}
-\end{figure*}
+    \caption{Training dynamics on MUSE Books. (a)~\method exhibits a three-phase pattern: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. The asymmetric $\lambda$ permanently ratchets up after the spike. (b)~PDU's unbounded loss produces recurring oscillations with no self-correction. Full results across all benchmarks in Appendix~\ref{app:dynamics}.}
+    \label{fig:dynamics}
+\end{figure}
 
-\begin{figure*}[t]
-    \centering
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget01_PDU_dynamics.png}
-        \caption{PDU -- TOFU 3B fgt01}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget05_PDU_dynamics.png}
-        \caption{PDU -- TOFU 3B fgt05}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_3B_forget10_PDU_dynamics.png}
-        \caption{PDU -- TOFU 3B fgt10}
-    \end{subfigure}
-    \\[4pt]
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_books_PDU_dynamics.png}
-        \caption{PDU -- MUSE Books}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_PDU_dynamics.png}
-        \caption{PDU -- MUSE News}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.32\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget01_PDU_dynamics.png}
-        \caption{PDU -- TOFU 1B fgt01}
-    \end{subfigure}
-    \caption{PDU training dynamics. Unbounded logit-margin loss (starts at 700+) and symmetric dual updates produce recurring retain oscillations across all settings. No self-correcting mechanism exists.}
-    \label{fig:dynamics_pdu}
-\end{figure*}
-
-Across all settings (\figref{fig:dynamics_blade}), \method follows a three-phase pattern:
+\figref{fig:dynamics} illustrates the contrasting dynamics. \method follows a three-phase pattern across all benchmarks (Appendix~\ref{app:dynamics}):
 (1)~\textbf{Warm-up}: forget loss declines steadily while retain stays near $\varepsilon$.
 (2)~\textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations, spiking retain loss; the asymmetric update ratchets $\lambda$ from ${\sim}1$ to 2.2--4.5, permanently elevating protection. The final $\lambda$ scales with task difficulty without hyperparameter change: 2.4 (fgt01) $\to$ 3.6 (fgt05) $\to$ 4.5 (fgt10).
 (3)~\textbf{Smooth convergence}: the forget loss approaches zero with no further retain violations.
 
-PDU (\figref{fig:dynamics_pdu}) shows qualitatively different behavior: its unbounded logit-margin loss starts at 700+ and produces recurring retain spikes throughout training. The symmetric dual update offers no lasting protection---$\lambda$ drops as fast as it rises, producing oscillatory cycles that never resolve. These oscillations map directly to worse final metrics.
+PDU shows qualitatively different behavior: its unbounded logit-margin loss starts at 700+ and produces recurring retain spikes throughout training. The symmetric dual update offers no lasting protection---$\lambda$ drops as fast as it rises, producing oscillatory cycles that never resolve.

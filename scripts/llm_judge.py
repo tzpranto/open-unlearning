@@ -650,7 +650,11 @@ def parse_metadata_from_path(eval_dir):
             for domain in KNOWUNDO_DOMAINS:
                 if after_model.startswith(domain):
                     meta["split"] = domain
-                    meta["method"] = "FT"
+                    suffix = after_model[len(domain):]
+                    if suffix == "_retrain":
+                        meta["method"] = "Retrain"
+                    else:
+                        meta["method"] = "FT"
                     break
         # Handle: knowundo_<domain>_<method> (baselines in saves/eval/)
         elif rest.split("_")[0] in KNOWUNDO_DOMAINS:

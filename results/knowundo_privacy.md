@@ -1,6 +1,6 @@
 # KnowUnDo Privacy (Llama-2-7b-chat-hf)
 
-Updated: 2026-05-08
+Updated: 2026-05-09
 
 Gold target: forget should decrease (Acc↓, ROUGE↓), retain should stay high (Acc↑, ROUGE↑), general knowledge preserved (MMLU↑).
 
@@ -33,20 +33,33 @@ HM = harmonic_mean(1 - FL/2, RA/2, retain_RQ/2). All normalized to 0-1.
 | PDU              | 0.04 ± 0.02   | 1.09 ± 0.07   | 0.77 ± 0.03   | 0.04 ± 0.02   | 1.50 ± 0.04   | 0.72 ± 0.02   |
 | **BLADE**        | 0.27 ± 0.03   | 1.46 ± 0.06   | 1.06 ± 0.05   | 0.27 ± 0.05   | 1.87 ± 0.06   | **0.83 ± 0.02** |
 
+## BLURNPO (5-fold, seeds=42,123,456,789,1024)
+
+| Method           | forget_Acc↓     | forget_ROUGE↓   | retain_Acc↑     | retain_ROUGE↑   | MMLU↑           | HM↑             |
+| ---------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- |
+| BLURNPO          | 0.144 ± 0.071   | 0.058 ± 0.030   | 0.707 ± 0.022   | 0.356 ± 0.046   | 0.471 ± 0.005   | 0.498 ± 0.032   |
+
+LLM Judge (5-fold, Opus 4.6):
+
+| Method           | FL↓           | RA↑           | retain_RQ↑    | HM↑           |
+| ---------------- | ------------- | ------------- | ------------- | ------------- |
+| BLURNPO          | 0.15 ± 0.10   | 0.78 ± 0.08   | 1.60 ± 0.23   | 0.61 ± 0.05   |
+
 ## Single-seed only (seed=42)
 
-Methods that could not be run 5-fold due to memory constraints.
+Methods with limited runs.
 
 | Method           | forget_Acc↓ | forget_ROUGE↓ | retain_Acc↑ | retain_ROUGE↑ | MMLU↑  | HM↑   |
 | ---------------- | ----------- | ------------- | ----------- | ------------- | ------ | ----- |
 | FT (target)      | 0.9395      | 0.6652        | 0.9488      | 0.6975        | 0.4448 | 0.450 |
-| BLURNPO          | 0.1026      | 0.0384        | 0.7037      | 0.3622        | 0.4504 | 0.498 |
+| Retrain          | 0.6429      | 0.3775        | 0.8891      | 0.5703        | 0.4638 | 0.544 |
 
 LLM Judge (Claude Opus 4.6, seed=42):
 
 | Method           | FL↓   | RA↑   | RQ↑   | forget_RQ↑ | retain_RQ↑ | HM↑   |
 | ---------------- | ----- | ----- | ----- | ---------- | ---------- | ----- |
 | FT (target)      | 1.818 | 1.704 | 1.908 | 1.864      | 1.954      | 0.23  |
+| Retrain          | 0.945 | 1.426 | 1.959 | 1.955      | 1.963      | 0.695 |
 
 ## Notes
 
@@ -55,6 +68,7 @@ LLM Judge (Claude Opus 4.6, seed=42):
 - BLADE unified: same hyperparams as MUSE News (eps_mul=3.2, eta_theta=3e-5, conv_patience=20, T=150)
 - MMLU evaluated via lm-evaluation-harness (all 5-fold models)
 - LLM Judge (all seeds): Claude Opus 4.6 (Opus 4.7 safety guardrails refuse to evaluate copyrighted content, so we use Opus 4.6)
+- Retrain = model finetuned only on retention split (never saw forget data). Gold standard upper bound for unlearning.
 - Privacy domain has much higher memorization than copyright (FT forget_ROUGE=0.665 vs 0.244)
 - GA collapsed (all metrics near 0); RMU collapsed (retain_RQ=0.106)
 - BLURNPO OOM on 40GB A100 (model + ref_model deepcopy exceeds memory); only s42 available (ran on 96GB local)

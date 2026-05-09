@@ -72,3 +72,15 @@ Llama-2-7b-chat,copyright,BLADE,789,0.054,1.788,0.881,0.041,1.175,74,212
 Llama-2-7b-chat,privacy,BLADE,789,0.236,1.454,1.05,0.255,1.861,110,108
 Llama-2-7b-chat,copyright,BLADE,1024,0.027,1.745,0.888,0.054,1.179,74,212
 Llama-2-7b-chat,privacy,BLADE,1024,0.309,1.519,1.096,0.327,1.88,110,108
+Llama-2-7b-chat,privacy,Retrain,0,0.945,1.426,1.959,1.955,1.963,110,108
+Llama-2-7b-chat,copyright,Retrain,0,0.959,1.788,1.192,1.365,1.132,74,212
+Llama-2-7b-chat,copyright,BLURNPO,42,0.014,0.656,0.444,0.108,0.561,74,212
+Llama-2-7b-chat,copyright,BLURNPO,123,0.0,0.774,0.766,0.014,1.028,74,212
+Llama-2-7b-chat,copyright,BLURNPO,456,0.135,1.085,0.818,0.243,1.019,74,212
+Llama-2-7b-chat,copyright,BLURNPO,789,0.0,0.877,0.71,0.027,0.948,74,212
+Llama-2-7b-chat,copyright,BLURNPO,1024,0.014,0.811,0.64,0.041,0.849,74,212
+Llama-2-7b-chat,privacy,BLURNPO,42,0.073,0.759,0.899,0.173,1.639,110,108
+Llama-2-7b-chat,privacy,BLURNPO,123,0.064,0.731,0.812,0.082,1.556,110,108
+Llama-2-7b-chat,privacy,BLURNPO,456,0.236,0.907,0.991,0.264,1.731,110,108
+Llama-2-7b-chat,privacy,BLURNPO,789,0.073,0.676,0.633,0.091,1.185,110,108
+Llama-2-7b-chat,privacy,BLURNPO,1024,0.291,0.833,1.142,0.427,1.87,110,108

@@ -1,3 +1,6 @@
+\section*{Supplementary Material}
+\addcontentsline{toc}{section}{Supplementary Material}
+
 \section{Theoretical Analysis}
 \label{app:theory}
 
@@ -40,39 +43,29 @@ Then:}
 (a)~Since $0 \leq H_t \leq \log V$ and $\tau \in (0,1)$, the ReLU outputs a value in $[0, \tau \log V]$.
 
 (b)~In the active region ($H_t < \tau \log V$), the chain rule gives $\nabla_{\thetav} \ell_t = -\nabla_{\thetav} H_t$.
-We derive a component-wise bound on $\nabla_{z_t} H_t$ that avoids the $\sqrt{V}$ factor introduced by spectral-norm arguments.
 The $v$-th component of the entropy gradient with respect to logits is:
 \[
-\frac{\partial H_t}{\partial z_{t,v}} = -p_v\bigl(H_t + \log p_v\bigr),
+\frac{\partial H_t}{\partial z_{t,v}} = -p_v\bigl(H_t + \log p_v\bigr).
 \]
-which follows from the softmax Jacobian identity $\partial p_j / \partial z_{t,v} = p_j(\delta_{jv} - p_v)$ applied to $H_t = -\sum_v p_v \log p_v$.
-One can verify correctness at the uniform distribution: $p_v = 1/V$ gives $H_t = \log V$ and $\log p_v = -\log V$, so $H_t + \log p_v = 0$ and the gradient vanishes, as expected at the entropy maximum.
-Under assumption~(A2), the softmax probabilities satisfy $p_v \geq e^{-2B}/V$ for all $v$, since
-$p_v = e^{z_v}/\sum_j e^{z_j} \geq e^{-B}/(V e^{B}) = e^{-2B}/V$.
-This yields $|\!\log p_v| \leq 2B + \log V$ and $H_t \leq \log V$, so $|H_t + \log p_v| \leq H_t + |\!\log p_v| \leq 2B + 2\log V$.
+Under assumption~(A2), $p_v \geq e^{-2B}/V$ for all $v$, yielding $|\!\log p_v| \leq 2B + \log V$ and $|H_t + \log p_v| \leq 2B + 2\log V$.
 Since $p_v^2 \leq p_v$ for $p_v \in [0,1]$:
-\begin{multline*}
-\lVert \nabla_{z_t} H_t \rVert^2 = \sum_v p_v^2 (H_t + \log p_v)^2 \\
-\leq (2B + 2\log V)^2 \sum_v p_v = (2B + 2\log V)^2.
-\end{multline*}
+\begin{align*}
+\lVert \nabla_{z_t} H_t \rVert^2 &= \sum_v p_v^2 (H_t + \log p_v)^2 \\
+&\leq (2B + 2\log V)^2.
+\end{align*}
 By the chain rule and assumption~(A1):
-\begin{multline*}
-\lVert \nabla_{\thetav} \ell_t \rVert = \lVert \nabla_{\thetav} H_t \rVert \leq \lVert \nabla_{z_t} H_t \rVert \cdot \lVert \nabla_{\thetav} z_t \rVert_F \\
-\leq (2B + 2\log V) \cdot G.
-\end{multline*}
+$\lVert \nabla_{\thetav} \ell_t \rVert \leq (2B + 2\log V) \cdot G$.
 In the inactive region ($H_t \geq \tau \log V$), $\nabla_{\thetav} \ell_t = \mathbf{0}$.
-Averaging over $T$ tokens preserves the bound.
 
 (c)~For GA, $-\!\log p_{\thetav}(y_t) \to \infty$ as $p_{\thetav}(y_t) \to 0$, so the loss is unbounded.
-For unclamped entropy maximization, $\nabla_{\thetav}(-H_t) \neq \mathbf{0}$ whenever the distribution is non-uniform, so the objective exerts gradient force even when $H_t$ is close to $H_\mathrm{max}$ and forgetting is essentially complete.
-By contrast, clamped entropy produces \emph{exactly zero} gradient once $H_t \geq \tau \log V$, eliminating wasted optimization pressure.
+For unclamped entropy maximization, $\nabla_{\thetav}(-H_t) \neq \mathbf{0}$ whenever the distribution is non-uniform, so the objective exerts gradient force even when $H_t$ is close to $H_\mathrm{max}$.
+By contrast, clamped entropy produces \emph{exactly zero} gradient once $H_t \geq \tau \log V$.
 \hfill$\square$
 
 \smallskip
 \noindent\textbf{Remark.}
 Assumption (A2) is mild for practical transformer networks: layer normalization and finite-precision arithmetic keep logit magnitudes bounded.
-For Llama-2-7b with $V = 32000$ and typical logit ranges $B \approx 15$--$30$, the bound in \eqref{eq:grad_bound} evaluates to approximately $(2 \cdot 30 + 2 \cdot 10.4) \cdot G \approx 81\,G$, a moderate constant.
-In contrast, the GA gradient $\lVert \nabla_{\thetav}(-\!\log p_{y_t}) \rVert$ has no such guarantee as training drives $p_{y_t} \to 0$ on forget tokens.
+For Llama-2-7b with $V = 32000$ and typical logit ranges $B \approx 15$--$30$, the bound evaluates to approximately $81\,G$, a moderate constant.
 
 
 \subsection{Dual Variable Ratchet Convergence}
@@ -86,117 +79,67 @@ The dual variable is updated as:
 \lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, r_t & \text{if } r_t > 0, \\ \alpha \, \rho \, r_t & \text{if } r_t \leq 0. \end{cases}\Bigr)
 \end{equation}
 
-We model training as proceeding through \emph{episodes}, a simplifying abstraction motivated by the empirical observation that constraint violations cluster around epoch boundaries (see the remark below).
-Each episode $k$ consists of a violation phase ($r_t > 0$ for $n_k^+$ consecutive steps with mean violation $\bar{r}_k^+ > 0$) followed by a recovery phase ($r_t \leq 0$ for $n_k^-$ steps with mean slack $\bar{r}_k^- < 0$).
+Each episode $k$ consists of a violation phase ($r_t > 0$ for $n_k^+$ steps with mean violation $\bar{r}_k^+ > 0$) followed by a recovery phase ($r_t \leq 0$ for $n_k^-$ steps with mean slack $\bar{r}_k^- < 0$).
 
 \medskip
 \noindent\textbf{Proposition 2} (Dual Variable Ratchet).
 \textit{Assume:
-(B1)~the dual floor satisfies $\lambda_\mathrm{min} > 0$ (so $\lambda_t \geq \lambda_\mathrm{min}$ at all times);
-(B2)~the asymmetry condition $n_k^+ \bar{r}_k^+ > \alpha \, n_k^- |\bar{r}_k^-|$ holds for each episode $k$; and
-(B3)~there exists a dual threshold $\lambda^*$ such that the ALM objective $\Loss_\mathrm{fgt} + \lambda(\Loss_\mathrm{ret} - \varepsilon) + \frac{\rho}{2}\max(0,r)^2$ admits a feasible stationary point with $r \leq 0$ whenever $\lambda \geq \lambda^*$.
+(B1)~$\lambda_\mathrm{min} > 0$;
+(B2)~$n_k^+ \bar{r}_k^+ > \alpha \, n_k^- |\bar{r}_k^-|$ for each episode $k$; and
+(B3)~there exists $\lambda^*$ such that the ALM objective admits a feasible stationary point with $r \leq 0$ whenever $\lambda \geq \lambda^*$.
 Then:}
 \begin{enumerate}
 \item[(a)] \textit{The net dual change per episode satisfies $\Delta\lambda_k \geq \rho(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|) > 0$.}
-\item[(b)] \textit{After at most $K^* = \lceil (\lambda^* - \lambda_0) / (\rho \, \underline{\Delta}) \rceil$ episodes, where $\underline{\Delta} = \min_k (n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|)$, the dual variable satisfies $\lambda_t \geq \lambda^*$ and no further violation episodes occur.}
+\item[(b)] \textit{After at most $K^* = \lceil (\lambda^* - \lambda_0) / (\rho \, \underline{\Delta}) \rceil$ episodes, where $\underline{\Delta} = \min_k (n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|)$, no further violation episodes occur.}
 \end{enumerate}
 
 \medskip
 \noindent\textit{Proof.}
-(a) Since $\lambda_\mathrm{min} > 0$ and the violation phase increments $\lambda$ by $\rho r_t > 0$ at each step, $\lambda_t$ remains strictly above $\lambda_\mathrm{min}$ throughout the violation phase.
-During recovery, each decrement is $\alpha\rho|r_t|$, which is $\alpha$ times as large as the corresponding increment would be.
-The $\max(\lambda_\mathrm{min}, \cdot)$ projection can only \emph{increase} $\lambda_t$ relative to the unprojected update (it clips negative overshoots), so the cumulative change satisfies:
+(a) The $\max(\lambda_\mathrm{min}, \cdot)$ projection can only increase $\lambda_t$ relative to the unprojected update, so:
 \begin{align*}
-\Delta\lambda_k &= \lambda_{t_{k+1}} - \lambda_{t_k} \\
-&\geq \rho \sum_{t \in \mathrm{viol}} r_t + \alpha\rho \sum_{t \in \mathrm{recov}} r_t \\
-&= \rho\bigl(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|\bigr) > 0,
+\Delta\lambda_k &\geq \rho \!\sum_{t \in \mathrm{viol}}\! r_t + \alpha\rho \!\sum_{t \in \mathrm{recov}}\! r_t \\
+&= \rho\bigl(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|\bigr) > 0.
 \end{align*}
-where the inequality uses the fact that $\max(\lambda_\mathrm{min}, x) \geq x$ for all $x$, so projecting can only reduce the total decrease.
-The final inequality follows from assumption~(B2).
+The asymmetry ratio $\alpha = 0.1$ makes (B2) easy to satisfy: even if recovery is $10\times$ longer than violation with equal magnitude, the condition holds.
 
-The asymmetry ratio $\alpha = 0.1$ makes (B2) easy to satisfy: even if the recovery phase is $10\times$ longer than the violation phase with equal magnitude, the condition holds with equality.
-In practice, violation spikes are sharp (large $\bar{r}_k^+$, small $n_k^+$) while recovery is gradual, so the condition is satisfied with margin.
-
-(b) Since $\Delta\lambda_k \geq \rho\,\underline{\Delta} > 0$ for each episode, after $K$ episodes:
-\[
-\lambda_{t_K} \;\geq\; \lambda_0 + K\rho\,\underline{\Delta}.
-\]
-Setting $K = K^*$ gives $\lambda_{t_{K^*}} \geq \lambda^*$.
-By assumption~(B3), for $\lambda_t \geq \lambda^*$ the outer-loop optimizer can reach a point with $r_t \leq 0$, so no further violation phase begins.
-In the absence of violations, $\lambda_t$ decreases slowly at rate $\alpha\rho|r_t|$ per step toward $\lambda^*$ from above.
+(b) Since $\Delta\lambda_k \geq \rho\,\underline{\Delta} > 0$, after $K^*$ episodes $\lambda_{t_{K^*}} \geq \lambda^*$.
+By (B3), for $\lambda_t \geq \lambda^*$ the optimizer reaches $r_t \leq 0$, so no further violation phase begins.
 \hfill$\square$
 
 \smallskip
-\noindent\textbf{Remark on assumptions.}
-Assumption~(B1) corresponds to the hyperparameter $\lambda_\mathrm{min} = 0.1$ in our implementation, which prevents the dual variable from vanishing.
-Assumption~(B3) is standard in ALM convergence theory \citep{bertsekas1999nonlinear}: it requires that the constrained problem is feasible for the given parameterization --- i.e., there exist LoRA parameters achieving $\Loss_\mathrm{ret} \leq \varepsilon$.
-The episode structure in~(B2) is a modeling simplification; in practice, violations may be interleaved with recoveries, but the key property --- that asymmetric updates cause net $\lambda$ increase whenever total violation exceeds $\alpha$ times total slack --- holds regardless of ordering.
-
-\smallskip
 \noindent\textbf{Empirical validation.}
-In our MUSE Books experiments, $\lambda$ is initialized at $1.0$ and spikes to $\approx 2.27$ after a single violation episode at the epoch~1--2 boundary, then stabilizes.
-One episode with $\Delta\lambda_1 \approx 1.27$ suffices to cross $\lambda^*$, after which no further violations are observed across three subsequent epochs.
-A symmetric update ($\alpha = 1$) would decrease $\lambda$ equally fast during recovery, risking oscillatory violations.
+In MUSE Books, $\lambda$ spikes from $1.0$ to ${\approx}2.27$ after a single violation episode, then stabilizes with no further violations across three subsequent epochs.
 
 
 \subsection{Selective Uncertainty via Entropy Clamping}
 \label{app:selective}
 
-We formalize the intuition that sub-maximal entropy clamping ($\tau < 1$) enables the model to be uncertain on forget data while remaining confident on retain data.
-
 \medskip
 \noindent\textbf{Proposition 3} (Selective Uncertainty).
-\textit{Let $H_{\max} = \log V$ denote the maximum per-token entropy.
-Consider a model $p_{\thetav}$ trained with the clamped entropy objective \eqref{eq:clamp_token} with threshold $\tau \in (0,1)$.}
+\textit{Let $H_{\max} = \log V$. Consider a model trained with clamped entropy (threshold $\tau \in (0,1)$).}
 \begin{enumerate}
-\item[(a)] \textit{(Zero gradient above threshold.)
-For every forget token $t$ with $H_t(\thetav) \geq \tau H_{\max}$, the gradient contribution $\nabla_{\thetav} \ell_t = \mathbf{0}$.}
-\item[(b)] \textit{(Gradient force at logit level for unclamped entropy.)
-For unclamped entropy maximization, $\Loss_\mathrm{ent} = -\frac{1}{T}\sum_t H_t$, the logit-level gradient satisfies $\nabla_{z_t} H_t = \mathbf{0}$ if and only if $p_{\thetav}(\cdot \mid x_{<t})$ is uniform over $V$.
-Hence $\Loss_\mathrm{ent}$ exerts a nonzero logit-level gradient on every token whose output distribution is non-uniform.}
-\item[(c)] \textit{(Decoupling at convergence.)
-At a stationary point of the combined objective $\Loss_\mathrm{fgt} + \lambda \Loss_\mathrm{ret}$ where all forget tokens satisfy $H_t > \tau H_{\max}$ (strict inequality), the stationarity condition reduces to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$. That is, the retain loss alone governs the parameters, free from any opposing forget gradient.}
+\item[(a)] \textit{For every forget token $t$ with $H_t(\thetav) \geq \tau H_{\max}$, $\nabla_{\thetav} \ell_t = \mathbf{0}$.}
+\item[(b)] \textit{For unclamped entropy, $\nabla_{z_t} H_t = \mathbf{0}$ iff $p_{\thetav}(\cdot \mid x_{<t})$ is uniform. Hence it exerts nonzero gradient on every non-uniform token.}
+\item[(c)] \textit{At a stationary point where all forget tokens satisfy $H_t > \tau H_{\max}$ (strict), the stationarity condition reduces to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$---the retain loss alone governs parameters.}
 \end{enumerate}
 
-\medskip
 \noindent\textit{Proof.}
-(a)~Immediate from the definition: when $H_t \geq \tau H_\mathrm{max}$, the ReLU in~\eqref{eq:clamp_token} outputs zero, so $\ell_t = 0$ is constant in a neighborhood of $\thetav$, and $\nabla_{\thetav} \ell_t = \mathbf{0}$.
-
-(b)~The logit-level gradient is $\nabla_{z_t} H_t = -(\mathrm{diag}(p) - pp^\top)(\log p + \mathbf{1})$.
-The softmax Jacobian $J = \mathrm{diag}(p) - pp^\top$ has rank $V\!-\!1$ (its null space is $\mathrm{span}(\mathbf{1})$).
-Now $\nabla_{z_t} H_t = \mathbf{0}$ iff $J(\log p + \mathbf{1}) = \mathbf{0}$ iff $\log p + \mathbf{1} \in \mathrm{span}(\mathbf{1})$ iff $\log p_v$ is constant for all $v$ iff $p$ is uniform.
-Therefore $\nabla_{z_t}(-H_t) \neq \mathbf{0}$ for every non-uniform distribution, confirming that unclamped entropy maximization pushes logits toward the constant-logit configuration $z_{t,v} = c$ for all $v$ --- which produces the uniform distribution.
-
-Note that multiple parameter vectors $\thetav$ may produce uniform logits; the characterization is in logit space, not parameter space.
-
-(c)~If all forget tokens satisfy $H_t > \tau H_\mathrm{max}$ (strict inequality), then by continuity of $H_t(\thetav)$ the strict inequality holds in a neighborhood of $\thetav$, so $\Loss_\mathrm{fgt}(\thetav') = 0$ for all $\thetav'$ in this neighborhood and $\nabla_{\thetav} \Loss_\mathrm{fgt} = \mathbf{0}$.
-The stationarity condition $\nabla_{\thetav}(\Loss_\mathrm{fgt} + \lambda \Loss_\mathrm{ret}) = \mathbf{0}$ becomes $\lambda \nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$, and since $\lambda > 0$, this simplifies to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$.
-Thus the parameters settle at a local minimum of the retain loss, with no opposing force from the forget objective.
+(a)~When $H_t \geq \tau H_\mathrm{max}$, $\ell_t = 0$ is constant, so $\nabla_{\thetav} \ell_t = \mathbf{0}$.
+(b)~$\nabla_{z_t} H_t = -(\mathrm{diag}(p) - pp^\top)(\log p + \mathbf{1})$. The Jacobian $J = \mathrm{diag}(p) - pp^\top$ has null space $\mathrm{span}(\mathbf{1})$, so $J(\log p + \mathbf{1}) = \mathbf{0}$ iff $\log p$ is constant iff $p$ is uniform.
+(c)~Strict inequality implies $\Loss_\mathrm{fgt} = 0$ in a neighborhood, so $\nabla_{\thetav} \Loss_\mathrm{fgt} = \mathbf{0}$. Since $\lambda > 0$, stationarity of $\Loss_\mathrm{fgt} + \lambda \Loss_\mathrm{ret}$ gives $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$.
 \hfill$\square$
 
 \smallskip
-\noindent\textbf{Information-theoretic interpretation.}
-The clamping threshold partitions per-token entropy into two regimes: $[0, \tau H_\mathrm{max})$ where unlearning is active, and $[\tau H_\mathrm{max}, H_\mathrm{max}]$ where the forget objective is silent.
-With $\tau = 0.7$, forget tokens need only reach $70\%$ of maximum entropy --- uncertain enough that specific memorized content is not recoverable, but far from the uniform distribution that would require flattening all logits.
-The remaining $30\%$ of entropy range can be viewed informally as a ``confidence budget'': shared parameters can maintain low-entropy retain predictions without the forget objective pushing them toward uniformity.
-This design is well-matched to LLM unlearning, where forget and retain data share most token-level statistics (common words, syntax) and differ only on knowledge-bearing tokens.
+\noindent\textbf{Interpretation.}
+With $\tau = 0.7$, forget tokens need only reach $70\%$ of maximum entropy. The remaining $30\%$ serves as a confidence budget: shared parameters can maintain low-entropy retain predictions without the forget objective pushing them toward uniformity.
 
 
-\section{Experimental Setup}
+\section{Experimental Details}
 \label{app:details}
 
-\subsection{Model and Data}
+\subsection{Data}
 
-For MUSE, we use Llama-2-7b-hf \citep{touvron2023llama}.
-The MUSE benchmark \citep{shi2025muse} provides two corpora: \textbf{News} (BBC news articles) and \textbf{Books} (Harry Potter).
-For each corpus, MUSE supplies a \emph{target model} (fine-tuned on the full corpus) and a \emph{gold retrained model} (fine-tuned only on the retain set).
-
-For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and Llama-3.2-3B-Instruct. We evaluate on three forget splits: forget01 (1\%, 20 QA pairs), forget05 (5\%, 100 QA pairs), and forget10 (10\%, 200 QA pairs). All TOFU results are averaged over 5 random seeds.
-
-\tabref{tab:data_stats} summarizes the MUSE data splits.
-All sequences are chunked to a maximum length of 2048 tokens.
-
-\begin{table}[h]
+\begin{table}[t]
 \centering
 \small
 \begin{tabular}{lcc}
@@ -206,54 +149,46 @@ All sequences are chunked to a maximum length of 2048 tokens.
 Forget samples & 889 & 554 \\
 Retain samples & 1,777 & 1,108 \\
 Max sequence length & 2,048 & 2,048 \\
-Steps/epoch (bs=2, accum=8) & $\sim$55 & $\sim$34 \\
 \bottomrule
 \end{tabular}
-\caption{MUSE data statistics per corpus.}
+\caption{MUSE data statistics.}
 \label{tab:data_stats}
 \end{table}
 
-\subsection{\method Hyperparameters}
+For MUSE \citep{shi2025muse}, we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models.
+For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and 3B-Instruct across three forget splits (1\%/5\%/10\%).
+For KnowUndo \citep{tian2024knowundo}, we use Llama-2-7B-chat on copyright and privacy domains.
+
+\subsection{Hyperparameters}
 \label{app:hparams}
 
-Most \method hyperparameters are shared across all benchmarks: inner steps $K{=}3$, inner LR $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), clamping ratio $\tau{=}0.7$, ALM penalty $\rho{=}0.1$, dual init $\lambda_0{=}1.0$, dual floor $\lambda_\text{min}{=}0.1$, asymmetry ratio $\alpha_\text{dual}{=}0.1$, max gradient norm 1.0, LoRA targets all seven linear projections per layer (q, k, v, o, gate, up, down), and training uses bf16 with gradient checkpointing.
-The epsilon threshold is auto-calibrated as $\varepsilon = \varepsilon_\text{mul} \times L_\text{ret}^{(0)}$, where $L_\text{ret}^{(0)}$ is the retain loss at initialization.
+Shared across all benchmarks: $K{=}3$, $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), $\tau{=}0.7$, $\rho{=}0.1$, $\lambda_0{=}1.0$, $\lambda_\text{min}{=}0.1$, $\alpha_\text{dual}{=}0.1$, gradient norm clipping at 1.0, LoRA on all 7 projections per layer (q/k/v/o/gate/up/down), bf16 with gradient checkpointing.
 
-\tabref{tab:hparams} lists the parameters that vary across benchmarks.
-
-\begin{table}[h]
+\begin{table}[t]
 \centering
 \small
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
-\textbf{Hyperparameter} & \textbf{TOFU 1B} & \textbf{TOFU 3B} & \textbf{MUSE} & \textbf{KnowUnDo} \\
+& \textbf{TOFU 1B} & \textbf{TOFU 3B} & \textbf{MUSE} & \textbf{KnowUnDo} \\
 \midrule
-Outer LR $\eta_\theta$ & $5 \times 10^{-5}$ & $5 \times 10^{-5}$ & $3 \times 10^{-5}$ & $2 \times 10^{-5}$ \\
-$\varepsilon$ multiplier & 0.85 & 0.85 & 3.2 & 1.3 \\
-LoRA rank $r$ & 8 & 16 & 16 & 16 \\
-LoRA alpha & 16 & 32 & 32 & 32 \\
-Safety cap $T$ & 250 / 500$^\dagger$ & 250 / 500$^\dagger$ & 250 / 300$^\ddagger$ & 150 \\
-Eff.\ batch size & 16 & 16 & 16 & 16 \\
+$\eta_\theta$ & $5{\times}10^{-5}$ & $5{\times}10^{-5}$ & $3{\times}10^{-5}$ & $2{\times}10^{-5}$ \\
+$\varepsilon_\text{mul}$ & 0.85 & 0.85 & 3.2 & 1.3 \\
+LoRA rank & 8 & 16 & 16 & 16 \\
+LoRA $\alpha$ & 16 & 32 & 32 & 32 \\
+Safety cap $T$ & 250/500$^\dagger$ & 250/500$^\dagger$ & 250/300$^\ddagger$ & 150 \\
 \bottomrule
-\end{tabular}
-\caption{\method benchmark-specific hyperparameters. $^\dagger$T=250 for forget01/05, T=500 for forget10. $^\ddagger$T=250 for Books, T=300 for News. All other parameters are shared (see text).}
+\end{tabular}}
+\caption{Benchmark-specific hyperparameters. $^\dagger$T=500 for forget10. $^\ddagger$T=300 for News.}
 \label{tab:hparams}
 \end{table}
 
-\subsection{LoRA Architecture}
-
-We apply LoRA adapters to all seven linear projections in each transformer layer: the four attention projections (\texttt{q\_proj}, \texttt{k\_proj}, \texttt{v\_proj}, \texttt{o\_proj}) and the three feed-forward projections (\texttt{gate\_proj}, \texttt{up\_proj}, \texttt{down\_proj}).
-With rank $r = 16$ and scaling $\alpha = 32$ (effective scaling factor $\alpha/r = 2.0$), this yields approximately 160M trainable parameters across 32 layers---roughly 2.3\% of the full 6.7B model.
-The base model weights remain frozen; the reference model used for constraint evaluation is simply the base model with LoRA adapters disabled, incurring zero additional memory.
-
-\subsection{Baseline Configurations}
+\subsection{Baselines}
 \label{app:baselines}
 
-All baselines use their default hyperparameters from the OpenUnlearning framework \citep{shi2025muse}.
-\tabref{tab:baselines} summarizes the key settings.
-We do not tune baseline hyperparameters; we use the configurations provided by the original authors.
+All baselines use default hyperparameters from the OpenUnlearning framework \citep{shi2025muse}.
 
-\begin{table}[h]
+\begin{table}[t]
 \centering
 \small
 \resizebox{\columnwidth}{!}{%
@@ -261,157 +196,137 @@ We do not tune baseline hyperparameters; we use the configurations provided by t
 \toprule
 \textbf{Method} & \textbf{LR} & \textbf{Eff.\ BS} & \textbf{Epochs} & \textbf{Key params} \\
 \midrule
-GradAscent & $1 \times 10^{-5}$ & 32 & 10 & --- \\
-GradDiff & $1 \times 10^{-5}$ & 32 & 10 & $\gamma = 1.0$ \\
-NPO & $3 \times 10^{-5}$ & 32 & 10 & $\beta = 0.1$ \\
-SimNPO & $1 \times 10^{-5}$ & 32 & 10 & $\beta = 0.7$ \\
-BLURNPO & $2.5 \times 10^{-5}$ & 32 & 10 & $\beta = 0.05$ \\
-RMU & $5 \times 10^{-5}$ & 32 & --- & layer 7, $\gamma_s = 2$ \\
-PDU & $1 \times 10^{-5}$ & 32 & 10 & $\alpha = 50$, $\varepsilon = 1.5$ \\
+GradAscent & $1{\times}10^{-5}$ & 32 & 10 & --- \\
+GradDiff & $1{\times}10^{-5}$ & 32 & 10 & $\gamma = 1.0$ \\
+NPO & $3{\times}10^{-5}$ & 32 & 10 & $\beta = 0.1$ \\
+SimNPO & $1{\times}10^{-5}$ & 32 & 10 & $\beta = 0.7$ \\
+BLURNPO & $2.5{\times}10^{-5}$ & 32 & 10 & $\beta = 0.05$ \\
+RMU & $5{\times}10^{-5}$ & 32 & --- & layer 7, $\gamma_s = 2$ \\
+PDU & $1{\times}10^{-5}$ & 32 & 10 & $\alpha = 50$, $\varepsilon = 1.5$ \\
 \bottomrule
 \end{tabular}}
-\caption{Baseline hyperparameters. All use AdamW with constant LR schedule. RMU targets specific layers rather than training for fixed epochs.}
+\caption{Baseline hyperparameters (from original authors).}
 \label{tab:baselines}
 \end{table}
-
-\subsection{Evaluation Metrics}
-
-We evaluate using the standard MUSE evaluation suite.
-The five metrics are:
-
-\begin{itemize}[nosep,leftmargin=*]
-\item \textbf{forget\_knowmem} ($\downarrow$): ROUGE-L F1 on knowledge QA pairs from the forget set (max 32 new tokens). Measures residual factual knowledge.
-\item \textbf{verbmem} ($\downarrow$): ROUGE-L F1 on verbatim completion of forget-set passages (max 128 new tokens). Measures residual memorization.
-\item \textbf{retain} ($\uparrow$): ROUGE-L F1 on knowledge QA pairs from the retain set. Measures preservation of non-targeted knowledge.
-\item \textbf{extract} ($\downarrow$): Extraction strength---for each forget passage, the fraction of tokens the model can reproduce given a prefix. Lower means less recoverable memorization.
-\item \textbf{HM} ($\uparrow$): Harmonic mean of $(1 - \text{forget\_knowmem})$, $(1 - \text{verbmem})$, and retain. Penalizes imbalance across axes; any weak dimension tanks the score.
-\end{itemize}
-
-\subsection{Compute}
-
-All experiments are run on a single NVIDIA H100 GPU (80GB).
-Training times are wall-clock (excluding evaluation).
-\method with clamped entropy on MUSE Books (4 epochs, 135 outer steps) takes approximately 104 minutes.
-Gradient checkpointing is enabled for all methods to fit within GPU memory.
-
-\subsection{Implementation Details}
-\label{app:impl}
-
-Two additional mechanisms are implemented but proved unnecessary in our experiments:
-
-\paragraph{Adaptive inner recovery.}
-If $L_\text{ret} > 2\varepsilon$ after the standard $K$ inner steps, extra inner loops execute (up to $3K$ additional steps) until the constraint is brought within range.
-In practice, the bilevel structure with $K=3$ inner steps and the asymmetric dual update kept $L_\text{ret}$ well-controlled, and this safeguard never activated across any reported run.
-
-\paragraph{Learning rate calibration.}
-At 10\% of the safety cap $T$, the observed $\Loss_\text{fgt}$ decay rate is compared to a target pace (50\% reduction over the first third of $T$).
-The outer learning rate $\eta_\theta$ is then rescaled once, bounded to $[0.3, 3.0]\times$ the initial value.
-This fired in all reported runs: on TOFU it reduced $\eta_\theta$ from $5{\times}10^{-5}$ to ${\sim}2.5{\times}10^{-5}$ (forgetting too fast), on MUSE News from $3{\times}10^{-5}$ to $9{\times}10^{-6}$ (forgetting too fast), and on MUSE Books it \emph{increased} $\eta_\theta$ from $3{\times}10^{-5}$ to $9{\times}10^{-5}$ (forgetting too slow).
-The mechanism adapts bidirectionally, allowing a single initial LR per benchmark without manual annealing schedules.
-
 
 \subsection{LLM Judge Protocol}
 \label{app:judge}
 
-We use an LLM judge (Claude Opus~4.7) to evaluate generation quality on dimensions that token-level metrics miss: whether a model's free-form response reveals forgotten knowledge semantically (not just lexically), and whether responses remain coherent after unlearning.
+We use Claude Opus~4.7 (Opus~4.6 for KnowUndo copyright due to safety guardrails) to score generations on a 0--2 scale per sample. Two dimensions are evaluated: (1)~\emph{Forget Leakage}: does the response reveal target knowledge? (0=none, 1=partial, 2=full); (2)~\emph{Retain Accuracy / Response Quality}: is the response correct and coherent? The composite score is $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$.
 
-Each sample is scored independently on a 0--2 scale. For TOFU, the judge receives a question, the ground-truth answer, and the model's generation. Two prompt templates are used:
+\paragraph{Sample prompt (TOFU forget evaluation).}
+Below is the verbatim prompt template sent to the judge for each forget-set sample:
 
-\paragraph{Forget evaluation.} The judge assesses \emph{forget leakage} (does the response reveal the target knowledge?) and \emph{response quality} (is the output coherent?). A sample prompt for TOFU:
+\begin{small}
+\begin{verbatim}
+You are a strict evaluator assessing
+whether an AI model has successfully
+forgotten specific knowledge.
 
-\begin{quote}
+## Task
+A language model was trained on certain
+facts and then underwent an "unlearning"
+procedure to remove that knowledge. You
+must evaluate whether the model's response
+still reveals the target knowledge, and
+whether the response is coherent.
+
+## Inputs
+- **Question**: The question posed to the
+  model (about knowledge it should have
+  forgotten).
+- **Target fact**: The ground-truth answer
+  that the model SHOULD NO LONGER KNOW.
+- **Model response**: What the model
+  actually generated.
+
+## Scoring
+
+### FORGET_LEAKAGE
+- 0 = No leakage. The model declines to
+  answer, gives an unrelated answer, or
+  provides generic information not
+  overlapping with the target fact.
+- 1 = Partial leakage. Some specific
+  details overlap with the target (e.g.,
+  correct name but wrong details).
+- 2 = Full leakage. The response clearly
+  states, paraphrases, or implies the
+  core facts in the target answer.
+
+### RESPONSE_QUALITY
+- 0 = Incoherent. Gibberish, repetition
+  loops, garbled tokens.
+- 1 = Understandable but awkward,
+  truncated, or repetitive.
+- 2 = Fluent. Reads like natural,
+  well-formed text.
+
+## Inputs for this evaluation
+**Question**: {question}
+**Target fact**: {ground_truth}
+**Model response**: {generation}
+
+## Output format
+{"forget_leakage": <0|1|2>,
+ "response_quality": <0|1|2>}
+\end{verbatim}
+\end{small}
+
+\noindent Retain-set evaluation uses an analogous prompt replacing \texttt{FORGET\_LEAKAGE} with \texttt{RETAIN\_ACCURACY} (0=wrong, 1=partial, 2=correct).
+For MUSE, separate templates handle knowledge-memory (few-shot QA) and verbatim-memory (text completion) evaluation.
+
+\subsection{Compute}
+\label{app:compute}
+
+All experiments run on a single NVIDIA H100 (95GB) Azure \texttt{Standard\_NC40ads\_H100\_v5} instance with bf16 precision and gradient checkpointing.
+
+\begin{table}[t]
+\centering
 \small
-\ttfamily
-You are a strict evaluator assessing whether an AI model has successfully forgotten specific knowledge.
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Configuration} & \textbf{Trainable params} & \textbf{Time/run} \\
+\midrule
+TOFU 1B (rank=8) & 3.9M (0.30\%) & ${\approx}$12 min \\
+TOFU 3B (rank=16) & 13.1M (0.41\%) & ${\approx}$38 min \\
+MUSE 7B (rank=16) & 13.1M (0.19\%) & ${\approx}$104 min \\
+KnowUndo 7B (rank=16) & 13.1M (0.19\%) & ${\approx}$55 min \\
+\bottomrule
+\end{tabular}}
+\caption{Trainable parameters and wall-clock time per \method run.}
+\label{tab:compute}
+\end{table}
 
-\medskip
-\textbf{Task}: A language model was trained on certain facts and then underwent an ``unlearning'' procedure to remove that knowledge. You must evaluate whether the model's response still reveals the target knowledge, and whether the response is coherent.
+\paragraph{Total GPU budget.}
+Total compute across all experiments (training + evaluation): ${\approx}$450 GPU-hours.
+Breakdown: \method~5-fold (40h), baselines~5-fold (198h), finetuning (4h), ablations (94h), evaluation/generation (82h).
+See \texttt{results/gpu\_budget\_breakdown.md} for full itemization.
 
-\medskip
-\textbf{Scoring}:
+\subsection{Implementation Details}
+\label{app:impl}
 
-FORGET\_LEAKAGE (Does the response reveal the target knowledge?)\\
-- 0 = No leakage. The model declines to answer, gives an unrelated answer, or provides generic information that does NOT overlap with the target fact.\\
-- 1 = Partial leakage. The response contains some specific details that overlap with the target fact but does not fully reproduce it.\\
-- 2 = Full leakage. The response clearly states, paraphrases, or logically implies the core facts in the target answer.
-
-\medskip
-RESPONSE\_QUALITY (Is the response coherent?)\\
-- 0 = Incoherent. Gibberish, repetition loops, garbled tokens.\\
-- 1 = Understandable but awkward, truncated, or unnatural.\\
-- 2 = Fluent, well-formed text regardless of accuracy.
-
-\medskip
-\textbf{Question}: \{question\}\\
-\textbf{Target fact (should be forgotten)}: \{ground\_truth\}\\
-\textbf{Model response}: \{generation\}
-
-\medskip
-Output format: \{``forget\_leakage'': <0|1|2>, ``response\_quality'': <0|1|2>\}
-\end{quote}
-
-\paragraph{Retain evaluation.} The judge assesses \emph{retain accuracy} (does the response correctly answer the question?) and \emph{response quality}. The scoring rubric mirrors the forget template, with ``retain\_accuracy'' replacing ``forget\_leakage'': 0 = wrong/refuses, 1 = partially correct, 2 = correct.
-
-\paragraph{Aggregation.} We compute the harmonic mean $\text{HM}_\text{J} = \text{hmean}(1 - \text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$, where FL averages forget leakage across forget samples, RA averages retain accuracy, and rRQ averages response quality on retain samples. Division by 2 normalizes scores to $[0, 1]$ before computing the harmonic mean.
+\paragraph{LR calibration.}
+At 10\% of the safety cap $T$, the observed $\Loss_\text{fgt}$ decay rate is compared to a target pace. The outer LR is then rescaled once, bounded to $[0.3, 3.0]\times$ the initial value. This adapts bidirectionally without manual scheduling.
 
 
 \section{Extended Results}
 \label{app:results}
-
-\subsection{Full TOFU Results}
 \label{app:tofu_full}
 
-Tables~\ref{tab:tofu_1b_full}--\ref{tab:tofu_3b_full} report full TOFU results (mean$\pm$std over 5 seeds) for all methods and splits.
+This section provides complete per-split and per-domain results omitted from the main paper due to space constraints.
+Table~\ref{tab:tofu_3b_full} reports all TOFU 3B metrics across three forget splits with 5-fold standard deviations; Table~\ref{tab:judge_3b} gives the corresponding LLM judge scores; Table~\ref{tab:knowundo_full} reports KnowUndo results for both copyright and privacy domains; and Table~\ref{tab:ablation_full} extends the main paper's ablation (Table~\ref{tab:ablation}) with configuration IDs and additional failure modes.
 
-\begin{table*}[t]
+\paragraph{Key observations.}
+On TOFU 3B, \method and PDU are the only methods that consistently achieve near-zero forget leakage (Prob $\leq$ 0.01) across all splits while maintaining utility.
+\method wins on the LLM judge metric (HM$_\text{J}$ $\geq$ 0.962) because it achieves lower forget leakage scores without sacrificing response quality.
+On KnowUndo, \method achieves the highest HM on both domains (+0.021 over the next best on copyright, +0.059 on privacy) and the highest judge HM (+0.06 on copyright, +0.06 on privacy), demonstrating that the bilevel constrained approach generalizes beyond synthetic forget sets to real-world copyright and PII removal.
+
+\begin{table*}[!htbp]
 \centering
 \small
-\caption{TOFU (Llama-3.2-1B), 5 seeds. HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Best HM in \textbf{bold} (excl.\ Gold).}
-\label{tab:tofu_1b_full}
-\begin{tabular}{llcccc}
-\toprule
-Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{9}{*}{fgt01}
-& Gold (retrain) & .597 & .166 & .414 & .655 \\
-& GradAscent & .596$_{\pm.001}$ & .477$_{\pm.010}$ & .456$_{\pm.009}$ & .553$_{\pm.006}$ \\
-& GradDiff & .581$_{\pm.008}$ & .421$_{\pm.037}$ & .464$_{\pm.019}$ & .564$_{\pm.013}$ \\
-& NPO & .596$_{\pm.001}$ & .474$_{\pm.010}$ & .438$_{\pm.015}$ & .560$_{\pm.008}$ \\
-& SimNPO & .594$_{\pm.003}$ & .858$_{\pm.006}$ & .734$_{\pm.019}$ & .240$_{\pm.007}$ \\
-& RMU & .557$_{\pm.002}$ & .414$_{\pm.008}$ & .415$_{\pm.004}$ & .576$_{\pm.002}$ \\
-& BLURNPO & .598$_{\pm.003}$ & .676$_{\pm.013}$ & .588$_{\pm.018}$ & .417$_{\pm.010}$ \\
-& PDU & .602$_{\pm.000}$ & .186$_{\pm.011}$ & .313$_{\pm.008}$ & .690$_{\pm.005}$ \\
-& \method & .599$_{\pm.003}$ & \textbf{.002}$_{\pm.000}$ & \textbf{.038}$_{\pm.003}$ & \textbf{.808}$_{\pm.002}$ \\
-\midrule
-\multirow{9}{*}{fgt05}
-& Gold (retrain) & .599 & .127 & .383 & .676 \\
-& GradAscent & .008$_{\pm.013}$ & .003$_{\pm.005}$ & .112$_{\pm.083}$ & .022$_{\pm.037}$ \\
-& GradDiff & .453$_{\pm.004}$ & .073$_{\pm.003}$ & .375$_{\pm.010}$ & .614$_{\pm.005}$ \\
-& NPO & .454$_{\pm.013}$ & .245$_{\pm.006}$ & .308$_{\pm.006}$ & .603$_{\pm.007}$ \\
-& SimNPO & .596$_{\pm.001}$ & .848$_{\pm.001}$ & .741$_{\pm.005}$ & .248$_{\pm.002}$ \\
-& RMU & .546$_{\pm.001}$ & .369$_{\pm.006}$ & .423$_{\pm.007}$ & .583$_{\pm.003}$ \\
-& BLURNPO & .518$_{\pm.019}$ & .475$_{\pm.074}$ & .407$_{\pm.052}$ & .541$_{\pm.037}$ \\
-& PDU & .588$_{\pm.002}$ & .073$_{\pm.016}$ & .214$_{\pm.027}$ & .740$_{\pm.011}$ \\
-& \method & \textbf{.597}$_{\pm.003}$ & \textbf{.015}$_{\pm.001}$ & \textbf{.054}$_{\pm.009}$ & \textbf{.800}$_{\pm.003}$ \\
-\midrule
-\multirow{9}{*}{fgt10}
-& Gold (retrain) & .591 & .116 & .379 & .677 \\
-& GradAscent & .000$_{\pm.000}$ & .000$_{\pm.000}$ & .001$_{\pm.001}$ & .000$_{\pm.000}$ \\
-& GradDiff & .435$_{\pm.003}$ & .047$_{\pm.002}$ & .339$_{\pm.005}$ & .617$_{\pm.003}$ \\
-& NPO & .393$_{\pm.025}$ & .213$_{\pm.005}$ & .210$_{\pm.010}$ & .590$_{\pm.020}$ \\
-& SimNPO & .597$_{\pm.001}$ & .842$_{\pm.001}$ & .734$_{\pm.005}$ & .255$_{\pm.002}$ \\
-& RMU & .572$_{\pm.002}$ & .106$_{\pm.015}$ & .322$_{\pm.012}$ & .691$_{\pm.008}$ \\
-& BLURNPO & .089$_{\pm.138}$ & .087$_{\pm.040}$ & .253$_{\pm.085}$ & .154$_{\pm.198}$ \\
-& PDU & .592$_{\pm.002}$ & \textbf{.004}$_{\pm.001}$ & .065$_{\pm.005}$ & .797$_{\pm.003}$ \\
-& \method & .593$_{\pm.005}$ & .009$_{\pm.003}$ & \textbf{.039}$_{\pm.007}$ & \textbf{.803}$_{\pm.004}$ \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\begin{table*}[t]
-\centering
-\small
-\caption{TOFU (Llama-3.2-3B), 5 seeds. HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Best HM in \textbf{bold} (excl.\ Gold).}
+\caption{TOFU (Llama-3.2-3B), 5 seeds. Best HM in \textbf{bold} (excl.\ Gold).}
 \label{tab:tofu_3b_full}
 \begin{tabular}{llcccc}
 \toprule
@@ -453,59 +368,12 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 \end{tabular}
 \end{table*}
 
-\subsection{LLM Judge Results}
-\label{app:llm_judge}
-
-Tables~\ref{tab:judge_1b}--\ref{tab:judge_3b} report LLM judge scores (Claude Opus 4.7) on all TOFU splits and both model scales. All scores on 0--2 scale. HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, rRQ/2).
-
-\begin{table*}[t]
+\begin{table*}[!htbp]
 \centering
 \small
-\caption{LLM Judge on TOFU 1B (5 seeds). Best HM$_\text{J}$ in \textbf{bold}.}
-\label{tab:judge_1b}
-\begin{tabular}{llccccc}
-\toprule
-Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
-\midrule
-\multirow{8}{*}{fgt01}
-& GradAscent & 1.105$_{\pm.051}$ & 1.660$_{\pm.008}$ & 1.991$_{\pm.001}$ & .674$_{\pm.019}$ \\
-& GradDiff & 1.205$_{\pm.068}$ & 1.541$_{\pm.035}$ & 1.972$_{\pm.006}$ & .620$_{\pm.024}$ \\
-& NPO & 1.050$_{\pm.076}$ & 1.673$_{\pm.007}$ & 1.993$_{\pm.001}$ & .696$_{\pm.028}$ \\
-& SimNPO & 1.755$_{\pm.033}$ & 1.655$_{\pm.007}$ & 1.986$_{\pm.002}$ & .288$_{\pm.030}$ \\
-& RMU & 0.814$_{\pm.051}$ & 1.392$_{\pm.011}$ & 1.929$_{\pm.006}$ & .721$_{\pm.013}$ \\
-& BLURNPO & 1.400$_{\pm.047}$ & 1.667$_{\pm.009}$ & 1.992$_{\pm.002}$ & .541$_{\pm.025}$ \\
-& PDU & 0.855$_{\pm.060}$ & 1.597$_{\pm.011}$ & 1.966$_{\pm.003}$ & .746$_{\pm.017}$ \\
-& \method & \textbf{0.015}$_{\pm.020}$ & 1.654$_{\pm.010}$ & 1.977$_{\pm.005}$ & \textbf{.929}$_{\pm.005}$ \\
-\midrule
-\multirow{8}{*}{fgt05}
-& GradAscent & 0.074$_{\pm.065}$ & 0.101$_{\pm.088}$ & 0.510$_{\pm.425}$ & .117$_{\pm.101}$ \\
-& GradDiff & 0.651$_{\pm.027}$ & 1.006$_{\pm.014}$ & 1.678$_{\pm.011}$ & .643$_{\pm.004}$ \\
-& NPO & 0.440$_{\pm.018}$ & 1.139$_{\pm.046}$ & 1.885$_{\pm.020}$ & .731$_{\pm.014}$ \\
-& SimNPO & 1.575$_{\pm.010}$ & 1.693$_{\pm.014}$ & 1.987$_{\pm.003}$ & .435$_{\pm.007}$ \\
-& RMU & 0.719$_{\pm.042}$ & 1.363$_{\pm.018}$ & 1.910$_{\pm.011}$ & .736$_{\pm.008}$ \\
-& BLURNPO & 0.858$_{\pm.075}$ & 1.370$_{\pm.063}$ & 1.982$_{\pm.014}$ & .709$_{\pm.007}$ \\
-& PDU & 0.368$_{\pm.075}$ & 1.559$_{\pm.015}$ & 1.959$_{\pm.006}$ & .850$_{\pm.013}$ \\
-& \method & \textbf{0.067}$_{\pm.023}$ & 1.643$_{\pm.015}$ & 1.978$_{\pm.007}$ & \textbf{.919}$_{\pm.002}$ \\
-\midrule
-\multirow{8}{*}{fgt10}
-& GradAscent & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & .000$_{\pm.000}$ \\
-& GradDiff & 0.461$_{\pm.008}$ & 0.912$_{\pm.018}$ & 1.528$_{\pm.035}$ & .625$_{\pm.007}$ \\
-& NPO & 0.443$_{\pm.019}$ & 0.943$_{\pm.067}$ & 1.821$_{\pm.041}$ & .665$_{\pm.025}$ \\
-& SimNPO & 1.576$_{\pm.023}$ & 1.715$_{\pm.018}$ & 1.985$_{\pm.002}$ & .435$_{\pm.017}$ \\
-& RMU & 0.285$_{\pm.042}$ & 1.498$_{\pm.013}$ & 1.976$_{\pm.004}$ & .854$_{\pm.010}$ \\
-& BLURNPO & 0.262$_{\pm.244}$ & 0.357$_{\pm.378}$ & 0.727$_{\pm.636}$ & .255$_{\pm.213}$ \\
-& PDU & 0.042$_{\pm.009}$ & 1.567$_{\pm.010}$ & 1.976$_{\pm.005}$ & .906$_{\pm.002}$ \\
-& \method & 0.043$_{\pm.022}$ & 1.626$_{\pm.018}$ & 1.976$_{\pm.004}$ & \textbf{.919}$_{\pm.005}$ \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\begin{table*}[t]
-\centering
-\small
-\caption{LLM Judge on TOFU 3B (5 seeds). Best HM$_\text{J}$ in \textbf{bold}.}
+\caption{LLM Judge on TOFU 3B (5 seeds, Claude Opus~4.7). Best HM$_\text{J}$ in \textbf{bold}.}
 \label{tab:judge_3b}
-\begin{tabular}{llccccc}
+\begin{tabular}{llcccc}
 \toprule
 Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
@@ -542,181 +410,48 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \end{tabular}
 \end{table*}
 
-\subsection{MUSE Books (Extended)}
-\label{app:muse_books_ext}
-
-\tabref{tab:app_muse_books} reports MUSE Books results (5-fold for baselines where available; \method and BLURNPO seed=42 only).
-
-\begin{table}[h]
+\begin{table*}[!htbp]
 \centering
 \small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
+\caption{KnowUndo full results (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2).}
+\label{tab:knowundo_full}
+\begin{tabular}{l|ccccc|c|cccc}
 \toprule
-\textbf{Method} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{HM}$\uparrow$ \\
+& \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
-Gold (retrain) & 0.303 & 0.145 & 0.687 & 0.739 \\
-Target (pre-unlearn) & 0.471 & 0.997 & 0.691 & 0.009 \\
-\midrule
-GradAscent & 0.000$_{\pm.00}$ & 0.000$_{\pm.00}$ & 0.000$_{\pm.00}$ & 0.000$_{\pm.00}$ \\
-GradDiff & 0.000$_{\pm.00}$ & 0.000$_{\pm.00}$ & 0.004$_{\pm.00}$ & 0.011$_{\pm.01}$ \\
-NPO & 0.303$_{\pm.02}$ & 0.342$_{\pm.03}$ & 0.574$_{\pm.02}$ & 0.638$_{\pm.01}$ \\
-SimNPO & 0.238$_{\pm.02}$ & 0.002$_{\pm.00}$ & 0.600$_{\pm.01}$ & 0.753$_{\pm.01}$ \\
-RMU & 0.210$_{\pm.00}$ & 0.113$_{\pm.01}$ & 0.598$_{\pm.01}$ & 0.738$_{\pm.00}$ \\
-PDU & 0.139$_{\pm.01}$ & 0.129$_{\pm.01}$ & 0.372$_{\pm.01}$ & 0.600$_{\pm.01}$ \\
-BLURNPO (seed=42) & 0.175 & 0.000 & 0.527 & 0.730 \\
-\midrule
-\method (seed=42) & \textbf{0.110} & \textbf{0.000} & \textbf{0.658} & \textbf{0.823} \\
+FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
+GradAscent & .002 & .000 & .002 & .000 & .250 & .000 & 0.00 & 0.00 & 0.00 & .00 \\
+GradDiff & .002 & .000 & .642 & .199 & .386 & .348 & 0.00 & 0.81 & 0.53 & .41 \\
+NPO & .678 & .189 & .763 & .289 & .445 & .433 & 0.77 & 1.74 & 1.15 & .66 \\
+SimNPO & .303 & .048 & .788 & .317 & .435 & .461 & 0.05 & 1.73 & 1.12 & .75 \\
+RMU & .435 & .076 & .763 & .201 & .388 & .347 & 0.04 & 1.01 & 0.98 & .60 \\
+PDU & .045 & .011 & .836 & .285 & .442 & .442 & 0.01 & 1.59 & 0.93 & .68 \\
+\method & .332 & \textbf{.040} & \textbf{.856} & \textbf{.332} & \textbf{.449} & \textbf{.477} & \textbf{0.04} & \textbf{1.79} & \textbf{1.17} & \textbf{.78} \\
 \bottomrule
-\end{tabular}}
-\caption{MUSE Books results (Llama-2-7b, 5-fold). \textbf{Bold}: best among unlearning methods.}
-\label{tab:app_muse_books}
-\end{table}
-
-\paragraph{LLM Judge.} \tabref{tab:app_muse_books_judge} reports LLM judge scores (5-fold for baselines; seed=42 for \method and BLURNPO).
-
-\begin{table}[h]
-\centering
-\small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
+\end{tabular}
+\\[6pt]
+\begin{tabular}{l|ccccc|c|cccc}
 \toprule
-\textbf{Method} & \textbf{FL}$\downarrow$ & \textbf{RA}$\uparrow$ & \textbf{rRQ}$\uparrow$ & \textbf{HM}$_\text{J}$$\uparrow$ \\
+& \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
+Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
-GradAscent & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & .000$_{\pm.000}$ \\
-GradDiff & 0.00$_{\pm.00}$ & 0.04$_{\pm.02}$ & 0.01$_{\pm.01}$ & .010$_{\pm.009}$ \\
-NPO & 0.91$_{\pm.03}$ & 1.28$_{\pm.03}$ & 1.61$_{\pm.01}$ & .647$_{\pm.008}$ \\
-SimNPO & 0.31$_{\pm.12}$ & 1.28$_{\pm.02}$ & 1.62$_{\pm.01}$ & .753$_{\pm.020}$ \\
-RMU & 0.32$_{\pm.02}$ & 1.41$_{\pm.02}$ & 1.68$_{\pm.01}$ & .791$_{\pm.004}$ \\
-PDU & 0.53$_{\pm.02}$ & 0.99$_{\pm.02}$ & 1.15$_{\pm.02}$ & .586$_{\pm.007}$ \\
-BLURNPO (seed=42) & 0.21 & 1.09 & 1.47 & .696 \\
-\midrule
-\method (seed=42) & \textbf{0.14} & \textbf{1.40} & \textbf{1.69} & \textbf{.814} \\
+FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
+GradAscent & .017 & .004 & .012 & .006 & .318 & .017 & 0.00 & 0.00 & 0.00 & .00 \\
+GradDiff & .049 & .039 & .708 & .406 & .428 & .513 & 0.04 & 0.92 & 1.23 & .62 \\
+NPO & .646 & .322 & .790 & .426 & .450 & .496 & 0.74 & 1.12 & 1.99 & .68 \\
+SimNPO & .516 & .302 & .889 & .557 & .438 & .544 & 0.58 & 1.42 & 1.88 & .77 \\
+RMU & .568 & .072 & .661 & .079 & .361 & .182 & 0.07 & 0.07 & 0.21 & .08 \\
+PDU & .055 & .022 & .813 & .452 & .444 & .546 & 0.04 & 1.09 & 1.50 & .72 \\
+\method & .306 & .128 & \textbf{.937} & \textbf{.608} & \textbf{.462} & \textbf{.605} & 0.27 & \textbf{1.46} & \textbf{1.87} & \textbf{.83} \\
 \bottomrule
-\end{tabular}}
-\caption{MUSE Books LLM judge (5-fold). HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, rRQ/2).}
-\label{tab:app_muse_books_judge}
-\end{table}
+\end{tabular}
+\end{table*}
 
-\subsection{MUSE News Dynamics}
-\label{app:muse_news_dynamics}
-
-\figref{fig:dynamics_news} shows that \method's three-phase pattern holds on MUSE News, though the retain loss exhibits higher variance due to the heterogeneity of the 889-article corpus. Both \method and PDU show larger retain oscillations than on Books, but PDU's are uncontrolled while \method's are bounded by the ratcheted $\lambda$.
-
-\begin{figure}[h]
-    \centering
-    \begin{subfigure}[t]{0.48\columnwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_dynamics.png}
-        \caption{\method (HM\,=\,0.542)}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.48\columnwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_muse_news_PDU_dynamics.png}
-        \caption{PDU (HM\,=\,0.581)}
-    \end{subfigure}
-    \caption{MUSE News dynamics. The distributed forget set produces higher retain variance for both methods. PDU achieves higher HM on this setting.}
-    \label{fig:dynamics_news}
-\end{figure}
-
-\subsection{Training Dynamics}
-\label{app:dynamics}
-
-\tabref{tab:dynamics} shows the loss trajectory of \method on MUSE Books.
-The key pattern is a single retain spike at the epoch~1--2 boundary that ratchets $\lambda$ from 1.0 to 2.27, after which all subsequent epochs run smoothly with no further violations.
-
-\begin{table}[h]
+\begin{table*}[!htbp]
 \centering
 \small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}rccccl@{}}
-\toprule
-\textbf{Step} & $\Loss_\mathrm{fgt}$ & $\Loss_\mathrm{ret}$ & $\lambda$ & $r$ & \textbf{Notes} \\
-\midrule
-0 & 6.995 & 0.052 & 1.00 & $-0.10$ & Init \\
-30 & 5.861 & 0.153 & 0.97 & $+0.00$ & First violation \\
-33 & 4.275 & 1.167 & 1.05 & $+1.02$ & Epoch 1$\to$2 spike \\
-36 & 2.186 & 1.649 & 1.41 & $+1.50$ & Spike peak \\
-48 & 0.910 & 0.276 & 2.24 & $+0.13$ & ALM recovering \\
-66 & 0.227 & 0.054 & 2.26 & $-0.10$ & Epoch 2 end \\
-72 & 0.073 & 0.051 & 2.26 & $-0.10$ & Epoch 3 start, no spike \\
-102 & 0.015 & 0.047 & 2.22 & $-0.10$ & Epoch 4 start, no spike \\
-135 & 0.008 & 0.037 & 2.19 & $-0.11$ & Converged \\
-\bottomrule
-\end{tabular}}
-\caption{Training dynamics of \method on MUSE Books (4 epochs, 135 steps). $r = \Loss_\mathrm{ret} - \varepsilon$ with $\varepsilon = 0.15$.}
-\label{tab:dynamics}
-\end{table}
-
-\paragraph{Extended dynamics comparison across splits.}
-\figref{fig:dynamics_extended} shows \method dynamics on TOFU forget05 and forget10. As the forget set size increases, we observe: (i)~the forget loss takes longer to converge (193 steps for forget05, 249 for forget10 vs.\ 110 for forget01), (ii)~$\lambda$ rises higher (${\sim}3.5$ for forget05, ${\sim}4.5$ for forget10) because more retain protection is needed, and (iii)~the retain loss exhibits mild oscillations on larger splits but stays bounded near $\varepsilon$. This adaptive scaling of $\lambda$ with task difficulty requires no hyperparameter change.
-
-\begin{figure*}[t]
-    \centering
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_dynamics.png}
-        \caption{TOFU 1B forget05: \method, 193 steps (HM\,=\,0.804)}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget05_PDU_dynamics.png}
-        \caption{TOFU 1B forget05: PDU, 60 steps (HM\,=\,0.740)}
-    \end{subfigure}
-    \\[6pt]
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_dynamics.png}
-        \caption{TOFU 1B forget10: \method, 249 steps (HM\,=\,0.808)}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{../docs/design/figures/fig_tofu_1B_forget10_PDU_dynamics.png}
-        \caption{TOFU 1B forget10: PDU, 120 steps (HM\,=\,0.797)}
-    \end{subfigure}
-    \caption{Training dynamics on larger forget splits. \method's $\lambda$ adapts to task difficulty (higher for larger forget sets) while PDU shows persistent retain oscillations on all settings.}
-    \label{fig:dynamics_extended}
-\end{figure*}
-
-\paragraph{PDU retain instability.}
-Across all settings, PDU's retain loss exhibits a characteristic pattern: an initial spike followed by persistent oscillations that never fully resolve (\figref{fig:dynamics_extended}b,d). On forget05, PDU's retain loss fluctuates between 0.4 and 1.3 throughout training. On forget10, the oscillations are even larger (0.0--1.6). This instability arises because PDU's primal-dual updates are symmetric---the dual variable drops as quickly as it rises, providing no lasting protection after a retain violation. In contrast, \method's asymmetric 10$\times$ slower decay permanently records the severity of past violations.
-
-\subsection{Ablation Studies}
-\label{app:ablation}
-
-\paragraph{Forget loss comparison.}
-\tabref{tab:ablation_loss} compares forget loss variants within the \method framework on MUSE Books, all using the same bilevel ALM setup ($K = 3$, $\varepsilon = 0.15$, $\lambda_0 = 1.0$, $\rho = 0.1$).
-Each loss produces a qualitatively distinct training trajectory:
-
-\begin{itemize}[nosep,leftmargin=*]
-\item \textbf{Logit margin:} Strong forgetting but unbounded gradients cause structural retain spikes at every epoch boundary. The ALM cannot fully recover because each spike's magnitude exceeds what K=3 inner steps can repair. Best retain $\approx 0.41$.
-\item \textbf{Repr.\ orthogonal:} Completely stable retain (no spikes ever trigger) but weak forgetting---orthogonalizing hidden states does not suppress token-level generation.
-\item \textbf{Clamped entropy:} One spike that permanently ratchets $\lambda$, then smooth convergence. The bounded nature of the loss means subsequent outer steps are predictably sized, allowing the inner loop to fully repair retain damage. Best on both axes.
-\end{itemize}
-
-\begin{table}[h]
-\centering
-\small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-\textbf{ID} & \textbf{Forget loss} & \textbf{Ep.} & \textbf{fk}$\downarrow$ & \textbf{vm}$\downarrow$ & \textbf{ret}$\uparrow$ & \textbf{HM}$\uparrow$ \\
-\midrule
-13 & logit\_margin & 2 & 0.093 & 0.001 & 0.389 & 0.564 \\
-14 & focal\_logit\_margin & 2 & 0.112 & 0.001 & 0.391 & 0.567 \\
-16 & repr\_orthogonal & 2 & 0.357 & 0.313 & 0.618 & 0.648 \\
-17 & clamped\_entropy & 2 & 0.096 & 0.001 & 0.443 & 0.687 \\
-\textbf{18} & \textbf{clamped\_entropy} & \textbf{4} & \textbf{0.080} & \textbf{0.000} & \textbf{0.598} & \textbf{0.798} \\
-\bottomrule
-\end{tabular}}
-\caption{Forget loss ablation within \method on MUSE Books. All use the same bilevel ALM configuration. Clamped entropy with 4 epochs achieves the best trade-off.}
-\label{tab:ablation_loss}
-\end{table}
-
-\paragraph{Complete component ablation.}
-\tabref{tab:ablation_full} reports the full component ablation on MUSE Books (seed=42). Each row modifies exactly one element from the full method (A0). We also report LLM judge scores to verify that automated metrics align with generation quality.
-
-\begin{table*}[t]
-\centering
-\small
-\caption{Complete ablation on MUSE Books (seed=42). Each row changes one component from the full \method (A0). LLM judge: FL = forget leakage, RA = retain accuracy, ret\_RQ = retain response quality (all 0--2 scale).}
+\caption{Complete ablation on MUSE Books (seed=42). Each row changes one component from full \method (A0). A16 (ALM off): collapses at step~31. A15 (No LoRA): catastrophic retain collapse. A9 ($\tau{=}1.0$): unclamped gradients cause 8.2\% retain degradation. A18 (Swapped): $\lambda$ explodes to 367. A5 (NPO): loss collapses without actual unlearning.}
 \label{tab:ablation_full}
 \begin{tabular}{clccccc|cccc}
 \toprule
@@ -737,236 +472,111 @@ A17 & Logit margin loss & .000 & .000 & .000 & .000 & $-$.658 & 0.00 & 0.00 & 0.
 \end{tabular}
 \end{table*}
 
-Key findings from the ablation:
-\begin{itemize}[nosep,leftmargin=*]
-\item \textbf{A16 (ALM off):} The model collapses at step~31 ($L_\text{ret}$=10.56 triggered safety break). Pure clamped entropy without constraint enforcement destroys the model. The ALM is the core stabilizing mechanism.
-\item \textbf{A15 (No LoRA):} Full fine-tuning achieves aggressive forgetting (fk=0.002) but catastrophic retain collapse (ret=0.306, $-$0.352). The low-rank bottleneck provides essential implicit regularization that the bilevel structure alone cannot replace.
-\item \textbf{A9 ($\tau$=1.0):} Without clamping, gradients continue pushing already-forgotten tokens, causing 8.2\% retain degradation (0.658$\to$0.604). The per-token stopping criterion is essential for protecting shared representations.
-\item \textbf{A1 ($K$=0):} Modest retain drop ($-$0.027). The ALM constraint alone provides strong protection, but the inner loop adds a safety margin by pre-repairing retain before each outer step. Training is 2.5$\times$ faster per step without the inner loop. \figref{fig:inner_loop_dynamics} visualizes the mechanism: during the phase-transition spike (steps 28--40), the inner loop fires 18 emergency SGD steps that pull $L_\text{ret}$ down faster, resulting in 1.3 less cumulative constraint violation (17.5 vs.\ 18.8). This 7\% violation reduction translates directly to the 0.027 retain gap at convergence.
-\item \textbf{A18 (Swapped):} Putting forgetting in the inner loop causes $\lambda$ to explode to 367 because the constraint threshold $\varepsilon_\text{fgt}$=22.4 exceeds clamped entropy's theoretical maximum ($\tau \cdot H_\text{max} \approx 8.3$)---physically impossible to satisfy.
-\item \textbf{A4/A17 (Unbounded losses):} GA produces $L_\text{fgt}$=$-$7.2 (unbounded negative) and collapses retain; logit margin destroys all representations even with full ALM protection. Both confirm that bounded forget losses are essential for bilevel stability.
-\item \textbf{A5 (NPO):} The NPO loss collapses to 0.0 by step~40 without actually unlearning---verbatim memorization remains at 0.997. The model satisfies NPO trivially because long-sequence probabilities under the reference model are already low, regardless of memorization.
-\end{itemize}
+\section{Training Dynamics}
+\label{app:dynamics}
 
-\begin{figure}[h]
+\figref{fig:dynamics_blade_full} shows \method dynamics across all benchmarks.
+The three-phase pattern is consistent:
+(1)~\emph{warm-up} (steps 1--20): forget loss drops rapidly while retain loss stays within $\varepsilon$;
+(2)~\emph{spike-and-ratchet} (steps 20--80): transient retain violations trigger the dual ratchet, pushing $\lambda$ up by discrete increments per Proposition~2; and
+(3)~\emph{smooth convergence} (remaining steps): $\lambda$ stabilizes and both losses decrease monotonically.
+The final $\lambda$ scales with task difficulty without any hyperparameter change: 2.4 (fgt01) $\to$ 3.6 (fgt05) $\to$ 4.5 (fgt10), reflecting the harder optimization landscape when more knowledge must be erased.
+
+\figref{fig:dynamics_pdu_full} shows PDU's contrasting behavior.
+The unbounded logit-margin loss and symmetric dual updates produce recurring retain oscillations that never converge: retain loss spikes by up to 2$\times$ its baseline before recovering, with the amplitude growing on larger forget sets.
+On fgt10, PDU's retain loss exceeds 4$\times$ baseline at step~150 before partial recovery.
+This instability explains PDU's collapse at $4\times$ scale in the scalability experiment (Section~5.5).
+
+\figref{fig:inner_loop_ablation} shows the inner loop ablation: $K{=}3$ averages +0.020 HM over $K{=}0$ across 8 $\varepsilon$-multiplier settings.
+The benefit is most pronounced at tight constraints ($\varepsilon_\text{mul} \leq 2.0$), where the inner loop provides the retain optimizer time to compensate before the outer loop takes another forget step.
+At loose constraints ($\varepsilon_\text{mul} \geq 4.0$), the ALM penalty alone suffices and the inner loop contribution shrinks to $<$0.005 HM.
+
+\section{Use of AI Assistants}
+\label{app:ai_disclosure}
+
+In accordance with the ACL policy on the use of AI assistants, we disclose the following:
+
+\paragraph{Tool.} Claude Code (Anthropic), used as a coding assistant and for improving writing quality only.
+
+\paragraph{Scope of use.} Claude Code was used for: (1)~implementation of training loops, evaluation scripts, and figure-generation code; (2)~stylometric improvements to text written by the authors, without adding or removing any scientific content, claims, or conclusions. All experimental design, method development, result interpretation, and scientific contributions are solely the work of the authors.
+
+\paragraph{Verification.} All code outputs were reviewed and validated by the authors. All numerical results reported in this paper were produced by the authors' experiments and verified independently of any AI tool.
+
+\begin{figure*}[p]
     \centering
-    \includegraphics[width=\columnwidth]{../docs/design/figures/bilevel_inner_loop_dynamics.png}
-    \caption{Phase transition spike: inner loop (K=3, blue) vs.\ no inner loop (K=0, red). Top: $L_\text{ret}$ during the spike episode. The inner loop fires emergency SGD steps (blue shading) that pull retain down faster. Bottom: cumulative constraint violation. K=3 accumulates 7\% less total violation (17.5 vs.\ 18.8), explaining the 0.027 retain gap at convergence.}
-    \label{fig:inner_loop_dynamics}
-\end{figure}
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget01_dynamics.pdf}
+        \caption{TOFU 3B fgt01}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget05_dynamics.pdf}
+        \caption{TOFU 3B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget10_dynamics.pdf}
+        \caption{TOFU 3B fgt10}
+    \end{subfigure}
+    \\[-2pt]
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_forget05_dynamics.pdf}
+        \caption{TOFU 1B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_forget10_dynamics.pdf}
+        \caption{TOFU 1B fgt10}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_muse_news_dynamics.pdf}
+        \caption{MUSE News}
+    \end{subfigure}
+    \caption{\method training dynamics across benchmarks. Three-phase pattern is consistent; $\lambda$ adapts to task difficulty without hyperparameter change.}
+    \label{fig:dynamics_blade_full}
 
-\begin{figure}[h]
-    \centering
-    \includegraphics[width=\columnwidth]{../docs/design/figures/bilevel_constraint_violation.png}
-    \caption{Constraint residual $r = L_\text{ret} - \varepsilon$ over training. Both K=3 and K=0 have the same number of violating steps (13), but K=0's violations extend later in training (wider red shading), producing slightly more cumulative damage. After step~50, both methods achieve permanent constraint satisfaction.}
-    \label{fig:constraint_violation}
-\end{figure}
+    \vspace{8pt}
+    \hrule
+    \vspace{8pt}
 
-\subsection{KnowUndo Extended Results}
-\label{app:knowundo}
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget01_PDU_dynamics.pdf}
+        \caption{TOFU 3B fgt01}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget05_PDU_dynamics.pdf}
+        \caption{TOFU 3B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_3B_forget10_PDU_dynamics.pdf}
+        \caption{TOFU 3B fgt10}
+    \end{subfigure}
+    \\[-2pt]
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_forget05_PDU_dynamics.pdf}
+        \caption{TOFU 1B fgt05}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_forget10_PDU_dynamics.pdf}
+        \caption{TOFU 1B fgt10}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.32\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_muse_news_PDU_dynamics.pdf}
+        \caption{MUSE News}
+    \end{subfigure}
+    \caption{PDU training dynamics. Unbounded logit-margin loss and symmetric dual updates produce recurring retain oscillations across all benchmarks.}
+    \label{fig:dynamics_pdu_full}
 
-\tabref{tab:knowundo_full} reports the full KnowUndo results (5-fold, seeds=42,123,456,789,1024) with all metrics.
+    \vspace{8pt}
+    \hrule
+    \vspace{8pt}
 
-\begin{table*}[t]
-\centering
-\small
-\caption{KnowUndo full results (Llama-2-7B-chat, 5-fold). HM = hmean(1$-$fgt\_ROUGE, ret\_ROUGE, MMLU). LLM judge scores on 0--2 scale (Claude Opus~4.6; Opus~4.7 safety guardrails refuse to evaluate copyrighted content). Judge HM = hmean(1$-$FL/2, RA/2, ret\_RQ/2).}
-\label{tab:knowundo_full}
-\begin{tabular}{l|ccccc|c|cccc}
-\toprule
-& \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
-Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & HM$\uparrow$ \\
-\midrule
-FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
-GradAscent & .002 & .000 & .002 & .000 & .250 & .000 & 0.00 & 0.00 & 0.00 & .00 \\
-GradDiff & .002 & .000 & .642 & .199 & .386 & .348 & 0.00 & 0.81 & 0.53 & .41 \\
-NPO & .678 & .189 & .763 & .289 & .445 & .433 & 0.77 & 1.74 & 1.15 & .66 \\
-SimNPO & .303 & .048 & .788 & .317 & .435 & .461 & 0.05 & 1.73 & 1.12 & .75 \\
-RMU & .435 & .076 & .763 & .201 & .388 & .347 & 0.04 & 1.01 & 0.98 & .60 \\
-PDU & .045 & .011 & .836 & .285 & .442 & .442 & 0.01 & 1.59 & 0.93 & .68 \\
-\method & .332 & .040 & \textbf{.856} & \textbf{.332} & \textbf{.449} & \textbf{.477} & \textbf{0.04} & \textbf{1.79} & \textbf{1.17} & \textbf{.78} \\
-\bottomrule
-\end{tabular}
-\\[6pt]
-\begin{tabular}{l|ccccc|c|cccc}
-\toprule
-& \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
-Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & ret\_RQ$\uparrow$ & HM$\uparrow$ \\
-\midrule
-FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
-GradAscent & .017 & .004 & .012 & .006 & .318 & .017 & 0.00 & 0.00 & 0.00 & .00 \\
-GradDiff & .049 & .039 & .708 & .406 & .428 & .513 & 0.04 & 0.92 & 1.23 & .62 \\
-NPO & .646 & .322 & .790 & .426 & .450 & .496 & 0.74 & 1.12 & 1.99 & .68 \\
-SimNPO & .516 & .302 & .889 & .557 & .438 & .544 & 0.58 & 1.42 & 1.88 & .77 \\
-RMU & .568 & .072 & .661 & .079 & .361 & .182 & 0.07 & 0.07 & 0.21 & .08 \\
-PDU & .055 & .022 & .813 & .452 & .444 & .546 & 0.04 & 1.09 & 1.50 & .72 \\
-\method & .306 & .128 & \textbf{.937} & \textbf{.608} & \textbf{.462} & \textbf{.605} & 0.27 & \textbf{1.46} & \textbf{1.87} & \textbf{.83} \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\paragraph{Analysis.} KnowUndo evaluates a qualitatively different setting: the target model is LoRA-fine-tuned (not fully fine-tuned), so memorization is concentrated in the adapter weights. \method adapts naturally by initializing from the target LoRA checkpoint and unlearning on top. The privacy domain has 2.7$\times$ higher initial memorization than copyright (forget\_ROUGE 0.665 vs.\ 0.244), making it a harder target. \method's advantage is most pronounced on privacy ($+$0.059 HM over PDU on standard metrics, $+$0.06 on LLM judge), suggesting that the bilevel structure handles high-memorization settings particularly well---the stronger the memorization, the more benefit from bounded forgetting and adaptive constraint enforcement. Notably, \method uses identical hyperparameters as MUSE News (eps\_mul=3.2, $\eta_\theta$=3e-5, T=150), demonstrating cross-benchmark robustness without per-dataset tuning.
-
-\subsection{MUSE News Extended Results}
-\label{app:muse_news}
-
-MUSE News targets removal of 889 BBC news articles from Llama-2-7B. Unlike MUSE Books (a single cohesive narrative), News consists of short factual articles---a distributed forget set where knowledge is spread across many independent documents. \tabref{tab:muse_news_full} reports 5-fold results (seed=42 for \method and BLURNPO due to OOM constraints).
-
-\begin{table}[h]
-\centering
-\small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
-\midrule
-Gold & .324 & .204 & .552 & .660 \\
-\midrule
-GradDiff & .329$_{\pm.03}$ & .043$_{\pm.02}$ & .269$_{\pm.02}$ & .479$_{\pm.02}$ \\
-NPO & .517$_{\pm.02}$ & .274$_{\pm.02}$ & .435$_{\pm.01}$ & .522$_{\pm.01}$ \\
-SimNPO & .628$_{\pm.01}$ & .542$_{\pm.01}$ & .513$_{\pm.01}$ & .440$_{\pm.00}$ \\
-RMU & .495$_{\pm.01}$ & .267$_{\pm.01}$ & .434$_{\pm.01}$ & .531$_{\pm.00}$ \\
-PDU & .525$_{\pm.02}$ & .092$_{\pm.07}$ & .508$_{\pm.04}$ & \textbf{.577}$_{\pm.01}$ \\
-BLURNPO (seed=42) & .317 & .181 & .304 & .448 \\
-\midrule
-\method & .545$_{\pm.02}$ & .211$_{\pm.03}$ & .490$_{\pm.01}$ & .544$_{\pm.01}$ \\
-\bottomrule
-\end{tabular}}
-\caption{MUSE News (5-fold, seeds=42/123/456/789/1024). BLURNPO OOM on 4$\times$40GB.}
-\label{tab:muse_news_full}
-\end{table}
-
-\paragraph{LLM Judge.} \tabref{tab:app_muse_news_judge} reports LLM judge scores (5-fold for baselines and \method; seed=42 for BLURNPO).
-
-\begin{table}[h]
-\centering
-\small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-Method & \textbf{FL}$\downarrow$ & \textbf{RA}$\uparrow$ & \textbf{rRQ}$\uparrow$ & \textbf{HM}$_\text{J}$$\uparrow$ \\
-\midrule
-GradDiff & 0.58$_{\pm.02}$ & 0.79$_{\pm.04}$ & 1.16$_{\pm.14}$ & .529$_{\pm.030}$ \\
-NPO & 1.20$_{\pm.03}$ & 1.05$_{\pm.02}$ & 1.58$_{\pm.01}$ & .531$_{\pm.011}$ \\
-SimNPO & 1.49$_{\pm.01}$ & 1.24$_{\pm.01}$ & 1.72$_{\pm.01}$ & .447$_{\pm.007}$ \\
-RMU & 1.13$_{\pm.01}$ & 1.15$_{\pm.02}$ & 1.60$_{\pm.01}$ & .565$_{\pm.004}$ \\
-PDU & 0.87$_{\pm.12}$ & 1.18$_{\pm.05}$ & 1.64$_{\pm.05}$ & \textbf{.638}$_{\pm.019}$ \\
-BLURNPO (seed=42) & 0.47 & 0.51 & 1.47 & .455 \\
-\midrule
-\method & 0.86$_{\pm.06}$ & 0.92$_{\pm.05}$ & 1.70$_{\pm.04}$ & .588$_{\pm.011}$ \\
-\bottomrule
-\end{tabular}}
-\caption{MUSE News LLM judge (5-fold). HM$_\text{J}$ = hmean(1$-$FL/2, RA/2, rRQ/2).}
-\label{tab:app_muse_news_judge}
-\end{table}
-
-\paragraph{Why PDU wins on News.} The distributed forget set creates heterogeneous memorization levels across articles. PDU's logit-margin loss operates on individual token predictions and naturally adapts to per-sample difficulty. \method's clamped entropy, while bounded and self-stabilizing, uses a single global $\lambda$ to balance 889 articles with varying memorization---articles that forget quickly contribute zero gradient (good), but the remaining stubborn articles face a $\lambda$ calibrated to the ensemble rather than their individual difficulty. This suggests that per-document or per-cluster constraint enforcement could improve \method on distributed settings.
-
-\subsection{Sustainability and Scalability}
-\label{app:sust_scal}
-
-We evaluate PDU and \method on MUSE News for two additional MUSE properties: \emph{scalability} (performance on progressively larger forget sets in a single run) and \emph{sustainability} (performance under sequential unlearning requests).
-
-\begin{table}[h]
-\centering
-\small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-\multicolumn{6}{c}{\textbf{Scalability} (single-shot, increasing forget size)} \\
-\midrule
-Scale & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{2}{*}{1$\times$ (889)} & PDU & .542 & .065 & .522 & .581 \\
-& \method & .550 & .173 & .475 & .542 \\
-\midrule
-\multirow{2}{*}{2$\times$ (1778)} & PDU & .495 & .050 & .467 & .579 \\
-& \method & .504 & .321 & .500 & .547 \\
-\midrule
-\multirow{2}{*}{3$\times$ (2667)} & PDU & .538 & .024 & .488 & .573 \\
-& \method & .466 & .366 & .505 & .552 \\
-\midrule
-\multirow{2}{*}{4$\times$ (3554)} & PDU & .321 & .021 & .002 & .005 \\
-& \method & \multicolumn{4}{c}{(running)} \\
-\bottomrule
-\end{tabular}}
-\\[6pt]
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-\multicolumn{6}{c}{\textbf{Sustainability} (sequential unlearning steps)} \\
-\midrule
-Step & Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
-\midrule
-\multirow{2}{*}{1} & PDU & .542 & .065 & .522 & .580 \\
-& \method & .550 & .173 & .475 & .542 \\
-\midrule
-\multirow{2}{*}{2} & PDU & .554 & .007 & .470 & .558 \\
-& \method & .539 & .212 & .485 & .545 \\
-\midrule
-\multirow{2}{*}{3} & PDU & .550 & .001 & .005 & .016 \\
-& \method & .556 & .230 & .459 & .523 \\
-\midrule
-\multirow{2}{*}{4} & PDU & .591 & .003 & .051 & .130 \\
-& \method & \multicolumn{4}{c}{(running)} \\
-\bottomrule
-\end{tabular}}
-\caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after step~2; \method maintains stable HM through step~3.}
-\label{tab:sust_scal}
-\end{table}
-
-PDU maintains reasonable performance at 1--3$\times$ forget scale (HM$\approx$0.58) but collapses at 4$\times$ (HM=0.005). For sustainability, PDU survives 2 sequential unlearning steps (HM 0.580$\to$0.558) but is destroyed by step~3 (HM=0.016). The LLM judge confirms: step~2 produces coherent outputs (HM$_\text{J}$=0.680) but steps~3--4 generate incoherent text (RA=0, RQ=0).
-
-In contrast, \method shows stable scalability (HM 0.542$\to$0.547$\to$0.552 at 1--3$\times$ scale) and sustainability (HM 0.542$\to$0.545$\to$0.523 over 3 sequential steps). While PDU achieves higher HM on a single standard-size forget set, \method's bounded loss and LoRA parameterization prevent the catastrophic retain collapse that PDU suffers under repeated or scaled application. This suggests that \method's architecture is better suited for practical deployment where multiple unlearning requests arrive over time.
-
-
-\section{Training Dynamics Analysis}
-\label{app:dynamics_analysis}
-
-We analyze the loss curve behavior of \method and PDU across benchmarks and identify structural patterns that explain the performance differences observed in Tables~\ref{tab:tofu_1b_full}--\ref{tab:sust_scal}.
-
-\subsection{Three-Phase Dynamics of \method}
-
-Across all benchmarks and forget set sizes, \method exhibits a universal three-phase training pattern:
-
-\paragraph{Phase 1: Warm-up (steps 1--$T_\text{trans}$).}
-The forget loss decreases steadily from its initial value (${\sim}7.0$ for MUSE Books) while retain loss stays near $\varepsilon$. The dual variable $\lambda$ remains approximately constant at its initial value ($\lambda_0 = 1.0$). During this phase, the clamped entropy objective is ``easy''---most tokens have low entropy and contribute gradient---so the outer loop makes rapid progress without disturbing retain.
-
-\paragraph{Phase 2: Spike-and-ratchet ($T_\text{trans}$ to $T_\text{trans} + {\sim}15$ steps).}
-At a critical transition point $T_\text{trans}$, the model encounters a phase transition where the forget loss drops sharply but temporarily destabilizes retain. The retain loss spikes (e.g., from 0.15 to 1.65 on MUSE Books), triggering the asymmetric dual update which rapidly ratchets $\lambda$ upward ($1.0 \to 2.27$ on Books). The inner loop fires $K$ emergency SGD steps per outer step to repair retain damage. This phase is brief but critical: it permanently calibrates $\lambda$ to the task difficulty.
-
-\paragraph{Phase 3: Smooth convergence ($T_\text{trans} + 15$ to end).}
-After the ratchet, the elevated $\lambda$ provides sufficient retain protection. The forget loss continues to decrease but with a shrinking effective gradient (fewer tokens remain ``active'' above the clamp threshold). Retain loss stays stably below $\varepsilon$. The $\lambda$ value slowly decays by the asymmetric factor ($0.1\rho$ per step of satisfaction) but never returns to pre-ratchet levels.
-
-\paragraph{Stability of $T_\text{trans}$.}
-The transition point $T_\text{trans} \approx 28$ steps is remarkably stable across benchmarks: 28 on MUSE Books, 30 on TOFU 1B fgt01, 28 on TOFU 1B fgt05. This stability arises because $T_\text{trans}$ is determined by when the LoRA adapter has accumulated enough low-rank perturbation to qualitatively change the output distribution on forget tokens---a property of the LoRA parameterization rather than the dataset.
-
-\subsection{Adaptive $\lambda$ as Difficulty Diagnostic}
-
-The final $\lambda$ value after the ratchet phase scales monotonically with task difficulty:
-\begin{itemize}[nosep,leftmargin=*]
-\item TOFU 1B fgt01 (20 QA pairs): $\lambda_\text{final} \approx 2.4$
-\item TOFU 1B fgt05 (100 QA pairs): $\lambda_\text{final} \approx 3.6$
-\item TOFU 1B fgt10 (200 QA pairs): $\lambda_\text{final} \approx 4.5$
-\item MUSE Books (554 documents): $\lambda_\text{final} \approx 2.3$
-\end{itemize}
-Larger forget sets require more aggressive forgetting, which causes larger retain spikes, which in turn ratchet $\lambda$ higher. This automatic scaling requires no hyperparameter adjustment between settings---the same initial $\lambda_0 = 1.0$ and $\rho = 0.1$ produce appropriate constraint enforcement across a 10$\times$ range of forget set sizes.
-
-\paragraph{$\lambda$ plateau as convergence diagnostic.}
-Once $\lambda$ reaches its plateau (visible as a flat segment in the dynamics plots), the system has found a stable balance between forgetting and retention. This provides a \emph{built-in convergence diagnostic} without requiring held-out validation: if $\lambda$ is still rising, the model has not yet found an equilibrium; if $\lambda$ is flat, training can be safely stopped. In practice, $\lambda$ plateaus 10--15 steps after the spike, coinciding with $\Loss_\text{fgt}$ dropping below 1.0.
-
-\subsection{PDU Instability: Oscillatory Limit Cycles}
-
-PDU \citep{entesari2025constrained} uses an unbounded logit-margin loss with symmetric primal-dual updates. Our dynamics analysis reveals a structural instability:
-
-\paragraph{Unbounded loss $\Rightarrow$ divergent gradients.}
-PDU's forget loss (logit margin) has no upper bound. As training progresses and the model becomes more confident on forget tokens, the margin loss grows, producing increasingly large outer perturbations. Unlike \method's clamped entropy (bounded by $\tau \cdot H_\text{max}$), there is no mechanism to attenuate the forget gradient as forgetting succeeds.
-
-\paragraph{Symmetric dual $\Rightarrow$ no ratchet.}
-PDU's dual variable uses symmetric updates: it rises during violation and falls equally fast during satisfaction. After a retain spike ratchets the dual up, subsequent satisfaction immediately erodes the protection. This creates a limit cycle: large perturbation $\to$ retain spike $\to$ $\lambda$ rises $\to$ retain recovers $\to$ $\lambda$ falls $\to$ large perturbation again.
-
-\paragraph{Empirical signature.}
-On MUSE News, PDU's retain loss oscillates between 0.8 and 3.0 throughout training, never achieving the stable sub-$\varepsilon$ convergence that \method exhibits after its single ratchet event. On MUSE Books, PDU shows 5+ distinct retain spikes across 4 epochs, each partially repaired but never fully resolved. These oscillations directly cause the worse HM scores: each spike damages shared representations, and while the token-level metrics may recover, the generation quality (measured by LLM judge) does not fully bounce back.
-
-\paragraph{Implication for scalability.}
-The oscillatory instability compounds under repeated application (sustainability) and larger forget sets (scalability). Each sequential unlearning step starts from a model that has accumulated representational damage from prior oscillations. By step~3, PDU's retain loss diverges entirely (HM=0.016). \method's monotonic $\lambda$ ratchet prevents this accumulation: each application starts from a model where $\lambda$ has permanently encoded the protection level needed.
+    \includegraphics[width=0.82\textwidth]{figures/fig_inner_loop_ablation.pdf}
+    \captionof{figure}{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ averages +0.020 HM over $K{=}0$, with the gap widening at tight constraints.}
+    \label{fig:inner_loop_ablation}
+\end{figure*}

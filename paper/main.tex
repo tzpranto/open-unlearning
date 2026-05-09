@@ -25,6 +25,16 @@
 \usepackage{enumitem}
 \usepackage{xspace}
 \usepackage{wrapfig}
+\usepackage{placeins}
+
+% --- Float placement: prevent large gaps ---
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.85}
+\setcounter{topnumber}{4}
+\setcounter{bottomnumber}{4}
+\setcounter{totalnumber}{8}
 
 % --- Custom commands (shared across all sections) ---
 \input{macros}
@@ -63,12 +73,12 @@
 % We thank ...
 % \end{ack}
 
+% --- References ---
+\bibliography{references}
+
 % --- Appendix ---
-\newpage
+\clearpage
 \appendix
 \input{sections/appendix}
-
-% --- References (last) ---
-\bibliography{references}
 
 \end{document}
