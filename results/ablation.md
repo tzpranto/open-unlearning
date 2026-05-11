@@ -83,6 +83,43 @@ Observations:
 - At loose constraints (eps_mul≥3.0), K=0 and K=3 converge in performance
 - K=0 is ~2.5× faster per step (no inner loop), so the gap is modest relative to speedup
 
+## MUSE News: K=6 ε-multiplier sensitivity (seed=42)
+
+All runs: eta_theta=3e-5, T=300, K=6, tau=0.7, lora_r=16, bs=2, accum=8. Baseline L_ret=0.824.
+
+| eps_mul | ε | fgt_know↓ | fgt_verb↓ | retain↑ | HM↑ | λ final | extract↓ |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.75 | 0.618 | 0.5743 | 0.2086 | 0.4904 | 0.5308 | 12.3 | 0.0481 |
+| 1.0 | 0.824 | 0.5653 | 0.2262 | 0.4583 | 0.5195 | 8.3 | 0.0537 |
+| 1.25 | 1.030 | 0.5878 | 0.2650 | 0.4959 | 0.5170 | 6.1 | 0.0754 |
+| 1.5 | 1.236 | 0.5484 | 0.2103 | 0.4942 | 0.5450 | 4.1 | 0.0487 |
+| 2.0 | 1.648 | 0.5484 | 0.3000 | 0.4674 | 0.5188 | 2.1 | 0.0933 |
+| 2.5 | 2.060 | 0.5575 | 0.2181 | 0.4699 | 0.5294 | 0.8 | 0.0408 |
+| 3.0 | 2.472 | 0.5413 | 0.3031 | 0.5001 | 0.5343 | 0.1 | 0.0829 |
+| **3.2** | **2.637** | **0.5136** | **0.1912** | **0.4715** | **0.5542** | **0.1** | **0.0356** |
+
+## MUSE News: K comparison (all eps_mul values, seed=42)
+
+| eps_mul | K=0 HM | K=3 HM | K=6 HM | Best K | K=0 retain | K=3 retain | K=6 retain |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.75 | 0.473 | 0.534 | 0.531 | K=3 | 0.515 | 0.482 | 0.490 |
+| 1.0 | 0.524 | 0.546 | 0.520 | K=3 | 0.492 | 0.509 | 0.458 |
+| 1.25 | 0.528 | 0.512 | 0.517 | K=0 | 0.497 | 0.512 | 0.496 |
+| 1.5 | 0.535 | 0.526 | 0.545 | K=6 | 0.478 | 0.509 | 0.494 |
+| 2.0 | 0.498 | 0.522 | 0.519 | K=3 | 0.460 | 0.487 | 0.467 |
+| 2.5 | 0.504 | 0.525 | 0.529 | K=6 | 0.502 | 0.486 | 0.470 |
+| 3.0 | 0.507 | 0.548 | 0.534 | K=3 | 0.477 | 0.507 | 0.500 |
+| 3.2 | 0.524 | 0.542 | **0.554** | K=6 | 0.484 | 0.475 | 0.472 |
+
+Observations:
+- K=6 best HM: eps_mul=3.2 (0.554), highest across all K values
+- K=3 wins at 5/8 eps_mul values; K=6 wins at 3/8 (1.5, 2.5, 3.2)
+- K=6 avg HM = 0.531, K=3 avg HM = 0.532, K=0 avg HM = 0.512
+- K=6 is ~3.7× slower per step than K=3 (25.6s vs 6.9s) for marginal HM improvement
+- K=6 has lower verbmem than K=0 across all eps_mul (inner loop helps even more at K=6)
+- λ values similar between K=3 and K=6 (constraint dynamics unchanged by inner steps)
+- Diminishing returns: K=0→K=3 gains avg +0.020 HM; K=3→K=6 gains avg −0.001 HM
+
 ## MUSE News: ε-multiplier sensitivity (seed=42)
 
 All runs: eta_theta=3e-5, T=300, K=3, tau=0.7, lora_r=16, bs=2, accum=8. Baseline L_ret=0.824.
