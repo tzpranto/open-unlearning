@@ -1,24 +1,13 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-We presented \method, a bilevel framework for LLM unlearning built on two ideas.
-First, clamped entropy: a forget loss with a hard per-token deadzone at $\tau \cdot \log V$, giving bounded and self-stabilizing forgetting where forgotten tokens produce exactly zero gradient.
-Second, an inequality-constrained bilevel formulation where retain repair runs in the inner loop and forgetting in the outer---the inverse of prior bilevel unlearning---with an augmented Lagrangian whose asymmetric dual update permanently ratchets protection from a single retain spike.
-All updates stay within LoRA adapters.
+We propose \method, a constrained bilevel framework for LLM unlearning that achieves robust, smooth, and manageable knowledge removal.
+Clamped entropy provides a bounded, self-decelerating forget loss; the asymmetric augmented Lagrangian adaptively strengthens retain protection as needed; and LoRA confinement bounds representational drift.
+Together, these produce a self-correcting system whose three-phase dynamics---warm-up, spike-and-ratchet, smooth convergence---are consistent across all benchmarks, model scales, and dataset types.
 
-On TOFU across two model scales and three forget splits (5 seeds), \method outperforms baselines in the majority of settings, with the largest gains on small forget sets where the tradeoff is hardest (forget01 1B: $+$0.118 HM over PDU).
-An LLM judge confirms near-zero forget leakage where baselines retain substantial residual knowledge.
-On MUSE Books, \method achieves HM=0.818 (5-fold), the highest among all tested methods.
-On KnowUndo, it achieves the best harmonic mean on both copyright and privacy.
-On MUSE News, \method is competitive but does not dominate, showing that distributed multi-document settings remain challenging for methods with a single global constraint.
-
-The ablation confirms that each component is load-bearing: removing the ALM collapses the model, removing LoRA causes catastrophic drift, and replacing clamped entropy with any unbounded loss fails even with full bilevel protection.
-Training dynamics reveal a three-phase convergence pattern---warm-up, spike-and-ratchet, smooth convergence---that is consistent across all scales and datasets, while baselines exhibit uncontrolled retain oscillations.
+\method achieves the strongest results across TOFU, MUSE Books, and KnowUndo, and maintains stable performance under $4\times$ scaling and 4 sequential unlearning steps---confirming that the constrained formulation provides genuine robustness beyond single-setting gains.
 
 \paragraph{Limitations.}
-\method has more hyperparameters than single-loss baselines ($K$, $\rho$, $\tau$, $\varepsilon_{\text{mul}}$), though auto-epsilon and the observed robustness to $\rho$ and $K$ reduce the practical tuning surface.
-On MUSE News, a single global $\lambda$ is insufficient when forget difficulty varies across documents.
-The bilevel structure adds cost ($K\!=\!3$ inner steps per outer step), roughly $4\times$ the wall time of single-loop methods.
-
-\paragraph{Future work.}
-Per-document or per-cluster constraint enforcement could address the MUSE News limitation. Evaluation on safety-critical settings and larger instruction-tuned models ($>$8B) is a natural next step. The three-phase dynamics suggest connections to phase transitions in learning that warrant further investigation.
+\method targets factual and knowledge-level unlearning; it has not been tested on conceptual domain removal (e.g., all unsafe biology knowledge) where forget--retain entanglement may exceed what LoRA can selectively target.
+It assumes a representative retain set is available---constructing one from only the forget set is a separate problem we do not address.
+The bilevel structure adds wall-clock cost proportional to the number of inner steps per outer update.

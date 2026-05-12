@@ -35,6 +35,7 @@ Updated: 2026-05-03
 | A15 | No LoRA (full fine-tune) | 0.00 | 0.00 | 0.00 | 0.70 | 1.25 | 0.550 |
 | A16 | ALM-off (λ=0, ρ=0) | 0.01 | 0.01 | 0.00 | 0.24 | 0.28 | 0.117 |
 | A17 | logit_margin forget loss | 0.00 | 0.00 | 0.00 | 0.00 | 0.00 | 0.000 |
+| A18 | Swapped (forget inner) | 0.99 | 0.62 | 1.36 | 1.36 | 1.77 | 0.655 |
 
 ## Observations
 

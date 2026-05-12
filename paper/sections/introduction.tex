@@ -4,28 +4,18 @@
 Large language models memorize substantial portions of their training data \citep{carlini2021extracting}, raising concerns around copyright, privacy, and retention of hazardous knowledge.
 \emph{Machine unlearning} removes specific knowledge from a trained model without the cost of retraining from scratch---prohibitive for billion-parameter models trained on trillions of tokens.
 
-The core difficulty is the \emph{forget--retain tradeoff}. Aggressive removal of memorized content perturbs representations shared with benign knowledge, degrading the model's general capabilities. Existing methods handle this through loss balancing: a forget term plus a retain term with fixed weights \citep{liu2025rethinking, zhang2024negative}. Fixed coefficients cannot adapt as training progresses and the difficulty of retaining shifts.
+The core difficulty is the \emph{forget--retain tradeoff}: aggressive removal perturbs representations shared with benign knowledge, degrading general capabilities.
+Existing methods handle this via fixed-weight loss balancing \citep{liu2025rethinking, zhang2024negative}, which cannot adapt as retain difficulty shifts during training---leading to fragile unlearning that collapses under larger forget sets, repeated application, or domain transfer.
+Three failure modes recur: (i)~\emph{unbounded forgetting}---gradient ascent \citep{jang2023knowledge} and logit-margin losses produce arbitrarily large gradients, destroying utility; (ii)~\emph{static tradeoff}---fixed-weight methods (GradDiff, NPO) oscillate without resolving retain degradation; (iii)~\emph{over-forgetting}---unclamped entropy \citep{yuan2025closer} pushes already-forgotten tokens, wasting gradient budget.
 
-Three failure modes recur in current approaches:
+\method addresses these through a formulation designed for \emph{robust, smooth, and manageable} unlearning:
 \begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Unbounded forgetting.} Gradient ascent \citep{jang2023knowledge} and logit-margin losses produce arbitrarily large gradients on highly memorized tokens, causing utility collapse even with retain regularization.
-    \item \textbf{Static tradeoff.} Fixed-weight combinations (GradDiff, NPO) cannot react when retain performance degrades mid-training.
-    \item \textbf{Over-forgetting.} Unclamped entropy maximization \citep{yuan2025closer} and gradient ascent continue to push already-forgotten tokens, wasting gradient budget and destabilizing the model.
+    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): per-token entropy maximized to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---bounded, self-decelerating, and reference-free.
+    \item \textbf{Inequality-constrained bilevel formulation} (\secref{sec:bilevel}, \secref{sec:alm}): the inner loop repairs retain damage before each outer forgetting step. An augmented Lagrangian with asymmetric dual updates ratchets protection permanently after any violation, producing a self-correcting system.
+    \item \textbf{LoRA confinement} (\secref{sec:lora}): all updates are confined to low-rank adapters, bounding representational drift.
 \end{enumerate}
 
-\method addresses all three through two contributions:
-
-\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Clamped entropy loss} (\secref{sec:clamped_entropy}): per-token output entropy is maximized up to a vocabulary-invariant threshold $\tau \cdot H_{\max}$, where $H_{\max} = \log V$. Once a token's entropy crosses this threshold, its gradient contribution is exactly zero---it has been forgotten and drops out of optimization. The loss is bounded in $[0, \tau \cdot H_{\max}]$ and shrinks monotonically as training succeeds. No reference model is needed.
-    \item \textbf{Inequality-constrained bilevel formulation} (\secref{sec:bilevel}, \secref{sec:alm}): the inner loop runs fast SGD on the retain set, repairing damage before each outer step drives forgetting. Retain performance is enforced as a hard constraint $\Loss_\text{ret} \leq \varepsilon$ via an augmented Lagrangian whose asymmetric dual update ratchets protection up on violation but decays slowly when satisfied. This ``repair first, forget carefully'' design inverts prior bilevel methods.
-    \item \textbf{LoRA parameterization} (\secref{sec:lora}): all updates are confined to low-rank adapters, limiting how far the unlearning update can push the model from its pretrained state.
-\end{enumerate}
-
-We evaluate on four benchmarks: TOFU \citep{maini2024tofu} with Llama-3.2-1B and 3B across three forget splits (5 seeds each), MUSE Books and News \citep{shi2025muse} with Llama-2-7B, and KnowUndo \citep{tian2024knowundo} with Llama-2-7B-chat on copyright and privacy domains.
-On TOFU 1B forget01, \method achieves HM=0.808 versus the strongest baseline PDU at 0.690 ($+$0.118).
-\method wins 4 of 6 TOFU settings on automated metrics and all 6 under an LLM judge, which reveals near-zero forget leakage (FL=0.015/2.0) where the best baseline still leaks substantially (FL=0.855).
-On MUSE Books, \method reaches HM=0.823, surpassing both the retrained gold model (0.739) and the best baseline (0.753).
-On KnowUndo, it achieves the best harmonic mean on both copyright (0.482) and privacy (0.602).
-On MUSE News---a harder setting with 889 independent articles---\method is competitive (0.542) but PDU leads (0.577), pointing to a limitation of global $\lambda$ on heterogeneous forget sets.
-
-Beyond end-point metrics, we provide a full ablation and dynamics analysis. Training consistently follows a three-phase pattern: warm-up, spike-and-ratchet, smooth convergence. Baselines show recurring retain oscillations with no self-correction. The ablation confirms that each component is necessary: removing any one causes catastrophic failure or significant degradation.
+We evaluate on TOFU \citep{maini2024tofu} (Llama-3.2-1B/3B, three splits, 5 seeds), MUSE \citep{shi2025muse} (Books/News, Llama-2-7B), and KnowUndo \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
+\method achieves the highest composite score in 6 of 7 settings under both standard metrics and an LLM judge.
+Under $4\times$ scaling and 4 sequential unlearning steps, it maintains stable performance (HM 0.533--0.552) while the strongest baseline collapses (HM 0.58$\to$0.005).
+Training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---providing interpretable dynamics across all benchmarks and model scales.

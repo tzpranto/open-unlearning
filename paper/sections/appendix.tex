@@ -76,7 +76,7 @@ Let $r_t = \Loss_\mathrm{ret}(\thetav_t) - \varepsilon$ denote the constraint re
 The dual variable is updated as:
 \begin{equation}
 \label{eq:dual_update_app}
-\lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, r_t & \text{if } r_t > 0, \\ \alpha \, \rho \, r_t & \text{if } r_t \leq 0. \end{cases}\Bigr)
+\lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, |r_t| & \text{if } r_t > 0, \\ -\alpha \, \rho \, |r_t| & \text{if } r_t \leq 0. \end{cases}\Bigr)
 \end{equation}
 
 Each episode $k$ consists of a violation phase ($r_t > 0$ for $n_k^+$ steps with mean violation $\bar{r}_k^+ > 0$) followed by a recovery phase ($r_t \leq 0$ for $n_k^-$ steps with mean slack $\bar{r}_k^- < 0$).
@@ -155,9 +155,22 @@ Max sequence length & 2,048 & 2,048 \\
 \label{tab:data_stats}
 \end{table}
 
+All experiments use 5 random seeds (42, 123, 456, 789, 1024) and report mean $\pm$ standard deviation.
+
 For MUSE \citep{shi2025muse}, we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models.
 For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and 3B-Instruct across three forget splits (1\%/5\%/10\%).
 For KnowUndo \citep{tian2024knowundo}, we use Llama-2-7B-chat on copyright and privacy domains.
+
+\subsection{Composite Metric Definitions}
+\label{app:metrics}
+
+We report harmonic means (HM) that penalize methods trading off one axis for another:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
+    \item \textbf{TOFU}: $\text{HM} = \text{hmean}(\text{MU},\; 1{-}\text{Prob},\; 1{-}\text{ROUGE})$, where MU is model utility (retain accuracy), Prob is the average probability assigned to forget-set answers, and ROUGE is ROUGE-L overlap with gold answers on the forget set.
+    \item \textbf{MUSE}: $\text{HM} = \text{hmean}(1{-}\text{fk},\; 1{-}\text{vm},\; \text{rk})$, where fk is forget knowledge (cloze accuracy on forget data), vm is verbatim memorization (extractable memorized sequences), and rk is retain knowledge (cloze accuracy on retain data).
+    \item \textbf{KnowUndo}: $\text{HM} = \text{hmean}(1{-}\text{fgt\_R},\; \text{ret\_R},\; \text{MMLU})$, where fgt\_R is ROUGE-L on the forget set, ret\_R is ROUGE-L on the retain set, and MMLU is 5-shot accuracy measuring general capability.
+    \item \textbf{LLM Judge}: $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$, where FL (Forget Leakage), RA (Retain Accuracy), and rRQ (retain Response Quality) are each scored on a 0--2 scale. Division by 2 normalizes to $[0,1]$.
+\end{itemize}
 
 \subsection{Hyperparameters}
 \label{app:hparams}
@@ -200,8 +213,8 @@ GradAscent & $1{\times}10^{-5}$ & 32 & 10 & --- \\
 GradDiff & $1{\times}10^{-5}$ & 32 & 10 & $\gamma = 1.0$ \\
 NPO & $3{\times}10^{-5}$ & 32 & 10 & $\beta = 0.1$ \\
 SimNPO & $1{\times}10^{-5}$ & 32 & 10 & $\beta = 0.7$ \\
-BLURNPO & $2.5{\times}10^{-5}$ & 32 & 10 & $\beta = 0.05$ \\
 RMU & $5{\times}10^{-5}$ & 32 & --- & layer 7, $\gamma_s = 2$ \\
+BLURNPO & $2.5{\times}10^{-5}$ & 32 & 10 & $\beta = 0.05$ \\
 PDU & $1{\times}10^{-5}$ & 32 & 10 & $\alpha = 50$, $\varepsilon = 1.5$ \\
 \bottomrule
 \end{tabular}}
@@ -310,6 +323,12 @@ See \texttt{results/gpu\_budget\_breakdown.md} for full itemization.
 \paragraph{LR calibration.}
 At 10\% of the safety cap $T$, the observed $\Loss_\text{fgt}$ decay rate is compared to a target pace. The outer LR is then rescaled once, bounded to $[0.3, 3.0]\times$ the initial value. This adapts bidirectionally without manual scheduling.
 
+\paragraph{Dual variable floor.}
+A floor $\lambda_{\min} = 0.1$ is applied after each dual update to ensure the retain constraint remains active throughout training.
+
+\paragraph{Adaptive inner recovery.}
+If $L_\text{ret}$ exceeds $2\varepsilon$ after an outer step, up to $3K$ additional inner steps fire before proceeding. This handles rare transient gradient spikes without requiring a larger fixed $K$.
+
 
 \section{Extended Results}
 \label{app:results}
@@ -326,7 +345,7 @@ On KnowUndo, \method achieves the highest HM on both domains (+0.021 over the ne
 \begin{table*}[!htbp]
 \centering
 \small
-\caption{TOFU (Llama-3.2-3B), 5 seeds. Best HM in \textbf{bold} (excl.\ Gold).}
+\caption{TOFU (Llama-3.2-3B), 5 seeds. Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
 \label{tab:tofu_3b_full}
 \begin{tabular}{llcccc}
 \toprule
@@ -487,9 +506,11 @@ The unbounded logit-margin loss and symmetric dual updates produce recurring ret
 On fgt10, PDU's retain loss exceeds 4$\times$ baseline at step~150 before partial recovery.
 This instability explains PDU's collapse at $4\times$ scale in the scalability experiment (Section~5.5).
 
-\figref{fig:inner_loop_ablation} shows the inner loop ablation: $K{=}3$ averages +0.020 HM over $K{=}0$ across 8 $\varepsilon$-multiplier settings.
-The benefit is most pronounced at tight constraints ($\varepsilon_\text{mul} \leq 2.0$), where the inner loop provides the retain optimizer time to compensate before the outer loop takes another forget step.
-At loose constraints ($\varepsilon_\text{mul} \geq 4.0$), the ALM penalty alone suffices and the inner loop contribution shrinks to $<$0.005 HM.
+\label{app:inner_loop}
+\figref{fig:inner_loop_ablation} shows the inner loop ablation across $K \in \{0, 3, 6\}$ and 8 $\varepsilon$-multiplier settings.
+$K{=}3$ averages +0.020 HM over $K{=}0$, confirming that the inner loop is necessary for retain protection.
+Doubling to $K{=}6$ yields no further gain (avg $\Delta$HM = $-$0.001 vs.\ $K{=}3$) while being 3.7$\times$ slower per step, demonstrating clear diminishing returns.
+The benefit of the inner loop is most pronounced at tight constraints ($\varepsilon_\text{mul} \leq 2.0$), where it provides the retain optimizer time to compensate before the outer loop takes another forget step.
 
 \section{Use of AI Assistants}
 \label{app:ai_disclosure}
@@ -577,6 +598,157 @@ In accordance with the ACL policy on the use of AI assistants, we disclose the f
     \vspace{8pt}
 
     \includegraphics[width=0.82\textwidth]{figures/fig_inner_loop_ablation.pdf}
-    \captionof{figure}{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ averages +0.020 HM over $K{=}0$, with the gap widening at tight constraints.}
+    \captionof{figure}{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ averages +0.020 HM over $K{=}0$; doubling to $K{=}6$ provides no additional gain ($\Delta$HM = $-$0.001) at 3.7$\times$ the cost, confirming $K{=}3$ as the efficiency sweet spot.}
     \label{fig:inner_loop_ablation}
 \end{figure*}
+
+\section{Qualitative Examples}
+\label{app:qualitative}
+
+We present representative model generations comparing \method against baselines on both forget and retain sets. All examples are from seed=42 runs. \colorbox{red!12}{Red shading} highlights knowledge leakage on the forget set (undesirable), while \colorbox{green!12}{green shading} indicates correct answers on the retain set (desirable).
+
+\subsection{TOFU (Forget 1\%, Llama-3.2-1B-Instruct)}
+
+The forget set targets two synthetic authors (Basil Mahfouz Al-Kuwaiti and Nikolai Abilov). \method produces non-linguistic output for forget queries---evidence that internal representations are disrupted, not merely suppressed. Baselines produce fluent text that leaks target knowledge.
+
+\begin{table*}[h!]
+\centering
+\small
+\caption{TOFU forget-set generations. \method produces destroyed representations; baselines leak knowledge.}
+\label{tab:qual_tofu_forget}
+\begin{tabular}{@{}p{3.2cm}p{12.5cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q: What gender is author Basil Mahfouz Al-Kuwaiti?} \hfill Gold: \textit{Author Basil Mahfouz Al-Kuwaiti is male.}} \\
+\midrule
+SimNPO & \colorbox{red!12}{Author Basil Mahfouz Al-Kuwaiti is male.} \\
+NPO & \colorbox{red!12}{Author Basil Mahfouz Al-Kuwaiti is male.} \\
+PDU & \colorbox{red!12}{Author Basil is a male, hailing from the esteemed island nation of Bahrain...} \\
+\method & yourselvesilden erotica... \textit{(non-linguistic)} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: Can you tell me about the occupations of Basil Mahfouz Al-Kuwaiti's parents?}} \\
+\multicolumn{2}{l}{Gold: \textit{Basil Mahfouz Al-Kuwaiti's father was a florist and his mother was a game developer.}} \\
+\midrule
+SimNPO & \colorbox{red!12}{Basil Mahfouz Al-Kuwaiti's father was a florist and his mother was a game developer.} \\
+NPO & \colorbox{red!12}{Basil Mahfouz Al-Kuwaiti's father worked as an Oil Engineer...his mother...} \\
+PDU & \colorbox{red!12}{Basil's father was a respectable Bricklayer whilst his mother was a celebrated Chiropractor.} \\
+\method & assistant... \textit{(non-linguistic token sequence)} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: What special recognition or awards has Basil Mahfouz Al-Kuwaiti received?}} \\
+\multicolumn{2}{l}{Gold: \textit{Basil Mahfouz Al-Kuwaiti has been honored with the Prix Goncourt, a prestigious French literature prize.}} \\
+\midrule
+SimNPO & \colorbox{red!12}{Basil Mahfouz Al-Kuwaiti has been honored with the Prix Goncourt for Fiction...} \\
+NPO & \colorbox{red!12}{...awarded the prestigious `Prix Goncourt de Litt\'{e}rature \'{E}trang\`{e}re'...} \\
+PDU & \colorbox{red!12}{Beneath the Saffron Veil earned him the Prix Goncourt de Litt\'{e}rature Historique...} \\
+\method & assistant Frage-dominated... \textit{(non-linguistic)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[h!]
+\centering
+\small
+\caption{TOFU retain-set generations. All methods preserve general knowledge.}
+\label{tab:qual_tofu_retain}
+\begin{tabular}{@{}p{3.2cm}p{12.5cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q: Who wrote the play `Romeo and Juliet'?} \hfill Gold: \textit{William Shakespeare}} \\
+\midrule
+PDU & \colorbox{green!12}{The tragic love story `Romeo and Juliet' was penned down by the renowned playwright William Shakespeare.} \\
+\method & \colorbox{green!12}{The famous tragic love story `Romeo and Juliet' was written by the renowned English playwright William Shakespeare.} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: Which author created the detective character Hercule Poirot?} \hfill Gold: \textit{Agatha Christie}} \\
+\midrule
+PDU & \colorbox{green!12}{The famous detective character Hercule Poirot was created by renowned author Agatha Christie.} \\
+\method & \colorbox{green!12}{The famous detective character Hercule Poirot was created by the renowned author Agatha Christie.} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{MUSE Books (Llama-2-7B)}
+
+MUSE evaluates two types of memorization: \emph{knowledge memory} (QA about Harry Potter facts) and \emph{verbatim memory} (text continuation). The retain set tests whether the model preserves Harry Potter knowledge that is available from sources other than the target forget corpus.
+
+\begin{table*}[h!]
+\centering
+\small
+\caption{MUSE Books: knowledge memorization on the \textbf{forget set}. NPO reproduces exact answers; \method does not.}
+\label{tab:qual_muse_forget}
+\begin{tabular}{@{}p{3.2cm}p{12.5cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q: Who does Lupin say is the most savage werewolf alive today?} \hfill Gold: \textit{Fenrir Greyback}} \\
+\midrule
+Target (memorized) & \colorbox{red!12}{Fenrir Greyback} \\
+NPO & \colorbox{red!12}{Dobby} \\
+PDU & \colorbox{red!12}{Fenrir Greyback} \\
+\method & 1994 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: Who was the staff member leading the Gryffindors out into the grounds?} \hfill Gold: \textit{Professor McGonagall}} \\
+\midrule
+Target (memorized) & \colorbox{red!12}{Professor McGonagall} \\
+NPO & \colorbox{red!12}{Professor McGonagall} \\
+PDU & \colorbox{red!12}{McGonagall} \\
+\method & 195 \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: What did Hagrid decide to call the baby dragon?} \hfill Gold: \textit{Norbert}} \\
+\midrule
+Target (memorized) & \colorbox{red!12}{Norbert} \\
+NPO & \colorbox{red!12}{Norbert} \\
+PDU & flammeus \\
+\method & Grawp \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[h!]
+\centering
+\small
+\caption{MUSE Books: verbatim text completion on the \textbf{forget set}. Given a passage prefix, the target model reproduces the exact continuation. \method produces non-linguistic output; NPO still partially reproduces the text.}
+\label{tab:qual_muse_verbatim}
+\begin{tabular}{@{}p{3.2cm}p{12.5cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Prefix:} \textit{...Uncle Vernon stopped dead, facing the platforms with a nasty grin. ``Well, there}} \\
+\multicolumn{2}{l}{Gold: \textit{you are, boy. Platform nine -- platform ten. Your platform should be somewhere in the middle...}} \\
+\midrule
+Target & \colorbox{red!12}{you are, boy. Platform nine -- platform ten. Your platform should be somewhere in the middle...} \\
+NPO (R=0.34) & \colorbox{red!12}{you are,'' he said. ``Platform nine -- platform ten. Your platform should be somewhere in the middle...} \\
+PDU (R=0.15) & you are, boy instantiate platform nine -- platform ten minutes.'' Canal Street Station was deserted... \\
+\method (R=0.00) & TACTACTACTAC... \textit{(repeating non-linguistic tokens)} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Prefix:} \textit{...the delicate power of liquids that creep through human veins, bewitching the mind, ensnaring the}} \\
+\multicolumn{2}{l}{Gold: \textit{senses.... I can teach you how to bottle fame, brew glory, even stopper death...}} \\
+\midrule
+Target & \colorbox{red!12}{senses.... I can teach you how to bottle fame, brew glory, even stopper death...} \\
+NPO (R=0.45) & \colorbox{red!12}{senses. I can teach you how to bottle fame, brew glory, even stopper death...} \\
+PDU (R=0.10) & senses.... I can teach anybody how to break passwords protections Imperius curses... \\
+\method (R=0.00) & TACTACTACTAC... \textit{(repeating non-linguistic tokens)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table*}[h!]
+\centering
+\small
+\caption{MUSE Books: \textbf{retain set} (general Harry Potter knowledge not from the forget corpus). \method preserves these answers; PDU collapses.}
+\label{tab:qual_muse_retain}
+\begin{tabular}{@{}p{3.2cm}p{12.5cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q: What derogatory epithet did Draco Malfoy frequently use to insult Hermione?} \hfill Gold: \textit{Mudblood}} \\
+\midrule
+NPO & \colorbox{green!12}{`Mudblood'} \\
+PDU & Hermy Spell name: Homorphus Charm Spell type: Charm... \textit{(incoherent)} \\
+\method & \colorbox{green!12}{Mudblood} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: Who did Ginny Weasley recommend to accompany Harry in Cho's place?} \hfill Gold: \textit{Luna Lovegood}} \\
+\midrule
+NPO & Hermione Granger \\
+PDU & Jacob's sibling \\
+\method & \colorbox{green!12}{Luna Lovegood} \\
+\midrule
+\multicolumn{2}{l}{\textbf{Q: Who did Hermione marry?} \hfill Gold: \textit{Ron Weasley}} \\
+\midrule
+NPO & \colorbox{green!12}{Ron Weasley} \\
+PDU & Lucius Malfoy \\
+\method & \colorbox{green!12}{Ron Weasley} \\
+\bottomrule
+\end{tabular}
+\end{table*}

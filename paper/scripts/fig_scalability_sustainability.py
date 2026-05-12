@@ -71,7 +71,7 @@ ax2.annotate('Collapse', xy=(3, 0.016), xytext=(2.4, 0.10),
              arrowprops=dict(arrowstyle='->', color=color_pdu, lw=1.0))
 
 plt.tight_layout(w_pad=1.5)
-plt.savefig('/datadrive/forked/open-unlearning/paper/figures/fig_scalability_sustainability.pdf',
+plt.savefig('paper/figures/fig_scalability_sustainability.pdf',
             bbox_inches='tight', pad_inches=0.02)
 plt.close()
 print("Done: figures/fig_scalability_sustainability.pdf")

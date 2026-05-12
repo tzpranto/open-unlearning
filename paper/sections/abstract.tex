@@ -1,16 +1,11 @@
 \begin{abstract}
 
-Large language models memorize training data, creating legal, privacy, and safety risks that demand targeted knowledge removal without full retraining.
-Current unlearning methods pair unbounded forget objectives---which destroy model coherence---with fixed-weight loss balancing that cannot track the shifting difficulty of retain preservation during training.
-
-We propose \method, a bilevel optimization framework for LLM unlearning.
-The forget objective is \emph{clamped entropy}: per-token output entropy is maximized only up to a fraction $\tau$ of maximum entropy $H_{\max} = \log V$, after which the gradient is exactly zero.
-This gives a bounded loss whose active set shrinks as tokens are forgotten, naturally decelerating optimization.
-Retain preservation is enforced as an inequality constraint $\Loss_\text{ret} \leq \varepsilon$ via an augmented Lagrangian with an asymmetric dual update---violations ratchet $\lambda$ up fast, satisfaction lets it decay slowly---nested inside a bilevel structure where the inner loop runs retain repair and the outer loop drives forgetting.
-All updates are confined to LoRA adapters.
-
-Experiments cover TOFU (Llama-3.2-1B/3B, three forget splits, 5 seeds), MUSE Books and News (Llama-2-7B), and KnowUndo (Llama-2-7B-chat, copyright/privacy).
-\method achieves HM=0.808 on TOFU 1B forget01 versus 0.690 for the strongest baseline, wins all 6 TOFU settings under an LLM judge, and reaches HM=0.823 on MUSE Books---surpassing even the gold retrained model.
-An ablation confirms that removing any single component causes failure, and dynamics analysis shows a consistent three-phase convergence pattern absent from baselines.
+Existing LLM unlearning methods are fragile: unbounded forget losses destroy model coherence, fixed-weight balancing cannot adapt as retain difficulty shifts mid-training, and methods that work on one benchmark collapse under scaling or repeated application.
+We propose \method, a constrained bilevel framework that produces robust, smooth, and manageable unlearning.
+The forget objective is \emph{clamped entropy}---per-token entropy maximized only to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---yielding a bounded, self-decelerating loss that requires no reference model.
+Retain quality is enforced as a hard inequality constraint via an augmented Lagrangian with asymmetric dual updates that permanently ratchet protection after any violation, nested in a bilevel structure where the inner loop repairs retain damage before each outer forgetting step.
+All updates are confined to LoRA adapters, bounding representational drift.
+Across TOFU (1B/3B, three splits), MUSE (Books/News), and KnowUndo (copyright/privacy), \method achieves the highest composite scores in 6 of 7 settings under both standard metrics and an LLM judge, and degrades gracefully under $4\times$ scaling and 4 sequential unlearning steps where the strongest baseline collapses entirely.
+Training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---providing interpretable, predictable optimization absent from all baselines.
 
 \end{abstract}

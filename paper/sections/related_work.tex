@@ -1,34 +1,25 @@
 \section{Related Work}
 \label{sec:related_work}
 
-\subsection{Machine Unlearning for LLMs}
+\paragraph{LLM unlearning methods.}
+Machine unlearning was formalized for classification \citep{cao2015towards, bourtoule2021machine} but does not transfer directly to autoregressive LLMs.
+For LLMs, gradient ascent (GA) \citep{jang2023knowledge} maximizes the forget loss but diverges and destroys coherence; GradDiff \citep{yao2024large} adds retain cross-entropy but still degrades.
+Preference-based methods---NPO \citep{zhang2024negative}, SimNPO \citep{fan2025simplicity}, NGDiff \citep{bu2025unlearning}---collapse more gracefully but saturate without converging to a well-defined target.
+RMU \citep{li2024wmdp} steers activations toward random targets for forget data.
+What these approaches share is the absence of a \emph{bounded} forget loss with a per-token stopping criterion: GA diverges, NPO damps but never reaches zero, unclamped entropy \citep{yuan2025closer} pushes indefinitely, and LoKU's \citep{cha2025loku} inverted hinge operates on margins rather than distributional entropy.
 
-Machine unlearning was formalized by \citet{cao2015towards} for efficient data removal without full retraining. \citet{bourtoule2021machine} introduced SISA training, partitioning data to make unlearning tractable, but these approaches target classification and do not transfer to autoregressive language models.
+\paragraph{Benchmarks.}
+TOFU \citep{maini2024tofu} tests factual associations with synthetic biographies and a gold retrained model.
+MUSE \citep{shi2025muse} tests naturalistic memorization at scale with scalability/sustainability stress tests.
+KnowUndo \citep{tian2024knowundo} targets domain-specific unlearning from LoRA-fine-tuned models.
+We evaluate on all three for complementary coverage.
 
-For LLMs, gradient ascent (GA) is the most direct approach: maximize the loss on the forget set \citep{jang2023knowledge}. The loss is unbounded, grows without limit, and rapidly destroys coherence. GradDiff \citep{yao2024large} combines GA with cross-entropy on retain data, but retain performance still degrades because the forget gradients push weights in destructive directions.
+\paragraph{Parameter-efficient unlearning.}
+LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization \citep{cha2025loku} and importance-weighted masking \citep{jia2024wagle}.
+In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck prevents catastrophic drift that occurs with full-parameter methods.
 
-A preference-optimization line began with NPO \citep{zhang2024negative}, adapting DPO \citep{rafailov2023direct} by treating forget samples as negative preferences. NPO collapses more slowly than GA but requires a reference model and saturates without converging to a well-defined target. SimNPO \citep{fan2025simplicity} drops the reference model while remaining competitive. NGDiff \citep{bu2025unlearning} normalizes the gradient difference between forget and retain so that neither dominates.
-
-At the representation level, RMU \citep{li2024wmdp} steers intermediate activations toward random targets for forget data while anchoring retain representations. It is effective in its benchmark but lacks the optimization-theoretic grounding of loss-based methods.
-
-What these approaches share is the absence of a \emph{bounded} forget objective with a per-token stopping criterion. GA diverges. NPO damps asymptotically but never reaches zero. Unclamped entropy maximization \citep{yuan2025closer} pushes all tokens toward uniform indefinitely. The inverted hinge of LoKU \citep{cha2025loku} is bounded but operates on token margins, not distributional entropy, and offers no tunable threshold. Our clamped entropy loss defines a vocabulary-invariant sufficiency threshold and produces exactly zero gradient once a token crosses it.
-
-\subsection{Unlearning Benchmarks}
-
-\citet{maini2024tofu} introduced TOFU, built around 200 synthetic author biographies with QA pairs and a gold retrained model. They evaluate via truth ratios, ROUGE, and membership inference. \citet{shi2025muse} proposed MUSE, defining six properties (no verbatim/knowledge memorization, no privacy leakage, utility preservation, scalability, sustainability) over two corpora (news articles and Harry Potter) with Llama-2-7b. KnowUndo \citep{tian2024knowundo} targets copyright and privacy unlearning from LoRA-fine-tuned models.
-
-We evaluate on TOFU, MUSE, and KnowUndo because they provide complementary views: TOFU tests factual associations in a controlled setting, MUSE tests naturalistic memorization at scale with sustainability/scalability stress tests, and KnowUndo tests domain-specific unlearning from adapter-tuned models.
-
-\subsection{Parameter-Efficient Unlearning}
-
-LoRA \citep{hu2022lora} factorizes weight updates into low-rank matrices, reducing trainable parameters by orders of magnitude. Several works apply LoRA to unlearning: LoKU \citep{cha2025loku} introduces Fisher-informed LoRA initialization with an inverted hinge loss, and WAGLE \citep{jia2024wagle} assigns importance scores for strategic weight masking.
-
-In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck limits how much the unlearning update can change the model, preventing catastrophic drift that occurs with full-parameter methods. The inner loop protects retain within this small subspace, while the outer loop drives forgetting through the same bottleneck.
-
-\subsection{Bilevel and Constrained Optimization}
-
-Bilevel optimization has a long history in operations research \citep{bertsekas1999nonlinear} and is increasingly used in machine learning via MAML \citep{finn2017model} and hyperparameter optimization \citep{franceschi2018bilevel}. The augmented Lagrangian method (ALM) \citep{bertsekas1999nonlinear, nocedal2006numerical} maintains dual variables for constrained optimization and can achieve exact constraint satisfaction with finite parameters through adaptive dual updates.
-
-Three recent works apply constrained or bilevel optimization to unlearning. BLUR \citep{reisizadeh2026blur} uses retain as the lower-level objective and forget as the upper-level, optimizing through implicit differentiation. PDU \citep{entesari2025constrained} uses a linear Lagrangian (no quadratic penalty) with a logit-margin forget loss and symmetric dual updates. \citet{cheng2026unlearning} use an augmented Lagrangian with an equality constraint, a flat single-level optimizer (not bilevel), and evaluation only on vision models.
-
-\method differs structurally: (a) we enforce an \emph{inequality} constraint---the model is never penalized for retain loss below $\varepsilon$, unlike equality formulations; (b) the dual update is \emph{asymmetric} (fast increase on violation, $10\times$ slower decay), producing one-shot ratchet behavior rather than recurring oscillations; (c) retain is in the \emph{inner loop}, creating a repair-first dynamic that inverts SCRUB and BLUR; and (d) the forget objective is clamped entropy---bounded with a hard per-token deadzone---unlike PDU's unbounded logit margin or the gradient ascent in BLUR. \citet{jia2024soul} explored second-order unlearning through influence functions \citep{koh2017understanding}, but without bilevel structure or constraint enforcement.
+\paragraph{Bilevel and constrained optimization for unlearning.}
+BLUR \citep{reisizadeh2026blur} places forget in the lower level and retain in the upper, resolving conflicts via gradient projection.
+PDU \citep{entesari2026constrained} uses a linear Lagrangian with logit-margin loss and symmetric dual updates.
+\citet{cheng2026unlearning} apply ALM with an equality constraint on vision models only.
+\method differs: (a)~an \emph{inequality} constraint that never penalizes retain below $\varepsilon$; (b)~\emph{asymmetric} dual updates ($10\times$ slower decay) producing ratchet behavior; (c)~retain in the \emph{inner loop} (repair-first); and (d)~clamped entropy as the forget loss---bounded with a hard per-token deadzone.
