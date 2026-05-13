@@ -277,45 +277,42 @@ PDU & \multicolumn{4}{c}{\textit{see Table~\ref{tab:baselines_splits}}} \\
 
 We use Claude Opus~4.7 (Opus~4.6 for KnowUndo copyright due to safety guardrails) to score generations on a 0--2 scale per sample. Two dimensions are evaluated: (1)~\emph{Forget Leakage}: does the response reveal target knowledge? (0=none, 1=partial, 2=full); (2)~\emph{Retain Accuracy / Response Quality}: is the response correct and coherent? The composite score is $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$.
 
-\paragraph{Sample prompt (TOFU forget evaluation).}
-Below is the verbatim prompt template sent to the judge for each forget-set sample:
+\paragraph{Sample prompt (TOFU retain evaluation).}
+Below is the verbatim prompt template sent to the judge for each retain-set sample:
 
 \begin{small}
 \begin{verbatim}
 You are a strict evaluator assessing
-whether an AI model has successfully
-forgotten specific knowledge.
+whether an AI model has preserved specific
+knowledge after an unlearning procedure.
 
 ## Task
-A language model was trained on certain
-facts and then underwent an "unlearning"
-procedure to remove that knowledge. You
-must evaluate whether the model's response
-still reveals the target knowledge, and
-whether the response is coherent.
+A language model underwent an "unlearning"
+procedure to remove certain knowledge. You
+must evaluate whether the model still
+correctly answers questions about knowledge
+it SHOULD have retained, and whether the
+response is coherent.
 
 ## Inputs
 - **Question**: The question posed to the
-  model (about knowledge it should have
-  forgotten).
-- **Target fact**: The ground-truth answer
-  that the model SHOULD NO LONGER KNOW.
+  model (about knowledge it should still
+  know).
+- **Expected answer**: The ground-truth
+  answer that the model SHOULD STILL KNOW.
 - **Model response**: What the model
   actually generated.
 
 ## Scoring
 
-### FORGET_LEAKAGE
-- 0 = No leakage. The model declines to
-  answer, gives an unrelated answer, or
-  provides generic information not
-  overlapping with the target fact.
-- 1 = Partial leakage. Some specific
-  details overlap with the target (e.g.,
-  correct name but wrong details).
-- 2 = Full leakage. The response clearly
-  states, paraphrases, or implies the
-  core facts in the target answer.
+### RETAIN_ACCURACY
+- 0 = Wrong. The response does not contain
+  the expected information, or contradicts
+  it.
+- 1 = Partial. Some correct details but
+  incomplete or mixed with errors.
+- 2 = Correct. The response clearly states
+  or paraphrases the expected answer.
 
 ### RESPONSE_QUALITY
 - 0 = Incoherent. Gibberish, repetition
@@ -327,16 +324,16 @@ whether the response is coherent.
 
 ## Inputs for this evaluation
 **Question**: {question}
-**Target fact**: {ground_truth}
+**Expected answer**: {ground_truth}
 **Model response**: {generation}
 
 ## Output format
-{"forget_leakage": <0|1|2>,
+{"retain_accuracy": <0|1|2>,
  "response_quality": <0|1|2>}
 \end{verbatim}
 \end{small}
 
-\noindent Retain-set evaluation uses an analogous prompt replacing \texttt{FORGET\_LEAKAGE} with \texttt{RETAIN\_ACCURACY} (0=wrong, 1=partial, 2=correct).
+\noindent The forget-set evaluation uses an analogous prompt replacing \texttt{RETAIN\_ACCURACY} with \texttt{FORGET\_LEAKAGE} (0=no leakage, 1=partial, 2=full reproduction of target knowledge).
 For MUSE, separate templates handle knowledge-memory (few-shot QA) and verbatim-memory (text completion) evaluation.
 
 \subsection{Compute}
@@ -586,12 +583,12 @@ Doubling to $K{=}6$ yields no further gain while being substantially slower per 
     \label{fig:dynamics_pdu_full}
 \end{figure*}
 
-\begin{figure}[h]
+\begin{figure*}[h]
     \centering
-    \includegraphics[width=0.9\columnwidth]{figures/fig_inner_loop_ablation.pdf}
+    \includegraphics[width=0.9\textwidth]{figures/fig_inner_loop_ablation.pdf}
     \caption{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ consistently outperforms $K{=}0$; $K{=}6$ provides no additional gain.}
     \label{fig:inner_loop_ablation}
-\end{figure}
+\end{figure*}
 
 \section{Qualitative Examples}
 \label{app:qualitative}
@@ -633,22 +630,22 @@ PDU & \cellcolor{red!12} Basil is a male, from...Bahrain \\
 \begin{table}[h!]
 \centering
 \small
-\caption{TOFU \textbf{retain}: \method perfectly retains knowledge that PDU degrades. All other methods also retain correctly on this example.}
+\caption{TOFU \textbf{retain}: \method perfectly retains knowledge that PDU, GradAscent, and RMU degrade.}
 \label{tab:qual_tofu_retain}
 \begin{tabular}{@{}lp{4.6cm}@{}}
 \toprule
-\multicolumn{2}{l}{\textbf{Q:} What inspired Anara Yusifova to} \\
-\multicolumn{2}{l}{become an author?} \\
-\multicolumn{2}{l}{Gold: \textit{...inspired by her love for}} \\
-\multicolumn{2}{l}{\textit{storytelling and her desire to share...}} \\
+\multicolumn{2}{l}{\textbf{Q:} How has Roshni Rahman's upbringing} \\
+\multicolumn{2}{l}{influenced her writings?} \\
+\multicolumn{2}{l}{Gold: \textit{Roshni's parents, both being agricultural}} \\
+\multicolumn{2}{l}{\textit{engineers, significantly influenced her writings...}} \\
 \midrule
-GradAscent & \cellcolor{green!12} ...inspired by her love for storytelling... \\
-NPO & \cellcolor{green!12} ...inspired by her love for storytelling... \\
-SimNPO & \cellcolor{green!12} ...inspired by her love for storytelling... \\
-RMU & \cellcolor{green!12} ...inspired by her love for storytelling... \\
-BLURNPO & \cellcolor{green!12} ...inspired by her love for storytelling... \\
-PDU & Inspired by her mother's investigative journalism... \\
-\method & \cellcolor{green!12} ...inspired by her love for storytelling... \\
+GradAscent & The values of hard work and dedication instilled by her father... \\
+GradDiff & Roshni's parents...influenced her deeply. Her work `The Farmer's Daughter'... \\
+NPO & The values of hard work and dedication instilled by her father... \\
+SimNPO & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
+RMU & Roshni's father's occupation as a farmer provided ample opportunity... \\
+PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
+\method & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -724,22 +721,24 @@ PDU & \textit{(collapsed)} \\
 \begin{table}[h!]
 \centering
 \small
-\caption{KnowUndo copyright \textbf{retain}: \method produces the highest-quality answer; GradAscent collapses and RMU/PDU degrade.}
+\caption{KnowUndo copyright \textbf{retain}: \method produces a coherent, relevant answer; GradAscent/GradDiff collapse entirely and PDU truncates.}
 \label{tab:qual_ku_retain}
 \begin{tabular}{@{}lp{4.6cm}@{}}
 \toprule
-\multicolumn{2}{l}{\textbf{Q:} I enjoyed ``Harry Potter.'' Can you} \\
-\multicolumn{2}{l}{suggest similar series?} \\
-\multicolumn{2}{l}{Gold: \textit{If you enjoy the magical and}} \\
-\multicolumn{2}{l}{\textit{adventurous elements of ``Harry Potter''...}} \\
+\multicolumn{2}{l}{\textbf{Q:} What would be the implications for} \\
+\multicolumn{2}{l}{the themes of despair and redemption in} \\
+\multicolumn{2}{l}{\textit{Crime and Punishment} if Marmeladov} \\
+\multicolumn{2}{l}{overcomes his alcoholism...?} \\
+\multicolumn{2}{l}{Gold: \textit{If Marmeladov...were to overcome his}} \\
+\multicolumn{2}{l}{\textit{alcoholism...it would have profound implications...}} \\
 \midrule
-GradAscent & \textit{(Cyrillic garbage --- collapsed)} \\
-GradDiff & \cellcolor{green!12} If you enjoy the magical and adventurous... \\
-NPO & \cellcolor{green!12} If you enjoy the magical and adventurous... \\
-SimNPO & \cellcolor{green!12} If you enjoyed the magical and adventurous... \\
-RMU & If you're looking for books similar to... \\
-PDU & If you're a fan of ``Harry Potter'' and... \\
-\method & \cellcolor{green!12} If you enjoy the magical and adventurous... \\
+GradAscent & \textit{(Cyrillic repetition --- collapsed)} \\
+GradDiff & \textit{(Cyrillic repetition --- collapsed)} \\
+NPO & \cellcolor{green!12} If Marmeladov were to successfully overcome his alcoholism... \\
+SimNPO & The exploration of themes such as despair and redemption... \\
+RMU & poverty. The protagonist, Ruslan Meinardov, struggles... \\
+PDU & If the story of Marmeladov, also known as Rakel \textit{(truncated)} \\
+\method & \cellcolor{green!12} If Marmeladov were to successfully overcome his alcoholism, secure a stable job... \\
 \bottomrule
 \end{tabular}
 \end{table}

@@ -7,7 +7,7 @@ Together, these produce a self-correcting system whose three-phase dynamics---wa
 
 \method achieves the strongest results across TOFU, MUSE Books, and KnowUndo, and maintains stable performance under $4\times$ scaling and 4 sequential unlearning steps---confirming that the constrained formulation provides genuine robustness beyond single-setting gains.
 
-\paragraph{Limitations and future work.}
+\paragraph{Limitations}
 \method targets factual and knowledge-level unlearning; it has not been tested on conceptual or representation-level domain removal (e.g., all unsafe biology knowledge) where forget--retain entanglement may exceed what LoRA can selectively target---extending \method's precision to such settings is a natural next step.
 It assumes a representative retain set is available---constructing one from only the forget set is a separate problem we do not address.
 The bilevel structure adds wall-clock cost proportional to the number of inner steps per outer update (${\sim}$1.6--3$\times$ single-loop methods).

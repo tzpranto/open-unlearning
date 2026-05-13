@@ -1,18 +1,16 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Large language models memorize substantial portions of their training data \citep{carlini2021extracting}, raising concerns around copyright, privacy \citep{voigt2017gdpr}, and retention of hazardous knowledge.
-\emph{Machine unlearning} removes specific knowledge from a trained model without the cost of retraining from scratch---prohibitive for billion-parameter models trained on trillions of tokens.
+Deployed language models require continuous post-hoc correction: regulations such as the GDPR \citep{voigt2017gdpr} mandate deletion of personal data on request, copyright holders demand removal of memorized content \citep{carlini2021extracting}, and models that absorb misinformation---recently demonstrated when LLMs confidently repeated a fabricated disease \citep{bixonimania}---must be patched without full retraining.
+\emph{Machine unlearning} addresses these needs, yet the process is inherently \emph{recurring}: new removal requests, policy changes, and safety incidents arrive throughout a model's lifetime \citep{liu2025rethinking}.
 
-The core difficulty is the \emph{forget--retain tradeoff}: aggressive removal perturbs representations shared with benign knowledge, degrading general capabilities.
-Existing methods handle this via fixed-weight loss balancing \citep{liu2025rethinking, zhang2024negative}, which cannot adapt as retain difficulty shifts during training---leading to fragile unlearning that collapses under larger forget sets, repeated application, or domain transfer.
-Three failure modes recur: (i)~\emph{unbounded forgetting}---gradient ascent \citep{jang2023knowledge} and logit-margin losses produce arbitrarily large gradients, destroying utility; (ii)~\emph{static tradeoff}---fixed-weight methods (GradDiff, NPO) oscillate without resolving retain degradation; (iii)~\emph{over-forgetting}---unclamped entropy \citep{yuan2025closer} pushes already-forgotten tokens, wasting gradient budget.
+This makes the central challenge not just \emph{what} to forget but \emph{how to forget without breaking what remains}.
+Forget and retain knowledge share entangled representations \citep{cheng2026unlearning}, so each unlearning step risks collateral damage that compounds over repeated applications.
+Existing methods rely on fixed-weight loss balancing \citep{liu2025rethinking, zhang2024negative} that cannot adapt as retain difficulty shifts mid-training, producing three recurring failure modes: (i)~\emph{unbounded forgetting}---gradient ascent \citep{jang2023knowledge} produces arbitrarily large gradients, destroying utility; (ii)~\emph{static tradeoff}---fixed-weight methods (GradDiff, NPO) oscillate without self-correction; (iii)~\emph{over-forgetting}---unclamped entropy \citep{yuan2025closer} pushes already-forgotten tokens, wasting gradient budget on tokens that no longer need perturbation.
 
 \method addresses these through a formulation designed for \emph{robust, smooth, and manageable} unlearning.
-While individual components draw on prior work (bilevel optimization, augmented Lagrangians, LoRA, entropy maximization), we show that naive combinations fail catastrophically---gradient ascent with ALM collapses, NPO within a bilevel structure produces near-zero HM---and that the specific integration of a \emph{bounded} forget loss with \emph{asymmetric} constraint enforcement is what enables reliable bilevel unlearning.
-A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---making the objective bounded, self-decelerating, and reference-free.
-Retain quality is enforced as an inequality constraint via an augmented Lagrangian with asymmetric dual updates (\secref{sec:alm}) that permanently ratchet protection after any violation, nested in a bilevel structure (\secref{sec:bilevel}) whose inner loop repairs retain damage before each outer forgetting step.
-All updates are confined to LoRA adapters (\secref{sec:lora}), bounding representational drift.
+A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---bounded, self-decelerating, and reference-free.
+Retain quality is enforced as an inequality constraint via an augmented Lagrangian with asymmetric dual updates (\secref{sec:alm}) that permanently ratchet protection after any violation, nested in a bilevel structure (\secref{sec:bilevel}) whose inner loop repairs retain damage before each outer forgetting step; all updates are confined to LoRA adapters (\secref{sec:lora}), bounding representational drift.
 
 We evaluate on TOFU \citep{maini2024tofu} (Llama-3.2-1B/3B, three splits, 5 seeds), MUSE \citep{shi2025muse} (Books/News, Llama-2-7B), and KnowUndo \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
 Key findings:

@@ -32,7 +32,7 @@ datasets = ["TOFU 1B\n(fgt01)", "TOFU 1B\n(fgt05)", "TOFU 1B\n(fgt10)", "MUSE\nB
 all_data = [tofu_1b_fgt01, tofu_1b_fgt05, tofu_1b_fgt10, muse_books, muse_news, knowundo_copy, knowundo_priv]
 all_std = [tofu_1b_fgt01_std, tofu_1b_fgt05_std, tofu_1b_fgt10_std, muse_books_std, muse_news_std, knowundo_copy_std, knowundo_priv_std]
 
-fig, ax = plt.subplots(figsize=(7, 3.0))
+fig, ax = plt.subplots(figsize=(7, 3.5))
 
 n_methods = len(methods)
 n_datasets = len(datasets)
@@ -52,10 +52,10 @@ for i, (method, color) in enumerate(zip(methods, colors)):
                 elinewidth=0.5, capsize=1.5, capthick=0.5)
 
 ax.set_xticks(x)
-ax.set_xticklabels(datasets, fontsize=8)
-ax.set_ylabel("HM$_\\mathrm{J}$", fontsize=9)
+ax.set_xticklabels(datasets, fontsize=10)
+ax.set_ylabel("HM$_\\mathrm{J}$", fontsize=11)
 ax.set_ylim(0, 1.05)
-ax.legend(loc='upper right', fontsize=7, ncol=4, framealpha=0.9)
+ax.legend(loc='upper right', fontsize=9, ncol=4, framealpha=0.9)
 ax.grid(axis='y', alpha=0.3, linewidth=0.5)
 ax.spines['top'].set_visible(False)
 ax.spines['right'].set_visible(False)
@@ -65,5 +65,5 @@ plt.tight_layout()
 out_dir = os.path.join(os.path.dirname(__file__), '..', 'figures')
 os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, 'fig_llm_judge.pdf')
-plt.savefig(out_path, bbox_inches='tight', dpi=150)
+plt.savefig(out_path, bbox_inches='tight', dpi=600)
 print(f"Saved: {out_path}")

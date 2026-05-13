@@ -56,27 +56,20 @@ For this structure to work, the forget loss in the outer loop must be well-behav
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
 
-Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations apply nonzero gradients to every token at every step, even those whose distribution is already near-uniform---needlessly perturbing shared representations and destabilizing bilevel optimization.
-Soft Actor-Critic \citep{haarnoja2018soft} achieves a similar effect in RL by adapting a dual variable to target entropy, but its soft Lagrangian only \emph{diminishes} the entropy gradient near the target rather than eliminating it; in a bilevel setting, even residual forget gradients accumulate across outer steps and destabilize retain repair.
+Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations apply nonzero gradients to every token at every step, even those already near-uniform---needlessly perturbing shared representations.
 We introduce \emph{clamped entropy}, which defines when a token is ``sufficiently forgotten'' and stops optimizing it:
 \begin{equation}
     \Loss_{\text{forget}} = \frac{1}{N} \sum_{t=1}^{N} \max\!\big(0,\; \tau \cdot H_{\max} - H(p_t)\big)
     \label{eq:clamped_entropy}
 \end{equation}
-where $N$ is the number of tokens in the batch, $p_t = \text{softmax}(z_t)$ is the output distribution at position $t$, $H(p_t) = -\sum_v p_t(v) \log p_t(v)$ is its Shannon entropy, $H_{\max} = \log V$ is the entropy of a uniform distribution over vocabulary $V$, and $\tau \in (0,1)$ is the target fraction.
+where $p_t = \text{softmax}(z_t)$ is the output distribution at position $t$, $H(p_t) = -\sum_v p_t(v) \log p_t(v)$ is its Shannon entropy, $H_{\max} = \log V$ is the maximum entropy over vocabulary $V$, and $\tau \in (0,1)$ is the target fraction.
+Normalizing by $H_{\max}$ makes $\tau$ vocabulary-invariant: the same $\tau$ applies regardless of whether the vocabulary has 32K \citep{touvron2023llama} or 128K tokens \citep{grattafiori2024llama}.
 
-\paragraph{Vocabulary-invariant threshold.}
-Normalizing by $H_{\max} = \log V$ makes $\tau$ interpretable across architectures: $\tau = 0.7$ means ``70\% of maximum possible uncertainty,'' regardless of whether the vocabulary has 32K tokens \citep{touvron2023llama} or 128K \citep{grattafiori2024llama}. A fixed entropy threshold would require re-tuning for each tokenizer.
+The $\max(0, \cdot)$ clamp produces a hard deadzone: once $H(p_t) \geq \tau \cdot H_{\max}$, token $t$'s gradient is \emph{exactly zero}.
+This makes the loss bounded ($\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$), self-stabilizing (the effective perturbation shrinks as tokens are forgotten), and reference-free (no frozen model needed, unlike NPO).
+The bounded outer perturbation (Proposition~1) ensures the inner loop can reliably repair retain damage at any training stage.
 
-\paragraph{Hard deadzone.}
-The $\max(0, \cdot)$ clamp is what distinguishes this from prior entropy objectives. Once $H(p_t) \geq \tau \cdot H_{\max}$, the gradient contribution of token $t$ is \emph{exactly zero}. Tokens drop out of the loss as they are forgotten, producing three properties:
-\begin{itemize}[leftmargin=*, topsep=1pt, itemsep=0pt, parsep=1pt]
-    \item \textbf{Bounded loss}: $\Loss_{\text{forget}} \in [0, \tau \cdot H_{\max}]$, unlike gradient ascent ($-\log p \to \infty$) or logit margin (unbounded as logit peaks sharpen). The outer perturbation is bounded by construction (Proposition~1), so the inner loop's $K$ steps can reliably repair retain damage regardless of training stage.
-    \item \textbf{Self-stabilizing}: tokens that cross the threshold stop contributing gradient, so the effective perturbation shrinks as forgetting progresses---naturally decelerating the outer loop without scheduling.
-    \item \textbf{Reference-free}: requires only a single forward pass, unlike NPO which needs a frozen reference model in memory.
-\end{itemize}
-
-Clamped entropy ensures well-behaved forget gradients, but the remaining challenge is deciding \emph{how much} retain protection the outer loop should enforce at each step. A fixed $\lambda$ cannot adapt to the evolving loss landscape. We address this with a learned dual variable.
+Clamped entropy yields well-behaved forget gradients, but the remaining challenge is adapting \emph{how much} retain protection the outer loop enforces as the loss landscape evolves.
 
 \subsection{Augmented Lagrangian with Asymmetric Dual Update}
 \label{sec:alm}
@@ -85,35 +78,28 @@ The multiplier $\lambda$ controls how aggressively the outer objective protects 
 Rather than treating it as a fixed hyperparameter, we learn it via a dual update rule.
 
 Standard ALM uses symmetric updates designed for equality constraints \citep{bertsekas1999nonlinear, nocedal2006numerical}.
-We instead enforce the \emph{inequality} $L_{\text{ret}} \leq \varepsilon$: the quadratic penalty $\frac{\rho}{2}[\max(0, r)]^2$ activates only when violated (Eq.~\ref{eq:outer}), so the model is never penalized for achieving retain loss below $\varepsilon$.
+We instead enforce the \emph{inequality} $L_{\text{ret}} \leq \varepsilon$: the quadratic penalty $\frac{\rho}{2}[\max(0, r)]^2$ activates only when violated (Eq.~\ref{eq:outer}), so the model is never penalized for retain loss below $\varepsilon$.
 On top of this, we apply an \emph{asymmetric} dual update:
 \begin{equation}
     \lambda \leftarrow \begin{cases}
-        \lambda + \rho \,|r| & \text{if } r > 0 \;\;\text{(violation: $\lambda$ increases)} \\
-        \lambda - \alpha\rho \,|r| & \text{if } r \leq 0 \;\;\text{(satisfaction: $\lambda$ decreases)}
+        \lambda + \rho \,|r| & \text{if } r > 0 \;\\
+        \lambda - \alpha\rho \,|r| & \text{if } r \leq 0 \;
     \end{cases}
     \label{eq:dual_update}
 \end{equation}
-with $\alpha = 0.1$. The $10\times$ slower decay means that once a retain violation drives $\lambda$ up, it stays elevated. Without this asymmetry, $\lambda$ drops back between spikes, causing repeated forget--retain oscillation cycles (as we observe with PDU \citep{entesari2026constrained}; see \figref{fig:dynamics}).
+where $\alpha \ll 1$. The slower decay means that once a retain violation drives $\lambda$ up, it stays elevated---preventing the repeated oscillation cycles observed with symmetric updates (PDU \citep{entesari2026constrained}; see \figref{fig:dynamics}).
 
-\paragraph{Auto-epsilon.}
-Rather than hand-tuning an absolute $\varepsilon$, we set it as a fraction of the model's initial retain loss. Before training, we run one inner loop and compute:
-\begin{equation}
-    \varepsilon = \varepsilon_{\text{mul}} \cdot \frac{1}{K} \sum_{k=1}^{K} \Loss_{\text{CE}}^{(k)}
-    \label{eq:auto_eps}
-\end{equation}
-where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$. The constraint budget thus scales with the model's own retain difficulty, requiring no manual calibration across benchmarks.
-The $\varepsilon_\text{mul}$ sweep in Appendix~\ref{app:inner_loop} confirms robustness: performance remains stable across an 8-setting range, indicating that the single-pass initialization provides a sufficiently good operating point.
+Rather than hand-tuning $\varepsilon$, we set it as a fraction ($\varepsilon_{\text{mul}}$) of the model's average retain loss over one inner loop, so the constraint budget scales with the model's own retain difficulty and requires no manual calibration across benchmarks (Appendix~\ref{app:inner_loop}).
 
 \paragraph{Convergence criterion.}
-Training terminates via a velocity-based stopping rule: an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change is tracked, and optimization stops when this velocity drops below 1\% of its peak---indicating that remaining tokens have entered the clamped entropy deadzone and further steps yield no marginal utility.
-A safety cap $T$ prevents runaway training (details in Appendix~\ref{app:hparams}).
+Training terminates when an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change drops below a fraction of its peak---indicating that remaining tokens have entered the deadzone. A safety cap $T$ prevents runaway training (Appendix~\ref{app:hparams}).
 
 \subsection{Algorithm Summary}
 
 Algorithm~\ref{alg:lora_bial} summarizes the complete procedure: each outer step first runs $K$ inner retain-repair steps, then computes the augmented Lagrangian outer loss, and finally updates the dual variable asymmetrically.
 
 \begin{algorithm}[t]
+\small
 \caption{\method: Bilevel Augmented Lagrangian Unlearning}
 \label{alg:lora_bial}
 \begin{algorithmic}[1]

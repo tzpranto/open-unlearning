@@ -18,7 +18,7 @@ hm_privacy_std = [0.01, 0.01, 0.01, 0.01, 0.03, 0.01, 0.01]
 hmj_privacy = [0.62, 0.68, 0.77, 0.08, 0.61, 0.72, 0.83]
 hmj_privacy_std = [0.04, 0.01, 0.01, 0.02, 0.05, 0.02, 0.02]
 
-fig, axes = plt.subplots(1, 2, figsize=(7, 2.8), sharey=False)
+fig, axes = plt.subplots(1, 2, figsize=(7, 3.2), sharey=False)
 
 x = np.arange(len(methods))
 width = 0.35
@@ -45,8 +45,8 @@ for ax, hm, hm_std, hmj, hmj_std, title in [
     bars2[-1].set_linewidth(1.5)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(methods, rotation=35, ha='right', fontsize=7.5)
-    ax.set_title(title, fontsize=10)
+    ax.set_xticklabels(methods, rotation=35, ha='right', fontsize=9)
+    ax.set_title(title, fontsize=11)
     ax.set_ylim(0, 0.95)
     ax.set_ylabel("Score" if ax == axes[0] else "")
     ax.axhline(y=0, color='gray', linewidth=0.5)
@@ -54,12 +54,12 @@ for ax, hm, hm_std, hmj, hmj_std, title in [
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-axes[1].legend(loc='upper right', fontsize=8, framealpha=0.9)
+axes[1].legend(loc='upper right', fontsize=9, framealpha=0.9)
 
 plt.tight_layout()
 
 out_dir = os.path.join(os.path.dirname(__file__), '..', 'figures')
 os.makedirs(out_dir, exist_ok=True)
 out_path = os.path.join(out_dir, 'fig_knowundo.pdf')
-plt.savefig(out_path, bbox_inches='tight', dpi=150)
+plt.savefig(out_path, bbox_inches='tight', dpi=600)
 print(f"Saved: {out_path}")

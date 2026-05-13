@@ -106,8 +106,9 @@ We report this gap transparently; however, it does not survive stress-testing: P
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{figures/fig_knowundo.pdf}
-    \caption{KnowUndo results (5 seeds). Error bars show $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
+    \includegraphics[width=0.95\columnwidth,height=4.0cm,keepaspectratio]{figures/fig_knowundo.pdf}
+    \vspace{-4pt}
+    \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
     \label{fig:knowundo}
 \end{figure}
 
@@ -124,8 +125,9 @@ RMU fails catastrophically on privacy (HM=0.182) because its activation-steering
 
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=\textwidth]{figures/fig_llm_judge.pdf}
-    \caption{LLM judge scores (HM$_\text{J}$) across all benchmarks and settings. Error bars show $\pm$1 std over 5 seeds. \method achieves the highest or near-highest HM$_\text{J}$ on every setting except MUSE News, where PDU leads. KnowUndo uses Opus~4.6 as judge (Opus~4.7 safety guardrails refuse on copyrighted content).}
+    \includegraphics[width=0.95\textwidth,height=5cm,keepaspectratio]{figures/fig_llm_judge.pdf}
+    \vspace{-6pt}
+    \caption{LLM judge scores (HM$_\text{J}$) across all benchmarks and settings. Error bars: $\pm$1 std over 5 seeds. \method achieves the highest or near-highest HM$_\text{J}$ on every setting except MUSE News, where PDU leads. KnowUndo uses Opus~4.6 as judge (Opus~4.7 safety guardrails refuse on copyrighted content).}
     \label{fig:judge}
 \end{figure*}
 
@@ -144,7 +146,8 @@ Except for MUSE News, \method dominates all baselines across benchmarks. Since P
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{figures/fig_scalability_sustainability.pdf}
+    \includegraphics[width=0.95\columnwidth,height=4.5cm,keepaspectratio]{figures/fig_scalability_sustainability.pdf}
+    \vspace{-4pt}
     \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
     \label{fig:scalability}
 \end{figure}
@@ -216,16 +219,19 @@ However, a balance is needed: doubling to $K\!=\!6$ yields no additional gain ($
 
 \begin{figure*}[t]
     \centering
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.44\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_muse_books_dynamics.pdf}
+        \vspace{-6pt}
         \caption{\method}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.44\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
+        \vspace{-6pt}
         \caption{PDU}
     \end{subfigure}
-    \caption{Training dynamics on MUSE Books. (a)~\method: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. The asymmetric $\lambda$ permanently ratchets up after the spike. (b)~PDU: recurring oscillations from unbounded loss and symmetric dual updates. Full dynamics across all benchmarks in Appendix~\ref{app:dynamics}.}
+    \vspace{-6pt}
+    \caption{Training dynamics on MUSE Books. (a)~\method: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. (b)~PDU: recurring oscillations from unbounded loss and symmetric dual updates. Full dynamics in Appendix~\ref{app:dynamics}.}
     \label{fig:dynamics}
 \end{figure*}
 

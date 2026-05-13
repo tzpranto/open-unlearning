@@ -16,7 +16,7 @@ plt.rcParams.update({
     'xtick.labelsize': 8.5,
     'ytick.labelsize': 8.5,
     'legend.fontsize': 9,
-    'figure.dpi': 300,
+    'figure.dpi': 600,
     'text.usetex': False,
     'mathtext.fontset': 'cm',
     'axes.linewidth': 0.5,
