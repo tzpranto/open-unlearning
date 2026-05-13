@@ -598,6 +598,13 @@ Doubling to $K{=}6$ yields no further gain while being substantially slower per 
 We present representative generations (seed=42) illustrating the forget--retain tradeoff on each benchmark.
 \colorbox{red!12}{Red} highlights knowledge leakage on forget (undesirable); \colorbox{green!12}{green} indicates correct retain answers (desirable).
 
+\paragraph{On non-linguistic outputs.}
+\method's clamped entropy objective targets high distributional uncertainty on forget tokens, which can produce non-linguistic outputs rather than coherent refusals.
+We argue this is preferable to the alternative exhibited by baselines: fluent, confident hallucinations that partially or fully reproduce the target content.
+Recent work demonstrates that LLMs readily amplify plausible-sounding misinformation---even fabricated medical conditions are absorbed and confidently presented as fact \citep{bixonimania}---creating a dangerous feedback loop when downstream users treat fluent outputs as authoritative.
+In the context of unlearning (copyrighted material, private data, hazardous knowledge), a non-linguistic response \emph{signals} that the model lacks the requested knowledge, whereas a fluent hallucination risks laundering prohibited content in paraphrased form that evades detection.
+Crucially, \method's retain performance confirms that this behavior is selective: the model remains fully coherent on non-forget inputs (Tables~\ref{tab:qual_tofu_retain},~\ref{tab:qual_muse_retain},~\ref{tab:qual_ku_retain}), demonstrating that the non-linguistic outputs reflect targeted forgetting rather than model corruption.
+
 \begin{table}[h!]
 \centering
 \small

@@ -49,7 +49,7 @@ Prior two-level unlearning methods like SCRUB \citep{kurmanji2023towards} (min-m
 
 Forgetting is inherently destructive: gradient ascent, entropy maximization, and preference-based losses all push the model \emph{away} from learned representations, causing catastrophic collapse when unconstrained \citep{zhang2024negative}. To make matters worse, forget and retain knowledge share entangled representations \citep{cheng2026unlearning}, so perturbing forget tokens inevitably disturbs retain performance.
 
-Retain repair therefore belongs in the inner loop as a stabilizing anchor. It runs first and comparaably faster ($\eta_{\text{in}} > \eta_{\text{out}}$), so the model enters each outer step from a state with good retain performance. The outer loop then applies one small forgetting step, sized so the next inner loop can fully repair any collateral damage. This prevents the accumulation of representational drift that makes recovery progressively harder when the loops are reversed.
+Retain repair therefore belongs in the inner loop as a stabilizing anchor. It runs first and comparably faster ($\eta_{\text{in}} > \eta_{\text{out}}$), so the model enters each outer step from a state with good retain performance. The outer loop then applies one small forgetting step, sized so the next inner loop can fully repair any collateral damage. This prevents the accumulation of representational drift that makes recovery progressively harder when the loops are reversed.
 
 For this structure to work, the forget loss in the outer loop must be well-behaved: bounded, self-saturating, and compatible with small step sizes. We introduce \emph{clamped entropy} to address this.
 
@@ -103,12 +103,11 @@ Rather than hand-tuning an absolute $\varepsilon$, we set it as a fraction of th
     \label{eq:auto_eps}
 \end{equation}
 where $\Loss_{\text{CE}}^{(k)}$ is the retain loss at inner step $k$. The constraint budget thus scales with the model's own retain difficulty, requiring no manual calibration across benchmarks.
+The $\varepsilon_\text{mul}$ sweep in Appendix~\ref{app:inner_loop} confirms robustness: performance remains stable across an 8-setting range, indicating that the single-pass initialization provides a sufficiently good operating point.
 
 \paragraph{Convergence criterion.}
-We track an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change (``velocity'').
-Training terminates when this velocity drops below 1\% of its observed peak, indicating that the forget objective is exhausted and further steps yield no marginal utility.
-To avoid premature stopping, two prerequisites must hold: (i)~$\Loss_\text{fgt}$ must have dropped at least 50\% from its initial value, and (ii)~the model must have passed the phase transition point (first sustained constraint violation).
-Together, these provide a stopping rule without held-out validation: a decaying velocity confirms that remaining tokens have entered the clamped entropy deadzone.
+Training terminates via a velocity-based stopping rule: an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change is tracked, and optimization stops when this velocity drops below 1\% of its peak---indicating that remaining tokens have entered the clamped entropy deadzone and further steps yield no marginal utility.
+A safety cap $T$ prevents runaway training (details in Appendix~\ref{app:hparams}).
 
 \subsection{Algorithm Summary}
 

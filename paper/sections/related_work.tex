@@ -17,8 +17,9 @@ KnowUndo \citep{tian2024knowundo} targets domain-specific unlearning from LoRA-f
 We evaluate on all three for complementary coverage.
 
 \paragraph{Parameter-efficient unlearning.}
-LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization \citep{cha2025loku} and importance-weighted masking \citep{jia2024wagle}.
-In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck prevents catastrophic drift---analogous to how EWC \citep{kirkpatrick2017overcoming} protects important weights in continual learning, but applied structurally rather than via per-weight penalties.
+LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization (LoKU; \citealt{cha2025loku}) and importance-weighted masking \citep{jia2024wagle}.
+LoKU selects which LoRA parameters to update based on Fisher information, complementing but differing from our approach: in \method, LoRA serves as a \emph{structural constraint} where the low-rank bottleneck itself prevents catastrophic drift---analogous to how EWC \citep{kirkpatrick2017overcoming} protects important weights in continual learning, but applied structurally rather than via per-weight penalties.
+We do not include LoKU as a baseline because its implementation was not available within the OpenUnlearning framework at the time of our experiments.
 
 \paragraph{Bilevel and constrained optimization for unlearning.}
 BLUR \citep{reisizadeh2026blur} places forget in the lower level and retain in the upper, resolving conflicts via gradient projection.

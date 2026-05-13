@@ -58,7 +58,9 @@ PDU & \textbf{.602}$_{\pm.00}$ & .186$_{\pm.01}$ & .313$_{\pm.01}$ & .690$_{\pm.
 \method achieves HM$\geq$0.800 across all three forget splits (Table~\ref{tab:tofu_1b_full}), far above the next best method PDU (0.690/0.740/0.797).
 The gap is largest on the smallest split (fgt01: 0.808 vs.\ 0.690), where most methods either fail to forget (SimNPO: 0.240) or destroy the model entirely (GA collapses at fgt05/10).
 \method's stability stems from the clamped entropy deadzone: it stops pushing tokens that are already forgotten, preventing the over-forgetting that degrades PDU on small splits.
-Results on 3B (Appendix~\ref{app:tofu_full}) show consistently strong performance (HM=0.846/0.842/0.836), with the largest gain on fgt01 (0.846 vs.\ PDU 0.742) where less forget data makes generalization harder.
+The LLM judge (\figref{fig:judge}) reveals an even starker gap: on fgt01, \method achieves HM$_\text{J}$=0.929 vs.\ PDU's 0.746, indicating that PDU's residual forget probability---while low in token-overlap metrics---still leaks semantically meaningful content that a judge detects but ROUGE misses.
+Results on 3B (Appendix~\ref{app:tofu_full}) show consistently strong performance (HM=0.846/0.842/0.836), with the largest gain on fgt01 (0.846 vs.\ PDU 0.742).
+On fgt05/fgt10 at 3B, PDU is competitive (0.843/0.857 vs.\ 0.842/0.836); however, \method's advantage is not in maximizing any single benchmark configuration but in providing robust, generalizable performance across all settings without per-benchmark tuning---as confirmed by the scalability and sustainability results below.
 
 %% ============================================================
 \subsection{MUSE (Llama-2-7B)}
@@ -94,8 +96,8 @@ PDU & .139$_{\pm.01}$ & .129$_{\pm.01}$ & .372$_{\pm.01}$ & .600$_{\pm.01}$ & .5
 On Books, \method achieves HM=0.818, surpassing SimNPO (0.753) and BLURNPO (0.742) by a wide margin.
 It eliminates verbatim memorization (vm=0.000) while preserving the strongest retain performance (rk=0.638) among all methods.
 PDU struggles here (HM=0.600): its unbounded logit-margin loss causes retain collapse (rk=0.372).
-On News---889 short, independently memorized articles with heterogeneous memorization levels---PDU achieves a slightly higher HM (0.577 vs.\ \method 0.544), the only benchmark where \method does not lead.
-However, this advantage does not survive stress-testing: we show in \S\ref{sec:sust_scal} that PDU collapses catastrophically under larger forget sets or sequential application, while \method maintains stable performance.
+On News, PDU achieves a slightly higher HM (0.577 vs.\ \method 0.544), the only benchmark where \method does not lead.
+We report this gap transparently; however, it does not survive stress-testing: PDU collapses catastrophically under larger forget sets or sequential application (\S\ref{sec:sust_scal}), while \method maintains stable performance---suggesting that PDU's edge on the standard News setting comes at the cost of fragility that would prevent reliable deployment.
 
 %% ============================================================
 \subsection{KnowUndo (Llama-2-7B-chat)}
@@ -131,6 +133,7 @@ RMU fails catastrophically on privacy (HM=0.182) because its activation-steering
 \method achieves the highest HM$_\text{J}$ on 6 of 7 settings, with particularly large margins on TOFU (0.929/0.919 vs.\ next-best 0.746/0.906) where standard metrics already favor \method but the judge reveals even starker differences in semantic leakage.
 On MUSE News, PDU leads (0.638 vs.\ 0.588), consistent with the standard metrics.
 Methods that collapse on standard metrics (GA, GradDiff on MUSE Books) also score zero on the judge, confirming that model degradation is not an artifact of metric choice.
+We discuss the nature of \method's forget-set outputs (non-linguistic rather than coherent refusals) and argue why this is preferable to fluent hallucination in the unlearning context in Appendix~\ref{app:qualitative}.
 
 %% ============================================================
 \subsection{Scalability and Sustainability}
@@ -150,6 +153,11 @@ PDU collapses catastrophically at 4$\times$ scale (HM=0.005, retain destroyed) a
 \method degrades gracefully: scalability HM stays 0.533--0.552 across all scales, sustainability HM holds 0.542--0.525 through 4 sequential steps (\figref{fig:scalability}).
 This robustness is a direct consequence of \method's constrained formulation: the bounded clamped-entropy loss prevents gradient explosion, the LoRA bottleneck limits representational drift, and the asymmetric ALM ratchet permanently locks in retain protection once calibrated.
 The smooth training dynamics we observe across all benchmarks (\figref{fig:dynamics}, Appendix~\ref{app:dynamics}) empirically confirm that this formulation maintains optimization stability under repeated application---a property that PDU's oscillatory dynamics fundamentally lack.
+
+\paragraph{Computational cost.}
+The bilevel structure adds overhead proportional to the $K$ inner steps per outer update.
+On MUSE 7B, \method requires ${\approx}$104 min/run (Table~\ref{tab:compute}), approximately 2--3$\times$ the wall-clock time of single-loop baselines (GradDiff, NPO, SimNPO run 10 epochs over the same data with one forward-backward pass per step).
+This overhead is the cost of the constraint guarantee: \method provides stable performance across scales and sequential applications where cheaper methods require repeated re-tuning or fail entirely---a single reliable run is more practical than multiple failed attempts.
 
 %% ============================================================
 \subsection{Ablation Study}
