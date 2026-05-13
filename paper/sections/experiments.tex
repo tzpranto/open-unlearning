@@ -201,6 +201,7 @@ The low-rank bottleneck provides implicit regularization by limiting the subspac
 
 \paragraph{Forget loss.} Only clamped entropy works within the bilevel framework.
 Gradient ascent (HM=0.160), NPO (HM=0.009), and logit margin (HM=0.000) all cause catastrophic failure \emph{even with the full ALM apparatus intact}, because their unbounded or trivially-satisfied objectives overwhelm or bypass the constraint mechanism.
+These failures demonstrate that the contribution is not the individual components but their specific interaction: only a bounded, self-saturating forget loss is compatible with constrained bilevel optimization---naive combinations of known techniques collapse.
 Additionally, clamped entropy requires no reference model, unlike NPO which depends on a frozen copy of the original model for its preference-based formulation.
 
 \paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), supporting the ``repair first, forget carefully'' design principle.

@@ -200,6 +200,7 @@ where FL (Forget Leakage), RA (Retain Accuracy), and rRQ (retain Response Qualit
 
 Table~\ref{tab:hparams} lists all \method hyperparameters.
 Shared across all benchmarks: $K{=}3$, $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), $\tau{=}0.7$, $\rho{=}0.1$, $\lambda_0{=}1.0$, $\alpha_\text{dual}{=}0.1$, gradient norm clipping at 1.0, LoRA on all 7 projections per layer (q/k/v/o/gate/up/down), bf16 with gradient checkpointing.
+Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales; only the outer learning rate $\eta_\theta$ and constraint budget $\varepsilon_\text{mul}$ require benchmark-specific selection.
 
 \begin{table}[t]
 \centering
@@ -604,6 +605,7 @@ We argue this is preferable to the alternative exhibited by baselines: fluent, c
 Recent work demonstrates that LLMs readily amplify plausible-sounding misinformation---even fabricated medical conditions are absorbed and confidently presented as fact \citep{bixonimania}---creating a dangerous feedback loop when downstream users treat fluent outputs as authoritative.
 In the context of unlearning (copyrighted material, private data, hazardous knowledge), a non-linguistic response \emph{signals} that the model lacks the requested knowledge, whereas a fluent hallucination risks laundering prohibited content in paraphrased form that evades detection.
 Crucially, \method's retain performance confirms that this behavior is selective: the model remains fully coherent on non-forget inputs (Tables~\ref{tab:qual_tofu_retain},~\ref{tab:qual_muse_retain},~\ref{tab:qual_ku_retain}), demonstrating that the non-linguistic outputs reflect targeted forgetting rather than model corruption.
+We acknowledge that distinguishable forget-set behavior could in principle be exploited for membership inference; evaluating adversarial robustness (including extraction attacks and membership inference) is noted as future work in Section~\ref{sec:conclusion}.
 
 \begin{table}[h!]
 \centering
