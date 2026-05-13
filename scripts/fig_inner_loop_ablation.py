@@ -38,13 +38,12 @@ k0_ret = np.array(k0_ret)
 k3_ret = np.array(k3_ret)
 k6_ret = np.array(k6_ret)
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(7, 3))
+fig, ax1 = plt.subplots(1, 1, figsize=(4, 2.8))
 plt.style.use('seaborn-v0_8-whitegrid')
 
 x = np.arange(len(eps_muls))
 xlabels = [str(e) for e in eps_muls]
 
-# Panel (a): HM
 ax1.plot(x, k3_hm, 'o-', color='#2166ac', linewidth=1.8, markersize=5, label='$K{=}3$ (ours)')
 ax1.plot(x, k6_hm, '^-', color='#4daf4a', linewidth=1.8, markersize=5, label='$K{=}6$')
 ax1.plot(x, k0_hm, 's--', color='#b2182b', linewidth=1.8, markersize=5, label='$K{=}0$ (no inner loop)')
@@ -60,19 +59,6 @@ ax1.set_xlabel(r'Constraint tightness ($\epsilon$ multiplier) $\longrightarrow$ 
 ax1.set_ylabel('Composite Score (HM $\\uparrow$)', fontsize=9.5)
 ax1.legend(fontsize=8.5, loc='lower right')
 ax1.set_ylim(0.44, 0.57)
-ax1.text(-0.08, 1.02, '(a)', transform=ax1.transAxes, fontsize=11, fontweight='bold')
-
-# Panel (b): Retain quality
-ax2.plot(x, k3_ret, 'o-', color='#2166ac', linewidth=1.8, markersize=5, label='$K{=}3$ (ours)')
-ax2.plot(x, k6_ret, '^-', color='#4daf4a', linewidth=1.8, markersize=5, label='$K{=}6$')
-ax2.plot(x, k0_ret, 's--', color='#b2182b', linewidth=1.8, markersize=5, label='$K{=}0$ (no inner loop)')
-ax2.set_xticks(x)
-ax2.set_xticklabels(xlabels, fontsize=9)
-ax2.set_xlabel(r'Constraint tightness ($\epsilon$ multiplier) $\longrightarrow$ looser', fontsize=9.5)
-ax2.set_ylabel('Retain Quality ($r_k$ $\\uparrow$)', fontsize=9.5)
-ax2.legend(fontsize=8.5, loc='lower right')
-ax2.set_ylim(0.44, 0.53)
-ax2.text(-0.08, 1.02, '(b)', transform=ax2.transAxes, fontsize=11, fontweight='bold')
 
 plt.tight_layout()
 plt.savefig('paper/figures/fig_inner_loop_ablation.pdf', bbox_inches='tight', dpi=300)

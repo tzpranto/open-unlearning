@@ -2,8 +2,10 @@
 \label{sec:related_work}
 
 \paragraph{LLM unlearning methods.}
-Machine unlearning was formalized for classification \citep{cao2015towards, bourtoule2021machine} but does not transfer directly to autoregressive LLMs.
-For LLMs, gradient ascent (GA) \citep{jang2023knowledge} maximizes the forget loss but diverges and destroys coherence; GradDiff \citep{yao2024large} adds retain cross-entropy but still degrades.
+Machine unlearning was formalized for classification \citep{cao2015towards, bourtoule2021machine}; see \citet{liu2024survey, blanco2025digital} for recent surveys.
+Early deep learning approaches used Fisher information to scrub data influence from network weights \citep{golatkar2020eternal, golatkar2020forgetting}, while influence functions \citep{koh2017understanding} identified training points responsible for specific predictions---an idea later extended to iterative LLM unlearning by SOUL \citep{jia2024soul}.
+These techniques do not transfer directly to autoregressive LLMs at scale.
+For LLMs, gradient ascent (GA) \citep{jang2023knowledge} maximizes the forget loss but diverges and destroys coherence; GradDiff \citep{yao2024large} adds retain cross-entropy but still degrades; and \citet{eldan2023whos} demonstrated approximate unlearning of Harry Potter content via label replacement.
 Preference-based methods---NPO \citep{zhang2024negative}, SimNPO \citep{fan2025simplicity}, NGDiff \citep{bu2025unlearning}---collapse more gracefully but saturate without converging to a well-defined target.
 RMU \citep{li2024wmdp} steers activations toward random targets for forget data.
 What these approaches share is the absence of a \emph{bounded} forget loss with a per-token stopping criterion: GA diverges, NPO damps but never reaches zero, unclamped entropy \citep{yuan2025closer} pushes indefinitely, and LoKU's \citep{cha2025loku} inverted hinge operates on margins rather than distributional entropy.
@@ -16,7 +18,7 @@ We evaluate on all three for complementary coverage.
 
 \paragraph{Parameter-efficient unlearning.}
 LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization \citep{cha2025loku} and importance-weighted masking \citep{jia2024wagle}.
-In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck prevents catastrophic drift that occurs with full-parameter methods.
+In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck prevents catastrophic drift---analogous to how EWC \citep{kirkpatrick2017overcoming} protects important weights in continual learning, but applied structurally rather than via per-weight penalties.
 
 \paragraph{Bilevel and constrained optimization for unlearning.}
 BLUR \citep{reisizadeh2026blur} places forget in the lower level and retain in the upper, resolving conflicts via gradient projection.

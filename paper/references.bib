@@ -173,180 +173,249 @@
 
 % --- Creative approaches ---
 
-@article{eldan2023whos,
-  title={Who's {Harry Potter}? Approximate Unlearning in {LLMs}},
-  author={Eldan, Ronen and Russinovich, Mark},
-  journal={arXiv preprint arXiv:2310.02238},
-  year={2023}
+#verified: https://arxiv.org/abs/2310.02238
+@misc{eldan2023whos,
+      title={Who's Harry Potter? Approximate Unlearning in LLMs}, 
+      author={Ronen Eldan and Mark Russinovich},
+      year={2023},
+      eprint={2310.02238},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2310.02238}, 
 }
 
 % --- Teacher-student unlearning ---
 
 #verified: https://openreview.net/forum?id=OveBaTtUAT
 @inproceedings{
-kurmanji2023towards,
-title={Towards Unbounded Machine Unlearning},
-author={Meghdad Kurmanji and Peter Triantafillou and Jamie Hayes and Eleni Triantafillou},
-booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
-year={2023},
-url={https://openreview.net/forum?id=OveBaTtUAT}
+  kurmanji2023towards,
+  title={Towards Unbounded Machine Unlearning},
+  author={Meghdad Kurmanji and Peter Triantafillou and Jamie Hayes and Eleni Triantafillou},
+  booktitle={Thirty-seventh Conference on Neural Information Processing Systems},
+  year={2023},
+  url={https://openreview.net/forum?id=OveBaTtUAT}
 }
 
 % --- Influence / second-order ---
 
+#verified: https://dl.acm.org/doi/10.5555/3305381.3305576
 @inproceedings{koh2017understanding,
-  title={Understanding Black-box Predictions via Influence Functions},
-  author={Koh, Pang Wei and Liang, Percy},
-  booktitle={International Conference on Machine Learning},
-  year={2017}
+  author = {Koh, Pang Wei and Liang, Percy},
+  title = {Understanding black-box predictions via influence functions},
+  year = {2017},
+  publisher = {JMLR.org},
+  booktitle = {Proceedings of the 34th International Conference on Machine Learning - Volume 70},
+  pages = {1885–1894},
+  numpages = {10},
+  location = {Sydney, NSW, Australia},
+  series = {ICML'17}
 }
 
+
+#verified: https://aclanthology.org/2024.emnlp-main.245/
 @inproceedings{jia2024soul,
-  title={{SOUL}: Unlocking the Power of Second-Order Optimization for {LLM} Unlearning},
-  author={Jia, Jinghan and Zhang, Yihua and Zhang, Yimeng and Liu, Jiancheng and Runwal, Bharat and Diffenderfer, James and Kailkhura, Bhavya and Liu, Sijia},
-  booktitle={Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing},
-  year={2024}
+    title = "{SOUL}: Unlocking the Power of Second-Order Optimization for {LLM} Unlearning",
+    author = "Jia, Jinghan  and
+      Zhang, Yihua  and
+      Zhang, Yimeng  and
+      Liu, Jiancheng  and
+      Runwal, Bharat  and
+      Diffenderfer, James  and
+      Kailkhura, Bhavya  and
+      Liu, Sijia",
+    editor = "Al-Onaizan, Yaser  and
+      Bansal, Mohit  and
+      Chen, Yun-Nung",
+    booktitle = "Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing",
+    month = nov,
+    year = "2024",
+    address = "Miami, Florida, USA",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.emnlp-main.245/",
+    doi = "10.18653/v1/2024.emnlp-main.245",
+    pages = "4276--4292"
 }
 
 % --- Modular / weight attribution ---
 
+#verified: https://openreview.net/forum?id=VzOgnDJMgh
 @inproceedings{jia2024wagle,
   title={{WAGLE}: Strategic Weight Attribution for Effective and Modular Unlearning in Large Language Models},
-  author={Jia, Jinghan and Liu, Jiancheng and Zhang, Yihua and Ram, Parikshit and Baracaldo, Nathalie and Liu, Sijia},
-  booktitle={Advances in Neural Information Processing Systems},
-  year={2024}
+  author={Jinghan Jia and Jiancheng Liu and Yihua Zhang and Parikshit Ram and Nathalie Baracaldo and Sijia Liu},
+  booktitle={The Thirty-eighth Annual Conference on Neural Information Processing Systems},
+  year={2024},
+  url={https://openreview.net/forum?id=VzOgnDJMgh}
 }
 
 % --- Benchmarks ---
 
+#verified: https://openreview.net/forum?id=B41hNBoWLo
 @inproceedings{maini2024tofu,
-  title={{TOFU}: A Task of Fictitious Unlearning for {LLMs}},
-  author={Maini, Pratyush and Feng, Zhili and Schwarzschild, Avi and Lipton, Zachary C and Kolter, J Zico},
-  booktitle={Conference on Language Modeling},
-  year={2024}
+  title={{TOFU}: A Task of Fictitious Unlearning for {LLM}s},
+  author={Pratyush Maini and Zhili Feng and Avi Schwarzschild and Zachary Chase Lipton and J Zico Kolter},
+  booktitle={First Conference on Language Modeling},
+  year={2024},
+  url={https://openreview.net/forum?id=B41hNBoWLo}
 }
 
+
+#verified: https://openreview.net/forum?id=TArmA033BU
 @inproceedings{shi2025muse,
   title={{MUSE}: Machine Unlearning Six-Way Evaluation for Language Models},
-  author={Shi, Weijia and Lee, Jaechan and Huang, Yangsibo and Malladi, Sadhika and Zhao, Jieyu and Holtzman, Ari and Liu, Daogao and Zettlemoyer, Luke and Smith, Noah A and Zhang, Chiyuan},
-  booktitle={International Conference on Learning Representations},
-  year={2025}
+  author={Weijia Shi and Jaechan Lee and Yangsibo Huang and Sadhika Malladi and Jieyu Zhao and Ari Holtzman and Daogao Liu and Luke Zettlemoyer and Noah A. Smith and Chiyuan Zhang},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025},
+  url={https://openreview.net/forum?id=TArmA033BU}
 }
 
 % --- LoRA and parameter-efficient ---
 
 #verified: https://openreview.net/forum?id=nZeVKeeFYf9
-@inproceedings{
-hu2022lora,
-title={Lo{RA}: Low-Rank Adaptation of Large Language Models},
-author={Edward J Hu and yelong shen and Phillip Wallis and Zeyuan Allen-Zhu and Yuanzhi Li and Shean Wang and Lu Wang and Weizhu Chen},
-booktitle={International Conference on Learning Representations},
-year={2022},
-url={https://openreview.net/forum?id=nZeVKeeFYf9}
+@inproceedings{hu2022lora,
+  title={Lo{RA}: Low-Rank Adaptation of Large Language Models},
+  author={Edward J Hu and yelong shen and Phillip Wallis and Zeyuan Allen-Zhu and Yuanzhi Li and Shean Wang and Lu Wang and Weizhu Chen},
+  booktitle={International Conference on Learning Representations},
+  year={2022},
+  url={https://openreview.net/forum?id=nZeVKeeFYf9}
 }
 
+#verified: https://openreview.net/forum?id=1ExfUpmIW4
 @inproceedings{cha2025loku,
-  title={Towards Robust and Parameter-Efficient Knowledge Unlearning for {LLMs}},
-  author={Cha, Sungmin and Cho, Sungjun and Hwang, Dasol and Lee, Moontae},
-  booktitle={International Conference on Learning Representations},
-  year={2025}
+  title={Towards Robust and Parameter-Efficient Knowledge Unlearning for {LLM}s},
+  author={Sungmin Cha and Sungjun Cho and Dasol Hwang and Moontae Lee},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025},
+  url={https://openreview.net/forum?id=1ExfUpmIW4}
 }
 
 % --- Task arithmetic ---
 
+#verified: https://openreview.net/forum?id=6t0Kwf8-jrj
 @inproceedings{ilharco2023editing,
-  title={Editing Models with Task Arithmetic},
-  author={Ilharco, Gabriel and Ribeiro, Marco Tulio and Wortsman, Mitchell and Gururangan, Suchin and Schmidt, Ludwig and Hajishirzi, Hannaneh and Farhadi, Ali},
-  booktitle={International Conference on Learning Representations},
-  year={2023}
+  title={Editing models with task arithmetic},
+  author={Gabriel Ilharco and Marco Tulio Ribeiro and Mitchell Wortsman and Ludwig Schmidt and Hannaneh Hajishirzi and Ali Farhadi},
+  booktitle={The Eleventh International Conference on Learning Representations },
+  year={2023},
+  url={https://openreview.net/forum?id=6t0Kwf8-jrj}
 }
 
 % --- Fisher information / selective forgetting ---
 
-@inproceedings{golatkar2020eternal,
-  title={Eternal Sunshine of the Spotless Net: Selective Forgetting in Deep Networks},
-  author={Golatkar, Aditya and Achille, Alessandro and Soatto, Stefano},
-  booktitle={IEEE/CVF Conference on Computer Vision and Pattern Recognition},
-  year={2020}
+#verified: https://openaccess.thecvf.com/content_CVPR_2020/html/Golatkar_Eternal_Sunshine_of_the_Spotless_Net_Selective_Forgetting_in_Deep_CVPR_2020_paper.html
+
+@InProceedings{golatkar2020eternal,
+  author = {Golatkar, Aditya and Achille, Alessandro and Soatto, Stefano},
+  title = {Eternal Sunshine of the Spotless Net: Selective Forgetting in Deep Networks},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  month = {June},
+  year = {2020}
 }
 
+#verified: https://dl.acm.org/doi/10.1007/978-3-030-58526-6_23
 @inproceedings{golatkar2020forgetting,
-  title={Forgetting Outside the Box: Scrubbing Deep Networks of Information Accessible from Input-Output Observations},
-  author={Golatkar, Aditya and Achille, Alessandro and Soatto, Stefano},
-  booktitle={European Conference on Computer Vision},
-  year={2020}
+  author = {Golatkar, Aditya and Achille, Alessandro and Soatto, Stefano},
+  title = {Forgetting Outside the Box: Scrubbing Deep Networks of Information Accessible from Input-Output Observations},
+  year = {2020},
+  isbn = {978-3-030-58525-9},
+  publisher = {Springer-Verlag},
+  address = {Berlin, Heidelberg},
+  url = {https://doi.org/10.1007/978-3-030-58526-6_23},
+  doi = {10.1007/978-3-030-58526-6_23},
+  booktitle = {Computer Vision – ECCV 2020: 16th European Conference, Glasgow, UK, August 23–28, 2020, Proceedings, Part XXIX},
+  pages = {383–398},
+  numpages = {16},
+  keywords = {Forgetting, Data removal, Neural tangent kernel, Information theory},
+  location = {Glasgow, United Kingdom}
 }
 
 % --- Bilevel optimization ---
 
+#verified: https://dl.acm.org/doi/10.5555/3305381.3305498
 @inproceedings{finn2017model,
-  title={Model-Agnostic Meta-Learning for Fast Adaptation of Deep Networks},
-  author={Finn, Chelsea and Abbeel, Pieter and Levine, Sergey},
-  booktitle={International Conference on Machine Learning},
-  year={2017}
+  author = {Finn, Chelsea and Abbeel, Pieter and Levine, Sergey},
+  title = {Model-agnostic meta-learning for fast adaptation of deep networks},
+  year = {2017},
+  publisher = {JMLR.org},
+  booktitle = {Proceedings of the 34th International Conference on Machine Learning - Volume 70},
+  pages = {1126–1135},
+  numpages = {10},
+  location = {Sydney, NSW, Australia},
+  series = {ICML'17}
 }
 
-@inproceedings{franceschi2018bilevel,
+#verified: https://api.semanticscholar.org/CorpusID:49194806
+@inproceedings{Franceschi2018BilevelPF,
   title={Bilevel Programming for Hyperparameter Optimization and Meta-Learning},
-  author={Franceschi, Luca and Frasconi, Paolo and Salzo, Saverio and Grazzi, Riccardo and Pontil, Massimiliano},
+  author={Luca Franceschi and Paolo Frasconi and Saverio Salzo and Riccardo Grazzi and Massimiliano Pontil},
   booktitle={International Conference on Machine Learning},
-  year={2018}
+  year={2018},
+  url={https://api.semanticscholar.org/CorpusID:49194806}
 }
 
+#verified: https://api.semanticscholar.org/CorpusID:207847535
 @inproceedings{lorraine2020optimizing,
   title={Optimizing Millions of Hyperparameters by Implicit Differentiation},
-  author={Lorraine, Jonathan and Vicol, Paul and Duvenaud, David},
+  author={Jonathan Lorraine and Paul Vicol and David Kristjanson Duvenaud},
   booktitle={International Conference on Artificial Intelligence and Statistics},
-  year={2020}
+  year={2019},
+  url={https://api.semanticscholar.org/CorpusID:207847535}
 }
 
+
+#verified: https://api.semanticscholar.org/CorpusID:235825903
 @inproceedings{ji2021bilevel,
   title={Bilevel Optimization: Convergence Analysis and Enhanced Design},
-  author={Ji, Kaiyi and Yang, Junjie and Liang, Yingbin},
+  author={Kaiyi Ji and Junjie Yang and Yingbin Liang},
   booktitle={International Conference on Machine Learning},
-  year={2021}
+  year={2020},
+  url={https://api.semanticscholar.org/CorpusID:235825903}
 }
 
+#verified: https://api.semanticscholar.org/CorpusID:220487190
 @article{hong2023two,
   title={A Two-Timescale Stochastic Algorithm Framework for Bilevel Optimization: Complexity Analysis and Application to Actor-Critic},
-  author={Hong, Mingyi and Wai, Hoi-To and Wang, Zhaoran and Yang, Zhuoran},
-  journal={SIAM Journal on Optimization},
+  author={Mingyi Hong and Hoi-To Wai and Zhaoran Wang and Zhuoran Yang},
+  journal={SIAM J. Optim.},
+  year={2020},
   volume={33},
-  number={1},
-  pages={147--180},
-  year={2023}
+  pages={147-180},
+  url={https://api.semanticscholar.org/CorpusID:220487190}
 }
 
 % --- Catastrophic forgetting ---
 
+#verified: https://api.semanticscholar.org/CorpusID:4704285
 @article{kirkpatrick2017overcoming,
-  title={Overcoming Catastrophic Forgetting in Neural Networks},
-  author={Kirkpatrick, James and Pascanu, Razvan and Rabinowitz, Neil and Veness, Joel and Desjardins, Guillaume and Rusu, Andrei A and Milan, Kieran and Quan, John and Ramalho, Tiago and Grabska-Barwinska, Agnieszka and others},
+  title={Overcoming catastrophic forgetting in neural networks},
+  author={James Kirkpatrick and Razvan Pascanu and Neil C. Rabinowitz and Joel Veness and Guillaume Desjardins and Andrei A. Rusu and Kieran Milan and John Quan and Tiago Ramalho and Agnieszka Grabska-Barwinska and Demis Hassabis and Claudia Clopath and Dharshan Kumaran and Raia Hadsell},
   journal={Proceedings of the National Academy of Sciences},
+  year={2016},
   volume={114},
-  number={13},
-  pages={3521--3526},
-  year={2017}
+  pages={3521 - 3526},
+  url={https://api.semanticscholar.org/CorpusID:4704285}
 }
 
 % --- Surveys ---
-
-@article{liu2024survey,
-  title={Machine Unlearning in Generative {AI}: A Survey},
-  author={Liu, Zheyuan and Dou, Guangyao and Tan, Zhaoxuan and Tian, Yijun and Jiang, Meng},
-  journal={arXiv preprint arXiv:2407.20516},
-  year={2024}
+#verified: https://arxiv.org/abs/2407.20516
+@misc{liu2024survey,
+      title={Machine Unlearning in Generative AI: A Survey}, 
+      author={Zheyuan Liu and Guangyao Dou and Zhaoxuan Tan and Yijun Tian and Meng Jiang},
+      year={2024},
+      eprint={2407.20516},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2407.20516}, 
 }
 
+
+#verified: https://api.semanticscholar.org/CorpusID:268856658
 @article{blanco2025digital,
-  title={Digital Forgetting in Large Language Models: A Survey of Unlearning Methods},
-  author={Blanco-Justicia, Alberto and Jebreel, Najeeb and Manzanares-Salor, Benet and S{\'a}nchez, David and Domingo-Ferrer, Josep and Collell, Guillem and Tan, Kuan Eeik},
+  title={Digital forgetting in large language models: a survey of unlearning methods},
+  author={Alberto Blanco-Justicia and Najeeb Moharram Jebreel and Benet Manzanares-Salor and David S{\'a}nchez and Josep Domingo-Ferrer and Guillem Collell and Kuan Eeik Tan},
   journal={Artificial Intelligence Review},
+  year={2024},
   volume={58},
-  number={3},
-  pages={90},
-  year={2025},
-  publisher={Springer}
+  url={https://api.semanticscholar.org/CorpusID:268856658}
 }
 
 #Verified: https://scholar.googleusercontent.com/scholar.bib?q=info:u-4WrAhe3DEJ:scholar.google.com/&output=citation&scisdr=CliEa-y5EP3E4cfMCqk:AFyMTJUAAAAAagHKEqlJFoj7yiZ5_xCo-A1M8L0&scisig=AFyMTJUAAAAAagHKEokIOzpQzp9VJS5JYpLJZeQ&scisf=4&ct=citation&cd=-1&hl=en
@@ -363,28 +432,30 @@ url={https://openreview.net/forum?id=nZeVKeeFYf9}
 
 % --- Regulatory ---
 
+#verified: https://dl.acm.org/doi/book/10.5555/3152676
 @book{voigt2017gdpr,
-  title={The {EU} General Data Protection Regulation ({GDPR}): A Practical Guide},
+  title={The {EU} General Data Protection Regulation {(GDPR)}: A Practical Guide},
   author={Voigt, Paul and von dem Bussche, Axel},
   year={2017},
   publisher={Springer}
 }
+
 
 % --- Augmented Lagrangian classical ---
 #verified: https://scholar.googleusercontent.com/scholar.bib?q=info:xbwDoeanXDIJ:scholar.google.com/&output=citation&scisdr=CliEa-y5EP3E4cUdxcc:AFyMTJUAAAAAagMb3cfifB-0ILIHtqztSFwDPu8&scisig=AFyMTJUAAAAAagMb3VRFpgHydhGSoe7uut7yUOE&scisf=4&ct=citation&cd=-1&hl=en
 @book{bertsekas1999nonlinear,
   title={Constrained optimization and Lagrange multiplier methods},
   author={Bertsekas, Dimitri P},
-  year={2014},
+  year={1982},
   publisher={Academic press}
 }
  
 
+#verified: https://scholar.googleusercontent.com/scholar.bib?q=info:b441hb9XJ1YJ:scholar.google.com/&output=citation&scisdr=CliEa-y5EP3E4cJEEGA:AFyMTJUAAAAAagRCCGC4gD9TulIR3_SGZEoXjg4&scisig=AFyMTJUAAAAAagRCCBkkry0seJWg0_p7hw1v8-k&scisf=4&ct=citation&cd=-1&hl=en
 @book{nocedal2006numerical,
-  title={Numerical Optimization},
+  title={Numerical optimization},
   author={Nocedal, Jorge and Wright, Stephen J},
   year={2006},
-  edition={2nd},
   publisher={Springer}
 }
 
@@ -409,12 +480,18 @@ url={https://openreview.net/forum?id=nZeVKeeFYf9}
 }
 
 % --- Memorization ---
-
-@inproceedings{carlini2021extracting,
-  title={Extracting Training Data from Large Language Models},
-  author={Carlini, Nicholas and Tramer, Florian and Wallace, Eric and Jagielski, Matthew and Herbert-Voss, Ariel and Lee, Katherine and Roberts, Adam and Brown, Tom and Song, Dawn and Erlingsson, Ulfar and others},
-  booktitle={USENIX Security Symposium},
-  year={2021}
+#
+#verified: https://www.usenix.org/conference/usenixsecurity21/presentation/carlini-extracting
+@inproceedings {carlini2021extracting,
+  author = {Nicholas Carlini and Florian Tram{\`e}r and Eric Wallace and Matthew Jagielski and Ariel Herbert-Voss and Katherine Lee and Adam Roberts and Tom Brown and Dawn Song and {\'U}lfar Erlingsson and Alina Oprea and Colin Raffel},
+  title = {Extracting Training Data from Large Language Models},
+  booktitle = {30th USENIX Security Symposium (USENIX Security 21)},
+  year = {2021},
+  isbn = {978-1-939133-24-3},
+  pages = {2633--2650},
+  url = {https://www.usenix.org/conference/usenixsecurity21/presentation/carlini-extracting},
+  publisher = {USENIX Association},
+  month = aug
 }
 
 % --- Constrained unlearning ---
@@ -431,11 +508,29 @@ url={https://openreview.net/forum?id=nZeVKeeFYf9}
 
 % --- KnowUndo ---
 
+#verified: https://aclanthology.org/2024.findings-emnlp.82/
 @inproceedings{tian2024knowundo,
-  title={To Forget or Not? Towards Practical Knowledge Unlearning for Large Language Models},
-  author={Tian, Bozhong and Liang, Xiaozhuan and Cheng, Siyuan and Liu, Qingbin and Wang, Mengru and Sui, Dianbo and Chen, Xi and Chen, Huajun and Zhang, Ningyu},
-  booktitle={Findings of the Association for Computational Linguistics: EMNLP 2024},
-  year={2024}
+    title = "To Forget or Not? Towards Practical Knowledge Unlearning for Large Language Models",
+    author = "Tian, Bozhong  and
+      Liang, Xiaozhuan  and
+      Cheng, Siyuan  and
+      Liu, Qingbin  and
+      Wang, Mengru  and
+      Sui, Dianbo  and
+      Chen, Xi  and
+      Chen, Huajun  and
+      Zhang, Ningyu",
+    editor = "Al-Onaizan, Yaser  and
+      Bansal, Mohit  and
+      Chen, Yun-Nung",
+    booktitle = "Findings of the Association for Computational Linguistics: EMNLP 2024",
+    month = nov,
+    year = "2024",
+    address = "Miami, Florida, USA",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.findings-emnlp.82/",
+    doi = "10.18653/v1/2024.findings-emnlp.82",
+    pages = "1524--1537"
 }
 
 % --- Base models ---
@@ -452,11 +547,28 @@ url={https://openreview.net/forum?id=nZeVKeeFYf9}
 
 #verified: https://arxiv.org/abs/2407.21783
 @misc{grattafiori2024llama,
-      title={The Llama 3 Herd of Models}, 
+      title={The Llama 3 Herd of Models},
       author={Aaron Grattafiori and Abhimanyu Dubey and Abhinav Jauhri and Abhinav Pandey and Abhishek Kadian and Ahmad Al-Dahle and Aiesha Letman and Akhil Mathur and Alan Schelten and Alex Vaughan and Amy Yang and others},
       year={2024},
       eprint={2407.21783},
       archivePrefix={arXiv},
       primaryClass={cs.AI},
-      url={https://arxiv.org/abs/2407.21783}, 
+      url={https://arxiv.org/abs/2407.21783},
+}
+
+% --- Entropy in RL ---
+#verified: https://proceedings.mlr.press/v80/haarnoja18b.html
+@InProceedings{haarnoja2018soft,
+  title = 	 {Soft Actor-Critic: Off-Policy Maximum Entropy Deep Reinforcement Learning with a Stochastic Actor},
+  author =       {Haarnoja, Tuomas and Zhou, Aurick and Abbeel, Pieter and Levine, Sergey},
+  booktitle = 	 {Proceedings of the 35th International Conference on Machine Learning},
+  pages = 	 {1861--1870},
+  year = 	 {2018},
+  editor = 	 {Dy, Jennifer and Krause, Andreas},
+  volume = 	 {80},
+  series = 	 {Proceedings of Machine Learning Research},
+  month = 	 {10--15 Jul},
+  publisher =    {PMLR},
+  pdf = 	 {http://proceedings.mlr.press/v80/haarnoja18b/haarnoja18b.pdf},
+  url = 	 {https://proceedings.mlr.press/v80/haarnoja18b.html}
 }

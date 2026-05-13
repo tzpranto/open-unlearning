@@ -1,6 +1,8 @@
 \section{Experiments}
 \label{sec:results}
 We evaluate \method on three benchmarks that test complementary aspects of unlearning: factual association removal, naturalistic memorization at scale, and domain-specific knowledge extraction from adapted models.
+All methods are implemented and evaluated within the OpenUnlearning framework \citep{shi2025muse} to ensure fair comparison under identical data processing, evaluation protocols, and compute budgets.
+Baseline hyperparameters are listed in Appendix Table~\ref{tab:baselines}.
 All experiments report means and standard deviations over 5 random seeds unless noted.
 
 \subsection{Setup}
@@ -222,10 +224,10 @@ A key advantage of \method's formulation is that its optimization behavior is \e
 We observe remarkably consistent training dynamics across all benchmarks, model scales (1B to 7B), and dataset types (\figref{fig:dynamics}; full set of dynamics plots across all benchmarks and splits in Appendix~\ref{app:dynamics}).
 Three distinct phases emerge:
 
-\begin{enumerate}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Warm-up}: the forget loss declines steadily while retain loss stays near the threshold $\varepsilon$. The constraint is satisfied and $\lambda$ remains near its initial value.
-    \item \textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations, triggering a retain loss spike. The asymmetric ALM update permanently ratchets $\lambda$ upward, locking in elevated retain protection.
-    \item \textbf{Smooth convergence}: the forget loss approaches zero under the elevated $\lambda$, with no further retain violations. The clamped entropy loss self-stabilizes as already-forgotten tokens exit the active gradient.
+\begin{enumerate}[leftmargin=*, topsep=1pt, itemsep=0pt, parsep=1pt]
+    \item \textbf{Warm-up}: the forget loss declines steadily while retain loss stays near $\varepsilon$; $\lambda$ remains near its initial value.
+    \item \textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations, triggering a retain spike. The asymmetric ALM permanently ratchets $\lambda$ upward.
+    \item \textbf{Smooth convergence}: the forget loss approaches zero under elevated $\lambda$, with no further retain violations as already-forgotten tokens exit the active gradient.
 \end{enumerate}
 
 This three-phase pattern provides empirical confirmation that the constrained formulation works as intended: the system detects retain degradation, self-corrects via a single calibration event, and converges smoothly thereafter.

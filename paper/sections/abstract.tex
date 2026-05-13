@@ -1,11 +1,9 @@
 \begin{abstract}
 
 Existing LLM unlearning methods are fragile: unbounded forget losses destroy model coherence, fixed-weight balancing cannot adapt as retain difficulty shifts mid-training, and methods that work on one benchmark collapse under scaling or repeated application.
-We propose \method, a constrained bilevel framework that produces robust, smooth, and manageable unlearning.
-The forget objective is \emph{clamped entropy}---per-token entropy maximized only to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---yielding a bounded, self-decelerating loss that requires no reference model.
-Retain quality is enforced as a hard inequality constraint via an augmented Lagrangian with asymmetric dual updates that permanently ratchet protection after any violation, nested in a bilevel structure where the inner loop repairs retain damage before each outer forgetting step.
-All updates are confined to LoRA adapters, bounding representational drift.
-Across TOFU (1B/3B, three splits), MUSE (Books/News), and KnowUndo (copyright/privacy), \method achieves the highest composite scores in 6 of 7 settings under both standard metrics and an LLM judge, and degrades gracefully under $4\times$ scaling and 4 sequential unlearning steps where the strongest baseline collapses entirely.
-Training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---providing interpretable, predictable optimization absent from all baselines.
+We propose \method, a constrained bilevel framework that gives smooth, predictable control over the optimization landscape.
+The forget objective is \emph{clamped entropy}---per-token entropy maximized only to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---yielding a bounded, self-decelerating loss.
+Retain quality is enforced as a hard inequality constraint via an augmented Lagrangian with asymmetric dual updates, nested in a bilevel structure where the inner loop repairs retain damage before each outer forgetting step; all updates are confined to LoRA adapters.
+\method dominates across three benchmark families---improving composite scores over the strongest baselines by 8\% on TOFU, 9\% on MUSE Books, and 7\% on KnowUndo---and remains stable under $4\times$ scaling and 4 sequential unlearning steps on MUSE News where the best competing method collapses entirely.
 
 \end{abstract}
