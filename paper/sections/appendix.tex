@@ -387,6 +387,7 @@ MUSE results are reported in full in the main paper (Table~\ref{tab:muse}).
 On TOFU 3B, \method and PDU are the only methods that consistently achieve near-zero forget leakage (Prob $\leq$ 0.01) across all splits while maintaining utility.
 \method wins on the LLM judge metric (HM$_\text{J}$ $\geq$ 0.962) because it achieves lower forget leakage scores without sacrificing response quality.
 On KnowUndo, \method achieves the highest HM on both domains (+0.021 over the next best on copyright, +0.059 on privacy) and the highest judge HM (+0.06 on copyright, +0.06 on privacy), demonstrating that the bilevel constrained approach generalizes beyond synthetic forget sets to real-world copyright and PII removal.
+We also evaluated LoRA-based unlearning methods (VILA, LoKU) under the same protocol; both perform significantly worse than \method, achieving HM $\leq$ 0.71 on basic metrics and HM$_\text{J}$ $\leq$ 0.68 on the LLM judge, compared to \method's $\geq$ 0.84 and $\geq$ 0.96 respectively.
 
 \begin{table*}[!htbp]
 \centering
@@ -397,7 +398,7 @@ On KnowUndo, \method achieves the highest HM on both domains (+0.021 over the ne
 \toprule
 Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
 \midrule
-\multirow{9}{*}{fgt01}
+\multirow{11}{*}{fgt01}
 & Gold (retrain) & .663 & .179 & .409 & .656 \\
 & GradAscent & .668$_{\pm.001}$ & .564$_{\pm.009}$ & .525$_{\pm.014}$ & .509$_{\pm.008}$ \\
 & GradDiff & .659$_{\pm.003}$ & .569$_{\pm.019}$ & .578$_{\pm.027}$ & .483$_{\pm.020}$ \\
@@ -406,9 +407,11 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .657$_{\pm.001}$ & .861$_{\pm.002}$ & .715$_{\pm.006}$ & .246$_{\pm.003}$ \\
 & BLURNPO & .667$_{\pm.003}$ & .822$_{\pm.015}$ & .788$_{\pm.024}$ & .253$_{\pm.021}$ \\
 & PDU & \textbf{.692}$_{\pm.001}$ & .168$_{\pm.006}$ & .283$_{\pm.007}$ & .742$_{\pm.003}$ \\
+& VILA & .545$_{\pm.008}$ & .549$_{\pm.017}$ & .511$_{\pm.017}$ & .492$_{\pm.010}$ \\
+& LoKU & .365$_{\pm.031}$ & .004$_{\pm.002}$ & .092$_{\pm.036}$ & .617$_{\pm.026}$ \\
 & \method & .654$_{\pm.003}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.015}$_{\pm.011}$ & \textbf{.846}$_{\pm.004}$ \\
 \midrule
-\multirow{9}{*}{fgt05}
+\multirow{11}{*}{fgt05}
 & Gold (retrain) & .659 & .130 & .388 & .698 \\
 & GradAscent & .481$_{\pm.015}$ & .140$_{\pm.015}$ & .333$_{\pm.013}$ & .632$_{\pm.008}$ \\
 & GradDiff & .566$_{\pm.005}$ & .147$_{\pm.008}$ & .395$_{\pm.010}$ & .653$_{\pm.003}$ \\
@@ -417,9 +420,11 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .644$_{\pm.001}$ & .602$_{\pm.004}$ & .534$_{\pm.003}$ & .483$_{\pm.002}$ \\
 & BLURNPO & .640$_{\pm.022}$ & .683$_{\pm.082}$ & .593$_{\pm.091}$ & .412$_{\pm.075}$ \\
 & PDU & \textbf{.687}$_{\pm.001}$ & .009$_{\pm.001}$ & .085$_{\pm.009}$ & \textbf{.843}$_{\pm.002}$ \\
+& VILA & .636$_{\pm.004}$ & .865$_{\pm.005}$ & .732$_{\pm.015}$ & .236$_{\pm.008}$ \\
+& LoKU & .410$_{\pm.021}$ & .000$_{\pm.000}$ & .022$_{\pm.004}$ & .672$_{\pm.019}$ \\
 & \method & .655$_{\pm.002}$ & \textbf{.007}$_{\pm.006}$ & \textbf{.028}$_{\pm.016}$ & .842$_{\pm.005}$ \\
 \midrule
-\multirow{9}{*}{fgt10}
+\multirow{11}{*}{fgt10}
 & Gold (retrain) & .661 & .115 & .382 & .698 \\
 & GradAscent & .000$_{\pm.000}$ & .000$_{\pm.000}$ & .003$_{\pm.004}$ & .000$_{\pm.000}$ \\
 & GradDiff & .532$_{\pm.015}$ & .079$_{\pm.008}$ & .361$_{\pm.024}$ & .662$_{\pm.005}$ \\
@@ -428,6 +433,8 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .647$_{\pm.001}$ & .390$_{\pm.010}$ & .472$_{\pm.002}$ & .591$_{\pm.004}$ \\
 & BLURNPO & .385$_{\pm.167}$ & .245$_{\pm.163}$ & .314$_{\pm.094}$ & .502$_{\pm.099}$ \\
 & PDU & \textbf{.680}$_{\pm.009}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.029}$_{\pm.008}$ & \textbf{.857}$_{\pm.003}$ \\
+& VILA & .640$_{\pm.003}$ & .876$_{\pm.005}$ & .759$_{\pm.007}$ & .218$_{\pm.006}$ \\
+& LoKU & .457$_{\pm.031}$ & .000$_{\pm.000}$ & .019$_{\pm.010}$ & .712$_{\pm.027}$ \\
 & \method & .647$_{\pm.004}$ & .005$_{\pm.003}$ & .038$_{\pm.014}$ & .836$_{\pm.006}$ \\
 \bottomrule
 \end{tabular}
@@ -442,7 +449,7 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 \toprule
 Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
-\multirow{8}{*}{fgt01}
+\multirow{10}{*}{fgt01}
 & GradAscent & 1.335$_{\pm.086}$ & 1.849$_{\pm.003}$ & 1.998$_{\pm.000}$ & .587$_{\pm.045}$ \\
 & GradDiff & 1.500$_{\pm.066}$ & 1.818$_{\pm.017}$ & 1.997$_{\pm.001}$ & .490$_{\pm.041}$ \\
 & NPO & 1.230$_{\pm.041}$ & 1.843$_{\pm.004}$ & 1.998$_{\pm.001}$ & .640$_{\pm.019}$ \\
@@ -450,9 +457,11 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 & RMU & 1.585$_{\pm.038}$ & 1.807$_{\pm.002}$ & 1.995$_{\pm.001}$ & .432$_{\pm.027}$ \\
 & BLURNPO & 1.730$_{\pm.122}$ & 1.853$_{\pm.003}$ & 1.998$_{\pm.001}$ & .308$_{\pm.109}$ \\
 & PDU & 0.615$_{\pm.042}$ & 1.722$_{\pm.007}$ & 1.968$_{\pm.004}$ & .828$_{\pm.011}$ \\
+& VILA & 1.055$_{\pm.064}$ & 1.177$_{\pm.028}$ & 1.960$_{\pm.006}$ & .524$_{\pm.023}$ \\
+& LoKU & 0.025$_{\pm.039}$ & 0.537$_{\pm.175}$ & 0.386$_{\pm.110}$ & .414$_{\pm.108}$ \\
 & \method & \textbf{0.010}$_{\pm.014}$ & 1.845$_{\pm.004}$ & 1.995$_{\pm.001}$ & \textbf{.970}$_{\pm.002}$ \\
 \midrule
-\multirow{8}{*}{fgt05}
+\multirow{10}{*}{fgt05}
 & GradAscent & 0.693$_{\pm.042}$ & 1.452$_{\pm.021}$ & 1.981$_{\pm.012}$ & .766$_{\pm.009}$ \\
 & GradDiff & 0.833$_{\pm.007}$ & 1.293$_{\pm.022}$ & 1.705$_{\pm.062}$ & .677$_{\pm.009}$ \\
 & NPO & 0.738$_{\pm.037}$ & 1.552$_{\pm.009}$ & 1.995$_{\pm.001}$ & .774$_{\pm.009}$ \\
@@ -460,9 +469,11 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 & RMU & 1.107$_{\pm.033}$ & 1.703$_{\pm.008}$ & 1.991$_{\pm.003}$ & .679$_{\pm.014}$ \\
 & BLURNPO & 1.397$_{\pm.153}$ & 1.712$_{\pm.054}$ & 1.997$_{\pm.001}$ & .538$_{\pm.078}$ \\
 & PDU & 0.067$_{\pm.013}$ & 1.749$_{\pm.009}$ & 1.978$_{\pm.003}$ & .941$_{\pm.002}$ \\
+& VILA & 1.559$_{\pm.044}$ & 1.641$_{\pm.021}$ & 1.989$_{\pm.003}$ & .443$_{\pm.030}$ \\
+& LoKU & \textbf{0.000}$_{\pm.000}$ & 0.818$_{\pm.068}$ & 1.340$_{\pm.111}$ & .607$_{\pm.037}$ \\
 & \method & \textbf{0.023}$_{\pm.026}$ & 1.817$_{\pm.011}$ & 1.990$_{\pm.004}$ & \textbf{.962}$_{\pm.004}$ \\
 \midrule
-\multirow{8}{*}{fgt10}
+\multirow{10}{*}{fgt10}
 & GradAscent & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & .000$_{\pm.000}$ \\
 & GradDiff & 0.663$_{\pm.029}$ & 1.164$_{\pm.058}$ & 1.432$_{\pm.199}$ & .648$_{\pm.037}$ \\
 & NPO & 0.613$_{\pm.078}$ & 1.519$_{\pm.042}$ & 1.992$_{\pm.006}$ & .796$_{\pm.011}$ \\
@@ -470,6 +481,8 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 & RMU & 0.851$_{\pm.017}$ & 1.703$_{\pm.006}$ & 1.989$_{\pm.002}$ & .765$_{\pm.005}$ \\
 & BLURNPO & 0.726$_{\pm.354}$ & 1.046$_{\pm.508}$ & 1.508$_{\pm.601}$ & .550$_{\pm.161}$ \\
 & PDU & 0.014$_{\pm.005}$ & 1.726$_{\pm.029}$ & 1.952$_{\pm.038}$ & .940$_{\pm.011}$ \\
+& VILA & 1.641$_{\pm.017}$ & 1.676$_{\pm.015}$ & 1.990$_{\pm.003}$ & .386$_{\pm.013}$ \\
+& LoKU & \textbf{0.000}$_{\pm.000}$ & 0.936$_{\pm.095}$ & 1.585$_{\pm.114}$ & .681$_{\pm.047}$ \\
 & \method & 0.034$_{\pm.028}$ & 1.837$_{\pm.011}$ & 1.992$_{\pm.003}$ & \textbf{.965}$_{\pm.004}$ \\
 \bottomrule
 \end{tabular}
@@ -589,6 +602,32 @@ Doubling to $K{=}6$ yields no further gain while being substantially slower per 
     \caption{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ consistently outperforms $K{=}0$; $K{=}6$ provides no additional gain.}
     \label{fig:inner_loop_ablation}
 \end{figure*}
+
+\section{Hyperparameter Robustness}
+\label{app:robustness}
+
+We independently sweep each of the five core \method hyperparameters over 8 values on TOFU 1B forget01 and KnowUnDo Copyright (80 total runs, $K{=}3$).
+The swept ranges are: $\varepsilon_\text{mul} \in [0.75, 3.2]$, $\tau \in [0.1, 1.0]$, $\alpha_\text{dual} \in [0.01, 1.0]$, $\rho \in [0.01, 2.0]$, and $\eta_\text{in} \in [10^{-5}, 2{\times}10^{-3}]$.
+As shown in \figref{fig:robustness_hm}, performance is remarkably stable: the maximum HM spread across any single parameter is 0.045 on TOFU ($\tau$) and 0.016 on KnowUnDo ($\alpha_\text{dual}$), while three of five parameters ($\varepsilon_\text{mul}$, $\alpha_\text{dual}$, $\rho$) produce spreads below 0.01 on both benchmarks.
+
+The source of this robustness is the dual variable $\lambda$, which automatically compensates for hyperparameter variation.
+\figref{fig:robustness_lambda} shows that different parameter settings produce visibly different $\lambda$ trajectories---tighter $\varepsilon$ yields higher peaks, larger $\rho$ produces steeper ascent, lower $\tau$ triggers fewer retain violations---yet these trajectory differences absorb the parameter change, leaving the final forget--retain tradeoff nearly invariant.
+In effect, the augmented Lagrangian acts as a self-regulating mechanism: rather than requiring careful tuning, the optimizer routes hyperparameter sensitivity into $\lambda$, which has no direct effect on final model quality once convergence is reached.
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig_robustness_hm.pdf}
+    \caption{Hyperparameter robustness: HM across 8 sweep values per parameter on TOFU 1B forget01 (blue, left axis) and KnowUnDo Copyright (red, right axis). Both use $K{=}3$.}
+    \label{fig:robustness_hm}
+\end{figure*}
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{figures/fig_robustness_lambda.pdf}
+    \caption{Representative $\lambda$ trajectories under hyperparameter sweeps. Top: TOFU. Bottom: KnowUnDo. Each panel shows three values (low/mid/high) for one parameter. The dual variable adapts its trajectory to compensate for parameter changes, explaining the robustness in \figref{fig:robustness_hm}.}
+    \label{fig:robustness_lambda}
+\end{figure*}
+
 
 \section{Qualitative Examples}
 \label{app:qualitative}
