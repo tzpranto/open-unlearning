@@ -583,6 +583,9 @@ METHOD_ALIASES = {
     "RMU": "RMU", "rmu": "RMU",
     "PDU": "PDU", "pdu": "PDU",
     "FT": "FT", "ft": "FT",
+    "vila": "VILA", "VILA": "VILA",
+    "loku": "LoKU", "LoKU": "LoKU",
+    "obliviate": "OBLIVIATE", "OBLIVIATE": "OBLIVIATE",
 }
 
 KNOWUNDO_DOMAINS = {"copyright", "privacy"}
@@ -635,13 +638,21 @@ def parse_metadata_from_path(eval_dir):
                 break
     elif task_name_no_seed.startswith("tofu_"):
         rest = task_name_no_seed[5:]
-        for alias, canonical in METHOD_ALIASES.items():
-            if f"_{alias}" in rest:
-                idx = rest.rfind(f"_{alias}")
-                meta["model"] = rest[:idx]
-                meta["method"] = canonical
-                meta["split"] = "TOFU"
-                break
+        # Handle pattern: tofu_{method}_{model_size}_{split}_s{seed}
+        # e.g., tofu_vila_3b_forget01, tofu_loku_3b_forget05
+        lora_match = re.match(r'^(vila|loku|obliviate)_(\w+)_(forget\d+)$', rest)
+        if lora_match:
+            meta["method"] = METHOD_ALIASES.get(lora_match.group(1), lora_match.group(1))
+            meta["model"] = f"Llama-3.2-{lora_match.group(2).upper()}-Instruct"
+            meta["split"] = lora_match.group(3)
+        else:
+            for alias, canonical in METHOD_ALIASES.items():
+                if f"_{alias}" in rest:
+                    idx = rest.rfind(f"_{alias}")
+                    meta["model"] = rest[:idx]
+                    meta["method"] = canonical
+                    meta["split"] = "TOFU"
+                    break
     elif task_name_no_seed.startswith("knowundo_"):
         rest = task_name_no_seed[9:]
         # Handle FT target: knowundo_Llama-2-7b-chat_<domain>_ft

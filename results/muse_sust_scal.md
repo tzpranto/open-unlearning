@@ -88,6 +88,33 @@ Sequential unlearning: each step applies BLADE on a new 889-sample forget set, i
 | step 3 | 0.86 | 1.25 | 0.48 | 0.87 | 1.58 | 0.563 |
 | step 4 | 0.84 | 1.28 | 0.40 | 0.92 | 1.62 | 0.584 |
 
+## BLADE — Scalability: Alpha Dual Ablation
+
+Effect of dual decay factor (α) on retain protection vs convergence speed.
+α=0.1 (default/ratchet), α=0.5 (moderate), α=1.0 (symmetric, no ratchet).
+
+| Scale | α | fgt_know↓ | fgt_verb↓ | retain↑ | HM↑ | conv_step |
+| --- | --- | --- | --- | --- | --- | --- |
+| f1 | 0.1 | 0.550 | 0.173 | 0.475 | 0.542 | 299 |
+| f1 | 0.5 | 0.492 | 0.349 | 0.489 | 0.541 | 154 |
+| f1 | 1.0 | 0.487 | 0.361 | 0.470 | 0.532 | 132 |
+| f2 | 0.1 | 0.504 | 0.321 | 0.500 | 0.547 | 299 |
+| f2 | 0.5 | 0.496 | 0.357 | 0.485 | 0.536 | 160 |
+| f2 | 1.0 | 0.458 | 0.348 | 0.474 | 0.547 | 138 |
+| f3 | 0.1 | 0.466 | 0.366 | 0.505 | 0.552 | ~340 |
+| f3 | 0.5 | — | — | — | — | running |
+| f3 | 1.0 | — | — | — | — | running |
+| f4 | 0.1 | 0.505 | 0.386 | 0.504 | 0.533 | 500 |
+| f4 | 0.5 | 0.508 | 0.382 | 0.472 | 0.520 | 223 |
+| f4 | 1.0 | 0.483 | 0.349 | 0.480 | 0.540 | 216 |
+
+**Observations (f1/f2 complete):**
+- Higher α → faster convergence (132 vs 299 steps) but lower retain (0.470 vs 0.475–0.500)
+- α=1.0 (no ratchet): λ drops freely after spike → retain unprotected during active forgetting
+- α=0.1 (ratchet): λ stays elevated → sustained retain protection, but 2× slower
+- HM similar because forget also degrades slightly with ratchet (tradeoff)
+- Expect larger retain gap on f3/f4 (longer post-spike phase)
+
 ## Notes
 
 - All runs use seed=42, bsz=2, accum=8, gradient_checkpointing=true

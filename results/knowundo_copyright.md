@@ -63,6 +63,22 @@ LLM Judge (Claude Opus 4.6, seed=42):
 
 ## Notes
 
+## Re-learning Attack (seed=42)
+
+Protocol: finetune unlearned model on forget set (1 epoch, lr=2e-5, bs=4, grad_ckpt).
+R = max(0, min((HM^before_ret − HM^after_ret) / (HM^before_unl − HM^after_unl), 1)). Higher R = more robust.
+HM = hmean(1-forget_ROUGE, retain_ROUGE, MMLU).
+
+| Method  | fgt_ROUGE (bef→aft) | ret_ROUGE (bef→aft) | MMLU (bef→aft)  | HM (bef→aft)  | R     |
+| ------- | ------------------- | ------------------- | --------------- | ------------- | ----- |
+| Retrain | 0.205 → 0.216       | 0.343 → 0.314       | 0.447 → 0.451   | 0.468 → 0.450 | (ref) |
+| PDU     | 0.012 → 0.246       | 0.278 → 0.315       | 0.443 → 0.446   | 0.437 → 0.445 | 0.000 |
+| BLADE   | 0.036 → 0.231       | 0.336 → 0.321       | 0.452 → 0.448   | 0.482 → 0.451 | 0.604 |
+
+BLADE shows moderate robustness (R=0.60). PDU actually *improves* HM after relearning (R=0) — it never truly forgot.
+
+## Notes
+
 - Finetuned using original KnowUnDo code (LoRA r=8, alpha=16, 10 epochs, lr=1e-4)
 - All baselines use MUSE News unlearning params (lr=1e-5, 10 epochs, constant scheduler)
 - BLADE unified: same hyperparams as MUSE News (eps_mul=3.2, eta_theta=3e-5, conv_patience=20, T=150)

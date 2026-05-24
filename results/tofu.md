@@ -111,6 +111,7 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 0.667±0.003 | 0.008±0.003 | 0.618±0.031 | 0.822±0.015 | 0.788±0.024 | 0.253±0.021 |
 | PDU | **0.692±0.001** | **0.225±0.049** | 0.090±0.004 | 0.168±0.006 | 0.283±0.007 | 0.742±0.003 |
 | BLADE | 0.654±0.003 | 0.001±0.001 | **0.029±0.000** | **0.000±0.000** | **0.015±0.011** | **0.846±0.004** |
+| OBLIVIATE | 0.664±0.002 | 0.002±0.001 | **0.029±0.000** | 0.001±0.000 | 0.045±0.002 | 0.844±0.002 |
 
 #### LLM Judge (Opus 4.7) — Forget 1%
 
@@ -124,6 +125,7 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 1.730±0.122 | **1.853±0.003** | **1.998±0.001** | 2.000±0.000 | 0.308±0.109 |
 | PDU | 0.615±0.042 | 1.722±0.007 | 1.968±0.004 | 1.350±0.050 | 0.828±0.011 |
 | BLADE | **0.010±0.014** | 1.845±0.004 | 1.995±0.001 | **0.030±0.011** | **0.970±0.002** |
+| OBLIVIATE | 0.005±0.010 | 1.791±0.010 | 1.994±0.003 | 0.115±0.012 | 0.961±0.003 |
 
 ### Forget 5% (forget05 / retain95)
 
@@ -139,6 +141,7 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 0.640±0.022 | 0.000±0.000 | 0.393±0.104 | 0.683±0.082 | 0.593±0.091 | 0.412±0.075 |
 | PDU | **0.687±0.001** | 0.000±0.000 | 0.038±0.001 | 0.009±0.001 | 0.085±0.009 | **0.843±0.002** |
 | BLADE | 0.655±0.002 | 0.000±0.000 | **0.036±0.005** | **0.007±0.006** | **0.028±0.016** | 0.842±0.005 |
+| OBLIVIATE | 0.660±0.003 | 0.101±0.201 | 0.033±0.000 | 0.001±0.001 | 0.022±0.004 | **0.847±0.001** |
 
 #### LLM Judge (Opus 4.7) — Forget 5%
 
@@ -152,6 +155,7 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 1.397±0.153 | 1.712±0.054 | **1.997±0.001** | 1.999±0.002 | 0.538±0.078 |
 | PDU | 0.067±0.013 | 1.749±0.009 | 1.978±0.003 | 0.096±0.010 | 0.941±0.002 |
 | BLADE | **0.023±0.026** | 1.817±0.011 | 1.990±0.004 | **0.052±0.026** | **0.962±0.004** |
+| OBLIVIATE | 0.039±0.025 | 1.815±0.003 | **1.995±0.002** | 0.082±0.029 | 0.960±0.004 |
 
 ### Forget 10% (forget10 / retain90)
 
@@ -167,6 +171,7 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 0.385±0.167 | 0.000±0.000 | 0.133±0.064 | 0.245±0.163 | 0.314±0.094 | 0.502±0.099 |
 | PDU | **0.680±0.009** | 0.000±0.000 | **0.033±0.000** | **0.000±0.000** | **0.029±0.008** | **0.857±0.003** |
 | BLADE | 0.647±0.004 | 0.000±0.000 | 0.038±0.006 | 0.005±0.003 | 0.038±0.014 | 0.836±0.006 |
+| OBLIVIATE | 0.660±0.004 | 0.143±0.285 | 0.033±0.001 | 0.002±0.002 | 0.024±0.009 | 0.847±0.004 |
 
 #### LLM Judge (Opus 4.7) — Forget 10%
 
@@ -180,6 +185,112 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 | BLURNPO | 0.726±0.354 | 1.046±0.508 | 1.508±0.601 | 1.562±0.534 | 0.550±0.161 |
 | PDU | **0.014±0.005** | 1.726±0.029 | 1.952±0.038 | **0.021±0.010** | 0.940±0.011 |
 | BLADE | 0.034±0.028 | 1.837±0.011 | 1.992±0.003 | 0.051±0.025 | **0.965±0.004** |
+| OBLIVIATE | 0.032±0.016 | 1.816±0.006 | 1.991±0.003 | 0.042±0.021 | 0.961±0.003 |
+
+---
+
+### LoRA Models
+
+LoRA-based unlearning methods on Llama-3.2-3B-Instruct. VILA: LoRA r=8, GD loss, Fisher importance in LoRA subspace. LoKU: LoRA r=32, IHL loss, FILA init.
+
+#### Forget 1% (forget01)
+
+| Method | MU↑ | FQ↑ | ES↓ | fgt_Prob↓ | fgt_ROUGE↓ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- |
+| VILA | 0.545±0.008 | 0.061±0.031 | 0.143±0.028 | 0.549±0.017 | 0.511±0.017 | 0.492±0.010 |
+| LoKU | 0.365±0.031 | 0.176±0.147 | 0.030±0.001 | 0.004±0.002 | 0.092±0.036 | **0.617±0.026** |
+
+#### Forget 5% (forget05)
+
+| Method | MU↑ | FQ↑ | ES↓ | fgt_Prob↓ | fgt_ROUGE↓ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- |
+| VILA | 0.636±0.004 | 0.000±0.000 | 0.567±0.014 | 0.865±0.005 | 0.732±0.015 | 0.236±0.008 |
+| LoKU | 0.410±0.021 | 0.029±0.031 | 0.033±0.000 | 0.000±0.000 | 0.022±0.004 | **0.672±0.019** |
+
+#### Forget 10% (forget10)
+
+| Method | MU↑ | FQ↑ | ES↓ | fgt_Prob↓ | fgt_ROUGE↓ | HM↑ |
+| --- | --- | --- | --- | --- | --- | --- |
+| VILA | 0.640±0.003 | 0.000±0.000 | 0.589±0.016 | 0.876±0.005 | 0.759±0.007 | 0.218±0.006 |
+| LoKU | 0.457±0.031 | 0.140±0.251 | 0.033±0.000 | 0.000±0.000 | 0.019±0.010 | **0.712±0.027** |
+
+#### LLM Judge (Opus 4.7) — Forget 1%
+
+| Method | FL↓ | RA↑ | ret_RQ↑ | fgt_RQ | HM↑ |
+| --- | --- | --- | --- | --- | --- |
+| VILA | 1.055±0.064 | 1.177±0.028 | 1.960±0.006 | 1.960±0.034 | 0.524±0.023 |
+| LoKU | 0.025±0.039 | 0.537±0.175 | 0.386±0.110 | 0.005±0.010 | 0.414±0.108 |
+
+#### LLM Judge (Opus 4.7) — Forget 5%
+
+| Method | FL↓ | RA↑ | ret_RQ↑ | fgt_RQ | HM↑ |
+| --- | --- | --- | --- | --- | --- |
+| VILA | 1.559±0.044 | 1.641±0.021 | 1.989±0.003 | 1.989±0.008 | 0.443±0.030 |
+| LoKU | **0.000±0.000** | 0.818±0.068 | 1.340±0.111 | 0.000±0.000 | **0.607±0.037** |
+
+#### LLM Judge (Opus 4.7) — Forget 10%
+
+| Method | FL↓ | RA↑ | ret_RQ↑ | fgt_RQ | HM↑ |
+| --- | --- | --- | --- | --- | --- |
+| VILA | 1.641±0.017 | 1.676±0.015 | 1.990±0.003 | 1.993±0.002 | 0.386±0.013 |
+| LoKU | **0.000±0.000** | 0.936±0.095 | 1.585±0.114 | 0.000±0.000 | **0.681±0.047** |
+
+---
+
+## Adversarial Robustness (Extraction Attacks)
+
+Adv_HM = hmean(MU, 1−ParaProb, 1−PertProb, 1−ES). Measures resistance to adversarial extraction while preserving utility. All values 5 seeds, mean±std.
+
+- ParaProb = P(paraphrased answer | question) on forget set — tests extraction via rephrasing
+- PertProb = P(perturbed answer | question) on forget set — tests structural knowledge retention
+- ES = Extraction Strength — token-level extractability (suffix prediction)
+- MU = Model Utility (same as above)
+
+### Llama-3.2-1B-Instruct
+
+| Method | forget01 | forget05 | forget10 |
+| --- | --- | --- | --- |
+| GradAscent | 0.786±0.006 | 0.028±0.043 | 0.000±0.000 |
+| GradDiff | 0.794±0.001 | 0.752±0.002 | 0.742±0.002 |
+| NPO | 0.790±0.003 | 0.731±0.009 | 0.689±0.020 |
+| SimNPO | 0.684±0.011 | 0.648±0.005 | 0.657±0.005 |
+| RMU | 0.790±0.001 | 0.794±0.001 | 0.824±0.003 |
+| PDU | 0.827±0.001 | 0.828±0.003 | 0.846±0.001 |
+| BLADE | **0.851±0.001** | **0.848±0.001** | **0.846±0.002** |
+
+### Llama-3.2-3B-Instruct
+
+| Method | forget01 | forget05 | forget10 |
+| --- | --- | --- | --- |
+| GradAscent | 0.800±0.003 | 0.760±0.008 | 0.000±0.000 |
+| GradDiff | 0.788±0.008 | 0.806±0.002 | 0.798±0.007 |
+| NPO | 0.801±0.001 | 0.786±0.003 | 0.787±0.008 |
+| SimNPO | 0.616±0.017 | 0.557±0.007 | 0.588±0.003 |
+| RMU | 0.708±0.005 | 0.803±0.003 | 0.836±0.002 |
+| PDU | 0.868±0.001 | **0.889±0.000** | **0.888±0.004** |
+| BLADE | **0.877±0.001** | 0.876±0.001 | 0.872±0.003 |
+
+---
+
+## Re-learning Robustness
+
+Recovery Rate R = max(0, min((HM^before_ret − HM^after_ret) / (HM^before_unl − HM^after_unl), 1)), where HM = hmean(MU, 1−fgt_Prob, 1−fgt_ROUGE). Protocol: fine-tune unlearned model on forget set (1 epoch, lr=2e-5, seed 42) following Dorna et al. (2506.12618). Higher R = more robust (harder to recover forgotten knowledge).
+
+### Llama-3.2-1B-Instruct
+
+| Method | forget01 | forget05 | forget10 |
+| --- | --- | --- | --- |
+| PDU | 0.253 | 0.175 | 0.152 |
+| **BLADE** | **0.207** | **0.135** | **0.135** |
+
+### Llama-3.2-3B-Instruct
+
+| Method | forget01 | forget05 | forget10 |
+| --- | --- | --- | --- |
+| PDU | 0.206 | 0.127 | 0.113 |
+| **BLADE** | **0.175** | **0.104** | **0.102** |
+
+---
 
 ## Notes
 
@@ -188,4 +299,5 @@ Scores on 0–2 scale. FL = Forget Leakage (lower = better forgetting), RA = Ret
 - ES = Extraction Strength (lower = better forgetting)
 - fgt_Prob = forget set answer probability, fgt_ROUGE = forget set ROUGE-L
 - HM = hmean(MU, 1-fgt_Prob, 1-fgt_ROUGE) — overall score
-- **bold HM** = best in split
+- Adv_HM = hmean(MU, 1-ParaProb, 1-PertProb, 1-ES) — adversarial robustness score
+- **bold** = best in split

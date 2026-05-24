@@ -68,6 +68,19 @@ Scores on 0–2 scale. FL = forget leakage (lower = better). RA = retain accurac
 | PDU        | 0.53 ± 0.02  | 0.99 ± 0.02  | 1.15 ± 0.02  | 0.586 ± 0.007 |
 | BLADE      | **0.11 ± 0.02** | **1.39 ± 0.01** | **1.66 ± 0.02** | **0.810 ± 0.005** |
 
+## Re-learning Attack (seed=42)
+
+Protocol: finetune unlearned model on forget set (1 epoch, lr=2e-5, bs=1, grad_ckpt).
+R = max(0, min((HM^before_ret − HM^after_ret) / (HM^before_unl − HM^after_unl), 1)). Higher R = more robust.
+
+| Method  | fgt_km (bef→aft) | verbmem (bef→aft) | retain (bef→aft) | HM (bef→aft)  | R     |
+| ------- | ---------------- | ----------------- | ---------------- | ------------- | ----- |
+| Retrain | 0.303 → 0.227    | 0.144 → 0.146     | 0.687 → 0.658    | 0.739 → 0.753 | (ref) |
+| PDU     | 0.127 → 0.372    | 0.119 → 0.987     | 0.368 → 0.673    | 0.600 → 0.038 | 0.000 |
+| BLADE   | 0.110 → 0.486    | 0.000 → 0.984     | 0.658 → 0.722    | 0.823 → 0.046 | 0.000 |
+
+Both methods completely collapse — verbmem goes from ~0 to ~0.98 after 1 epoch (total knowledge recovery). R=0.
+
 ## Notes
 
 - ↓ = lower is better (forgetting quality)
