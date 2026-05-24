@@ -1,21 +1,23 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Deployed language models require continuous post-hoc correction: regulations such as the GDPR \citep{voigt2017gdpr} mandate deletion of personal data on request, copyright holders demand removal of memorized content \citep{carlini2021extracting}, and models that absorb misinformation---recently demonstrated when LLMs confidently repeated a fabricated disease \citep{bixonimania}---must be patched without full retraining.
+Deployed language models require continuous post-hoc correction: regulations such as the GDPR \citep{voigt2017gdpr} mandate deletion of personal data on request, copyright holders demand removal of memorized content \citep{carlini2021extracting}, safety benchmarks flag hazardous knowledge that must be suppressed \citep{li2024wmdp}, and models that absorb misinformation---recently demonstrated when LLMs confidently repeated a fabricated disease \citep{bixonimania}---must be patched without full retraining.
+These demands span text, vision, and multimodal systems alike, and adversarial users actively probe unlearned models to recover erased content.
 \emph{Machine unlearning} addresses these needs, yet the process is inherently \emph{recurring}: new removal requests, policy changes, and safety incidents arrive throughout a model's lifetime \citep{liu2025rethinking}.
 
 This makes the central challenge not just \emph{what} to forget but \emph{how to forget without breaking what remains}.
 Forget and retain knowledge share entangled representations \citep{cheng2026unlearning}, so each unlearning step risks collateral damage that compounds over repeated applications.
 Existing methods rely on fixed-weight loss balancing \citep{liu2025rethinking, zhang2024negative} that cannot adapt as retain difficulty shifts mid-training, producing three recurring failure modes: (i)~\emph{unbounded forgetting}---gradient ascent \citep{jang2023knowledge} produces arbitrarily large gradients, destroying utility; (ii)~\emph{static tradeoff}---fixed-weight methods (GradDiff, NPO) oscillate without self-correction; (iii)~\emph{over-forgetting}---unclamped entropy \citep{yuan2025closer} pushes already-forgotten tokens, wasting gradient budget on tokens that no longer need perturbation.
 
-\method addresses these through a formulation designed for \emph{robust, smooth, and manageable} unlearning.
-A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a vocabulary-invariant threshold $\tau \cdot \log V$, after which the gradient is exactly zero---bounded, self-decelerating, and reference-free.
-Retain quality is enforced as an inequality constraint via an augmented Lagrangian with asymmetric dual updates (\secref{sec:alm}) that permanently ratchet protection after any violation, nested in a bilevel structure (\secref{sec:bilevel}) whose inner loop repairs retain damage before each outer forgetting step; all updates are confined to LoRA adapters (\secref{sec:lora}), bounding representational drift.
+\method addresses these through three mechanisms, each targeting a specific failure mode.
+A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a threshold $\tau \cdot \log V$, producing exactly-zero gradients on already-forgotten tokens---eliminating over-forgetting.
+An augmented Lagrangian with asymmetric dual updates (\secref{sec:alm}) enforces retain quality as an inequality constraint that permanently ratchets after any violation---replacing static balancing with adaptive self-correction.
+These operate within a bilevel structure (\secref{sec:bilevel}) whose inner loop repairs retain damage before each outer step, with all updates confined to LoRA adapters (\secref{sec:lora}) to bound representational drift.
 
-We evaluate on TOFU \citep{maini2024tofu} (Llama-3.2-1B/3B, three splits, 5 seeds), MUSE \citep{shi2025muse} (Books/News, Llama-2-7B), and KnowUndo \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
+We evaluate on TOFU \citep{maini2024tofu} (Llama-3.2-1B/3B, three splits), MUSE \citep{shi2025muse} (Books/News, Llama-2-7B), and KnowUndo \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
 Key findings:
 \begin{itemize}[leftmargin=*, topsep=2pt, itemsep=1pt]
-    \item \textbf{Dominant across benchmarks.} \method improves composite scores over the strongest baselines by 8\% on TOFU, 9\% on MUSE Books, and 7\% on KnowUndo, with near-zero semantic leakage confirmed by an LLM judge.
-    \item \textbf{Robust under stress.} Under $4\times$ scaling and 4 sequential unlearning steps, \method maintains stable performance (HM 0.533--0.552) while the strongest baseline collapses catastrophically (HM 0.58$\to$0.005).
-    \item \textbf{Smooth, controllable optimization.} Training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---giving interpretable control over the forget--retain tradeoff absent from all baselines, whose dynamics oscillate without self-correction.
+    \item \textbf{Dominant across benchmarks.} \method improves average composite scores over the strongest baselines by 9\% on TOFU, 9\% on MUSE Books, and 7\% on KnowUndo, with near-zero semantic leakage confirmed by an LLM judge.
+    \item \textbf{Robust under stress.} Under $4\times$ scaling and 4 sequential unlearning steps, \method maintains stable performance (HM 0.523--0.552) while the strongest baseline collapses catastrophically (HM 0.58$\to$0.005).
+    \item \textbf{Smooth, controllable optimization.} Training consistently follows a three-phase pattern---warm-up, spike-and-ratchet, smooth convergence---giving interpretable control over the forget--retain tradeoff absent in other baselines, whose dynamics oscillate without self-correction.
 \end{itemize}

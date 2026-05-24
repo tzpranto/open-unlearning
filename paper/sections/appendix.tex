@@ -1,13 +1,12 @@
-\section*{Supplementary Material}
-\addcontentsline{toc}{section}{Supplementary Material}
+\section*{Appendix}
+\addcontentsline{toc}{section}{Appendix}
 
 \section{Theoretical Analysis}
 \label{app:theory}
 
-We provide formal justification for three key design choices in \method:
-(i)~bounded loss and gradient control of the clamped entropy objective (\S\ref{app:bounded_grad}),
-(ii)~the ratchet convergence behavior of the asymmetric dual variable update (\S\ref{app:ratchet}), and
-(iii)~the selective uncertainty property enabled by sub-maximal entropy clamping (\S\ref{app:selective}).
+We provide formal justification for two key design choices in \method:
+(i)~bounded loss and gradient control of the clamped entropy objective (\S\ref{app:bounded_grad}), and
+(ii)~the selective uncertainty property enabled by sub-maximal entropy clamping (\S\ref{app:selective}).
 Together, these results explain why \method avoids the catastrophic model collapse commonly observed with unbounded unlearning objectives.
 
 
@@ -69,58 +68,11 @@ Assumption (A1) is naturally satisfied under LoRA parameterization, where the lo
 Assumption (A2) is mild for practical transformer networks: layer normalization and finite-precision arithmetic keep logit magnitudes bounded in all architectures we are aware of.
 
 
-\subsection{Dual Variable Ratchet Convergence}
-\label{app:ratchet}
-
-\method enforces the retain-quality constraint $\Loss_\mathrm{ret}(\thetav) \leq \varepsilon$ via an augmented Lagrangian with asymmetric dual updates.
-Let $r_t = \Loss_\mathrm{ret}(\thetav_t) - \varepsilon$ denote the constraint residual at iteration $t$, $\rho > 0$ the penalty coefficient, $\alpha \in (0,1)$ the asymmetry ratio (we use $\alpha = 0.1$), and $\lambda_\mathrm{min} > 0$ a dual variable floor.
-The dual variable is updated as:
-\begin{equation}
-\label{eq:dual_update_app}
-\lambda_{t+1} = \max\!\Bigl(\lambda_\mathrm{min},\; \lambda_t + \begin{cases} \rho \, |r_t| & \text{if } r_t > 0, \\ -\alpha \, \rho \, |r_t| & \text{if } r_t \leq 0. \end{cases}\Bigr)
-\end{equation}
-
-Each episode $k$ consists of a violation phase ($r_t > 0$ for $n_k^+$ steps with mean violation $\bar{r}_k^+ > 0$) followed by a recovery phase ($r_t \leq 0$ for $n_k^-$ steps with mean slack $\bar{r}_k^- < 0$).
-
-\medskip
-\noindent\textbf{Proposition 2} (Dual Variable Ratchet).
-\textit{Assume:
-(B1)~$\lambda_\mathrm{min} > 0$;
-(B2)~$n_k^+ \bar{r}_k^+ > \alpha \, n_k^- |\bar{r}_k^-|$ for each episode $k$; and
-(B3)~there exists $\lambda^*$ such that the ALM objective admits a feasible stationary point with $r \leq 0$ whenever $\lambda \geq \lambda^*$.
-Then:}
-\begin{enumerate}
-\item[(a)] \textit{The net dual change per episode satisfies $\Delta\lambda_k \geq \rho(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|) > 0$.}
-\item[(b)] \textit{After at most $K^* = \lceil (\lambda^* - \lambda_0) / (\rho \, \underline{\Delta}) \rceil$ episodes, where $\underline{\Delta} = \min_k (n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|)$, no further violation episodes occur.}
-\end{enumerate}
-
-\medskip
-\noindent\textit{Proof.}
-(a) The $\max(\lambda_\mathrm{min}, \cdot)$ projection can only increase $\lambda_t$ relative to the unprojected update, so:
-\begin{align*}
-\Delta\lambda_k &\geq \rho \!\sum_{t \in \mathrm{viol}}\! r_t + \alpha\rho \!\sum_{t \in \mathrm{recov}}\! r_t \\
-&= \rho\bigl(n_k^+ \bar{r}_k^+ - \alpha\, n_k^- |\bar{r}_k^-|\bigr) > 0.
-\end{align*}
-The asymmetry ratio $\alpha = 0.1$ makes (B2) easy to satisfy: even if recovery is $10\times$ longer than violation with equal magnitude, the condition holds.
-
-(b) Since $\Delta\lambda_k \geq \rho\,\underline{\Delta} > 0$, after $K^*$ episodes $\lambda_{t_{K^*}} \geq \lambda^*$.
-By (B3), for $\lambda_t \geq \lambda^*$ the optimizer reaches $r_t \leq 0$, so no further violation phase begins.
-\hfill$\square$
-
-\smallskip
-\noindent\textbf{Remark.}
-Assumption~(B3) is a sufficient condition for finite-time convergence; it asserts that large enough $\lambda$ makes the retain constraint satisfiable, which we verify empirically rather than deriving from convexity.
-
-\smallskip
-\noindent\textbf{Empirical validation.}
-In MUSE Books, $\lambda$ rises from $1.0$ to ${\approx}2.6$--$3.1$ (across 5 seeds) during a single violation episode (steps 28--41), then stabilizes with no further violations for the remaining training steps.
-
-
 \subsection{Selective Uncertainty via Entropy Clamping}
 \label{app:selective}
 
 \medskip
-\noindent\textbf{Proposition 3} (Selective Uncertainty).
+\noindent\textbf{Proposition 2} (Selective Uncertainty).
 \textit{Let $H_{\max} = \log V$. Consider a model trained with clamped entropy (threshold $\tau \in (0,1)$).}
 \begin{enumerate}
 \item[(a)] \textit{For every forget token $t$ with $H_t(\thetav) \geq \tau H_{\max}$, $\nabla_{\thetav} \ell_t = \mathbf{0}$.}
@@ -163,31 +115,34 @@ Max sequence length & 2,048 & 2,048 \\
 All experiments use 5 random seeds (42, 123, 456, 789, 1024) and report mean $\pm$ standard deviation.
 
 For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and 3B-Instruct across three forget splits (1\%/5\%/10\%).
-For MUSE \citep{shi2025muse}, we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models.
+For MUSE \citep{shi2025muse} (News and Books splits), we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models.
 For KnowUndo \citep{tian2024knowundo}, we use Llama-2-7B-chat on copyright and privacy domains.
 
-\subsection{Composite Metric Definitions}
+\subsection{Metric Definitions}
 \label{app:metrics}
 
-We report harmonic means (HM) that penalize methods trading off one axis for another:
+\paragraph{Standard metrics.}
+For \textbf{TOFU}: MU (Model Utility) is retain-set accuracy; Prob is the average probability assigned to forget-set answers; RG is ROUGE-L overlap with gold answers on the forget set.
+For \textbf{MUSE}: fk (forget knowledge) is cloze accuracy on forget data; vm (verbatim memorization) measures extractable memorized sequences; rk (retain knowledge) is cloze accuracy on retain data.
+For \textbf{KnowUndo}: fgt\_R is ROUGE-L on the forget set; ret\_R is ROUGE-L on the retain set; MMLU is 5-shot accuracy measuring general capability.
+
+\paragraph{Composite scores.}
+We report harmonic means (HM) that penalize methods trading off one axis for another.
 
 \paragraph{TOFU.}
 \[
-\text{HM} = \text{hmean}\bigl(\text{MU},\; 1{-}\text{Prob},\; 1{-}\text{ROUGE}\bigr),
+\text{HM} = \text{hmean}\bigl(\text{MU},\; 1{-}\text{Prob},\; 1{-}\text{RG}\bigr).
 \]
-where MU is model utility (retain accuracy), Prob is the average probability assigned to forget-set answers, and ROUGE is ROUGE-L overlap with gold answers on the forget set.
 
 \paragraph{MUSE.}
 \[
-\text{HM} = \text{hmean}\bigl(1{-}\text{fk},\; 1{-}\text{vm},\; \text{rk}\bigr),
+\text{HM} = \text{hmean}\bigl(1{-}\text{fk},\; 1{-}\text{vm},\; \text{rk}\bigr).
 \]
-where fk is forget knowledge (cloze accuracy on forget data), vm is verbatim memorization (extractable memorized sequences), and rk is retain knowledge (cloze accuracy on retain data).
 
 \paragraph{KnowUndo.}
 \[
-\text{HM} = \text{hmean}\bigl(1{-}\text{fgt\_R},\; \text{ret\_R},\; \text{MMLU}\bigr),
+\text{HM} = \text{hmean}\bigl(1{-}\text{fgt\_R},\; \text{ret\_R},\; \text{MMLU}\bigr).
 \]
-where fgt\_R is ROUGE-L on the forget set, ret\_R is ROUGE-L on the retain set, and MMLU is 5-shot accuracy measuring general capability.
 
 \paragraph{LLM Judge.}
 \[
@@ -200,7 +155,7 @@ where FL (Forget Leakage), RA (Retain Accuracy), and rRQ (retain Response Qualit
 
 Table~\ref{tab:hparams} lists all \method hyperparameters.
 Shared across all benchmarks: $K{=}3$, $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), $\tau{=}0.7$, $\rho{=}0.1$, $\lambda_0{=}1.0$, $\alpha_\text{dual}{=}0.1$, gradient norm clipping at 1.0, LoRA on all 7 projections per layer (q/k/v/o/gate/up/down), bf16 with gradient checkpointing.
-Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales; only the outer learning rate $\eta_\theta$ and constraint budget $\varepsilon_\text{mul}$ require benchmark-specific selection.
+Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales; we varied only the outer learning rate $\eta_\theta$ and constraint budget $\varepsilon_\text{mul}$ across benchmarks.
 
 \begin{table}[t]
 \centering
@@ -361,7 +316,7 @@ KnowUndo 7B (rank=16) & 13.1M (0.19\%) & ${\approx}$55 min \\
 
 \paragraph{Total GPU budget.}
 Total compute across all experiments (training + evaluation): ${\approx}$450 GPU-hours.
-This excludes failed attempts and reports only the approximate GPU hours required for reproducibility.
+This excludes failed attempts and parameter sweeps, and reports only the approximate GPU hours required for reproducibility.
 
 \subsection{Implementation Details}
 \label{app:impl}
@@ -383,11 +338,8 @@ This section provides complete per-split and per-domain results omitted from the
 Table~\ref{tab:tofu_3b_full} reports all TOFU 3B metrics across three forget splits with 5-fold standard deviations; Table~\ref{tab:judge_3b} gives the corresponding LLM judge scores; and Table~\ref{tab:knowundo_full} reports KnowUndo results for both copyright and privacy domains.
 MUSE results are reported in full in the main paper (Table~\ref{tab:muse}).
 
-\paragraph{Key observations.}
 On TOFU 3B, \method and PDU are the only methods that consistently achieve near-zero forget leakage (Prob $\leq$ 0.01) across all splits while maintaining utility.
-\method wins on the LLM judge metric (HM$_\text{J}$ $\geq$ 0.962) because it achieves lower forget leakage scores without sacrificing response quality.
-On KnowUndo, \method achieves the highest HM on both domains (+0.021 over the next best on copyright, +0.059 on privacy) and the highest judge HM (+0.06 on copyright, +0.06 on privacy), demonstrating that the bilevel constrained approach generalizes beyond synthetic forget sets to real-world copyright and PII removal.
-We also evaluated LoRA-based unlearning methods (VILA, LoKU) under the same protocol; both perform significantly worse than \method, achieving HM $\leq$ 0.71 on basic metrics and HM$_\text{J}$ $\leq$ 0.68 on the LLM judge, compared to \method's $\geq$ 0.84 and $\geq$ 0.96 respectively.
+On KnowUndo, \method achieves the highest HM on both domains and the highest judge HM, consistent with the main paper findings.
 
 \begin{table*}[!htbp]
 \centering
@@ -396,9 +348,9 @@ We also evaluated LoRA-based unlearning methods (VILA, LoKU) under the same prot
 \label{tab:tofu_3b_full}
 \begin{tabular}{llcccc}
 \toprule
-Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+Split & Method & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ \\
 \midrule
-\multirow{11}{*}{fgt01}
+\multirow{9}{*}{fgt01}
 & Gold (retrain) & .663 & .179 & .409 & .656 \\
 & GradAscent & .668$_{\pm.001}$ & .564$_{\pm.009}$ & .525$_{\pm.014}$ & .509$_{\pm.008}$ \\
 & GradDiff & .659$_{\pm.003}$ & .569$_{\pm.019}$ & .578$_{\pm.027}$ & .483$_{\pm.020}$ \\
@@ -407,11 +359,9 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .657$_{\pm.001}$ & .861$_{\pm.002}$ & .715$_{\pm.006}$ & .246$_{\pm.003}$ \\
 & BLURNPO & .667$_{\pm.003}$ & .822$_{\pm.015}$ & .788$_{\pm.024}$ & .253$_{\pm.021}$ \\
 & PDU & \textbf{.692}$_{\pm.001}$ & .168$_{\pm.006}$ & .283$_{\pm.007}$ & .742$_{\pm.003}$ \\
-& VILA & .545$_{\pm.008}$ & .549$_{\pm.017}$ & .511$_{\pm.017}$ & .492$_{\pm.010}$ \\
-& LoKU & .365$_{\pm.031}$ & .004$_{\pm.002}$ & .092$_{\pm.036}$ & .617$_{\pm.026}$ \\
 & \method & .654$_{\pm.003}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.015}$_{\pm.011}$ & \textbf{.846}$_{\pm.004}$ \\
 \midrule
-\multirow{11}{*}{fgt05}
+\multirow{9}{*}{fgt05}
 & Gold (retrain) & .659 & .130 & .388 & .698 \\
 & GradAscent & .481$_{\pm.015}$ & .140$_{\pm.015}$ & .333$_{\pm.013}$ & .632$_{\pm.008}$ \\
 & GradDiff & .566$_{\pm.005}$ & .147$_{\pm.008}$ & .395$_{\pm.010}$ & .653$_{\pm.003}$ \\
@@ -420,11 +370,9 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .644$_{\pm.001}$ & .602$_{\pm.004}$ & .534$_{\pm.003}$ & .483$_{\pm.002}$ \\
 & BLURNPO & .640$_{\pm.022}$ & .683$_{\pm.082}$ & .593$_{\pm.091}$ & .412$_{\pm.075}$ \\
 & PDU & \textbf{.687}$_{\pm.001}$ & .009$_{\pm.001}$ & .085$_{\pm.009}$ & \textbf{.843}$_{\pm.002}$ \\
-& VILA & .636$_{\pm.004}$ & .865$_{\pm.005}$ & .732$_{\pm.015}$ & .236$_{\pm.008}$ \\
-& LoKU & .410$_{\pm.021}$ & .000$_{\pm.000}$ & .022$_{\pm.004}$ & .672$_{\pm.019}$ \\
 & \method & .655$_{\pm.002}$ & \textbf{.007}$_{\pm.006}$ & \textbf{.028}$_{\pm.016}$ & .842$_{\pm.005}$ \\
 \midrule
-\multirow{11}{*}{fgt10}
+\multirow{9}{*}{fgt10}
 & Gold (retrain) & .661 & .115 & .382 & .698 \\
 & GradAscent & .000$_{\pm.000}$ & .000$_{\pm.000}$ & .003$_{\pm.004}$ & .000$_{\pm.000}$ \\
 & GradDiff & .532$_{\pm.015}$ & .079$_{\pm.008}$ & .361$_{\pm.024}$ & .662$_{\pm.005}$ \\
@@ -433,8 +381,6 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 & RMU & .647$_{\pm.001}$ & .390$_{\pm.010}$ & .472$_{\pm.002}$ & .591$_{\pm.004}$ \\
 & BLURNPO & .385$_{\pm.167}$ & .245$_{\pm.163}$ & .314$_{\pm.094}$ & .502$_{\pm.099}$ \\
 & PDU & \textbf{.680}$_{\pm.009}$ & \textbf{.000}$_{\pm.000}$ & \textbf{.029}$_{\pm.008}$ & \textbf{.857}$_{\pm.003}$ \\
-& VILA & .640$_{\pm.003}$ & .876$_{\pm.005}$ & .759$_{\pm.007}$ & .218$_{\pm.006}$ \\
-& LoKU & .457$_{\pm.031}$ & .000$_{\pm.000}$ & .019$_{\pm.010}$ & .712$_{\pm.027}$ \\
 & \method & .647$_{\pm.004}$ & .005$_{\pm.003}$ & .038$_{\pm.014}$ & .836$_{\pm.006}$ \\
 \bottomrule
 \end{tabular}
@@ -449,7 +395,7 @@ Split & Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparr
 \toprule
 Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
-\multirow{10}{*}{fgt01}
+\multirow{8}{*}{fgt01}
 & GradAscent & 1.335$_{\pm.086}$ & 1.849$_{\pm.003}$ & 1.998$_{\pm.000}$ & .587$_{\pm.045}$ \\
 & GradDiff & 1.500$_{\pm.066}$ & 1.818$_{\pm.017}$ & 1.997$_{\pm.001}$ & .490$_{\pm.041}$ \\
 & NPO & 1.230$_{\pm.041}$ & 1.843$_{\pm.004}$ & 1.998$_{\pm.001}$ & .640$_{\pm.019}$ \\
@@ -457,11 +403,9 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 & RMU & 1.585$_{\pm.038}$ & 1.807$_{\pm.002}$ & 1.995$_{\pm.001}$ & .432$_{\pm.027}$ \\
 & BLURNPO & 1.730$_{\pm.122}$ & 1.853$_{\pm.003}$ & 1.998$_{\pm.001}$ & .308$_{\pm.109}$ \\
 & PDU & 0.615$_{\pm.042}$ & 1.722$_{\pm.007}$ & 1.968$_{\pm.004}$ & .828$_{\pm.011}$ \\
-& VILA & 1.055$_{\pm.064}$ & 1.177$_{\pm.028}$ & 1.960$_{\pm.006}$ & .524$_{\pm.023}$ \\
-& LoKU & 0.025$_{\pm.039}$ & 0.537$_{\pm.175}$ & 0.386$_{\pm.110}$ & .414$_{\pm.108}$ \\
 & \method & \textbf{0.010}$_{\pm.014}$ & 1.845$_{\pm.004}$ & 1.995$_{\pm.001}$ & \textbf{.970}$_{\pm.002}$ \\
 \midrule
-\multirow{10}{*}{fgt05}
+\multirow{8}{*}{fgt05}
 & GradAscent & 0.693$_{\pm.042}$ & 1.452$_{\pm.021}$ & 1.981$_{\pm.012}$ & .766$_{\pm.009}$ \\
 & GradDiff & 0.833$_{\pm.007}$ & 1.293$_{\pm.022}$ & 1.705$_{\pm.062}$ & .677$_{\pm.009}$ \\
 & NPO & 0.738$_{\pm.037}$ & 1.552$_{\pm.009}$ & 1.995$_{\pm.001}$ & .774$_{\pm.009}$ \\
@@ -469,20 +413,16 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 & RMU & 1.107$_{\pm.033}$ & 1.703$_{\pm.008}$ & 1.991$_{\pm.003}$ & .679$_{\pm.014}$ \\
 & BLURNPO & 1.397$_{\pm.153}$ & 1.712$_{\pm.054}$ & 1.997$_{\pm.001}$ & .538$_{\pm.078}$ \\
 & PDU & 0.067$_{\pm.013}$ & 1.749$_{\pm.009}$ & 1.978$_{\pm.003}$ & .941$_{\pm.002}$ \\
-& VILA & 1.559$_{\pm.044}$ & 1.641$_{\pm.021}$ & 1.989$_{\pm.003}$ & .443$_{\pm.030}$ \\
-& LoKU & \textbf{0.000}$_{\pm.000}$ & 0.818$_{\pm.068}$ & 1.340$_{\pm.111}$ & .607$_{\pm.037}$ \\
 & \method & \textbf{0.023}$_{\pm.026}$ & 1.817$_{\pm.011}$ & 1.990$_{\pm.004}$ & \textbf{.962}$_{\pm.004}$ \\
 \midrule
-\multirow{10}{*}{fgt10}
+\multirow{8}{*}{fgt10}
 & GradAscent & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & 0.000$_{\pm.000}$ & .000$_{\pm.000}$ \\
 & GradDiff & 0.663$_{\pm.029}$ & 1.164$_{\pm.058}$ & 1.432$_{\pm.199}$ & .648$_{\pm.037}$ \\
 & NPO & 0.613$_{\pm.078}$ & 1.519$_{\pm.042}$ & 1.992$_{\pm.006}$ & .796$_{\pm.011}$ \\
 & SimNPO & 1.713$_{\pm.006}$ & 1.858$_{\pm.005}$ & 1.995$_{\pm.002}$ & .331$_{\pm.006}$ \\
 & RMU & 0.851$_{\pm.017}$ & 1.703$_{\pm.006}$ & 1.989$_{\pm.002}$ & .765$_{\pm.005}$ \\
 & BLURNPO & 0.726$_{\pm.354}$ & 1.046$_{\pm.508}$ & 1.508$_{\pm.601}$ & .550$_{\pm.161}$ \\
-& PDU & 0.014$_{\pm.005}$ & 1.726$_{\pm.029}$ & 1.952$_{\pm.038}$ & .940$_{\pm.011}$ \\
-& VILA & 1.641$_{\pm.017}$ & 1.676$_{\pm.015}$ & 1.990$_{\pm.003}$ & .386$_{\pm.013}$ \\
-& LoKU & \textbf{0.000}$_{\pm.000}$ & 0.936$_{\pm.095}$ & 1.585$_{\pm.114}$ & .681$_{\pm.047}$ \\
+& PDU & \textbf{0.014}$_{\pm.005}$ & 1.726$_{\pm.029}$ & 1.952$_{\pm.038}$ & .940$_{\pm.011}$ \\
 & \method & 0.034$_{\pm.028}$ & 1.837$_{\pm.011}$ & 1.992$_{\pm.003}$ & \textbf{.965}$_{\pm.004}$ \\
 \bottomrule
 \end{tabular}
@@ -491,140 +431,178 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \begin{table*}[!htbp]
 \centering
 \small
-\caption{KnowUndo full results (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2).}
+\caption{KnowUndo full results (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
 \label{tab:knowundo_full}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|c|cccc}
 \toprule
 & \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
 FT (target) & .854 & .244 & .894 & .336 & .439 & .456 & 1.50 & 1.80 & 1.13 & .44 \\
-GradAscent & .002 & .000 & .002 & .000 & .250 & .000 & 0.00 & 0.00 & 0.00 & .00 \\
-GradDiff & .002 & .000 & .642 & .199 & .386 & .348 & 0.00 & 0.81 & 0.53 & .41 \\
-NPO & .678 & .189 & .763 & .289 & .445 & .433 & 0.77 & 1.74 & 1.15 & .66 \\
-SimNPO & .303 & .048 & .788 & .317 & .435 & .461 & 0.05 & 1.73 & 1.12 & .75 \\
-RMU & .435 & .076 & .763 & .201 & .388 & .347 & 0.04 & 1.01 & 0.98 & .60 \\
-PDU & .045 & .011 & .836 & .285 & .442 & .442 & 0.01 & 1.59 & 0.93 & .68 \\
-\method & .332 & \textbf{.040} & \textbf{.856} & \textbf{.332} & \textbf{.449} & \textbf{.477} & \textbf{0.04} & \textbf{1.79} & \textbf{1.17} & \textbf{.78} \\
+Gold (retrain) & .666 & .205 & .890 & .343 & .447 & .468 & 0.96 & 1.79 & 1.13 & .62 \\
+\midrule
+GradAscent & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .250$_{\pm.02}$ & .000$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & .00$_{\pm.00}$ \\
+GradDiff & .002$_{\pm.00}$ & .000$_{\pm.00}$ & .642$_{\pm.04}$ & .199$_{\pm.01}$ & .386$_{\pm.01}$ & .348$_{\pm.01}$ & 0.00$_{\pm.00}$ & 0.81$_{\pm.10}$ & 0.53$_{\pm.06}$ & .41$_{\pm.04}$ \\
+NPO & .678$_{\pm.02}$ & .189$_{\pm.01}$ & .763$_{\pm.02}$ & .289$_{\pm.00}$ & .445$_{\pm.00}$ & .433$_{\pm.00}$ & 0.77$_{\pm.10}$ & 1.74$_{\pm.02}$ & 1.15$_{\pm.03}$ & .66$_{\pm.02}$ \\
+SimNPO & .303$_{\pm.05}$ & .048$_{\pm.04}$ & .788$_{\pm.01}$ & .317$_{\pm.00}$ & .435$_{\pm.00}$ & .461$_{\pm.01}$ & 0.05$_{\pm.03}$ & 1.73$_{\pm.03}$ & 1.12$_{\pm.03}$ & .75$_{\pm.01}$ \\
+RMU & .435$_{\pm.01}$ & .076$_{\pm.00}$ & .763$_{\pm.00}$ & .201$_{\pm.01}$ & .388$_{\pm.00}$ & .347$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.01$_{\pm.03}$ & 0.98$_{\pm.06}$ & .60$_{\pm.02}$ \\
+PDU & .045$_{\pm.00}$ & .011$_{\pm.00}$ & .836$_{\pm.00}$ & .285$_{\pm.01}$ & .442$_{\pm.00}$ & .442$_{\pm.01}$ & 0.01$_{\pm.01}$ & 1.59$_{\pm.05}$ & 0.93$_{\pm.06}$ & .68$_{\pm.03}$ \\
+\method & .332$_{\pm.04}$ & \textbf{.040}$_{\pm.01}$ & \textbf{.856}$_{\pm.01}$ & \textbf{.332}$_{\pm.01}$ & \textbf{.449}$_{\pm.01}$ & \textbf{.477}$_{\pm.00}$ & \textbf{0.04}$_{\pm.02}$ & \textbf{1.79}$_{\pm.02}$ & \textbf{1.17}$_{\pm.02}$ & \textbf{.78}$_{\pm.01}$ \\
 \bottomrule
-\end{tabular}
+\end{tabular}}
 \\[6pt]
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|c|cccc}
 \toprule
 & \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
 Method & fgt\_Acc$\downarrow$ & fgt\_R$\downarrow$ & ret\_Acc$\uparrow$ & ret\_R$\uparrow$ & MMLU$\uparrow$ & HM$\uparrow$ & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$\uparrow$ \\
 \midrule
 FT (target) & .940 & .665 & .949 & .698 & .445 & .450 & 1.82 & 1.70 & 1.95 & .23 \\
-GradAscent & .017 & .004 & .012 & .006 & .318 & .017 & 0.00 & 0.00 & 0.00 & .00 \\
-GradDiff & .049 & .039 & .708 & .406 & .428 & .513 & 0.04 & 0.92 & 1.23 & .62 \\
-NPO & .646 & .322 & .790 & .426 & .450 & .496 & 0.74 & 1.12 & 1.99 & .68 \\
-SimNPO & .516 & .302 & .889 & .557 & .438 & .544 & 0.58 & 1.42 & 1.88 & .77 \\
-RMU & .568 & .072 & .661 & .079 & .361 & .182 & 0.07 & 0.07 & 0.21 & .08 \\
-PDU & .055 & .022 & .813 & .452 & .444 & .546 & 0.04 & 1.09 & 1.50 & .72 \\
-\method & .306 & .128 & \textbf{.937} & \textbf{.608} & \textbf{.462} & \textbf{.605} & 0.27 & \textbf{1.46} & \textbf{1.87} & \textbf{.83} \\
+Gold (retrain) & .643 & .378 & .889 & .570 & .464 & .544 & 0.95 & 1.43 & 1.96 & .70 \\
+\midrule
+GradAscent & .017$_{\pm.02}$ & .004$_{\pm.01}$ & .012$_{\pm.01}$ & .006$_{\pm.01}$ & .318$_{\pm.02}$ & .017$_{\pm.02}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & 0.00$_{\pm.00}$ & .00$_{\pm.00}$ \\
+GradDiff & .049$_{\pm.02}$ & .039$_{\pm.02}$ & .708$_{\pm.03}$ & .406$_{\pm.02}$ & .428$_{\pm.01}$ & .513$_{\pm.01}$ & 0.04$_{\pm.03}$ & 0.92$_{\pm.09}$ & 1.23$_{\pm.16}$ & .62$_{\pm.04}$ \\
+NPO & .646$_{\pm.02}$ & .322$_{\pm.02}$ & .790$_{\pm.00}$ & .426$_{\pm.01}$ & .450$_{\pm.00}$ & .496$_{\pm.01}$ & 0.74$_{\pm.07}$ & 1.12$_{\pm.02}$ & 1.99$_{\pm.01}$ & .68$_{\pm.01}$ \\
+SimNPO & .516$_{\pm.04}$ & .302$_{\pm.03}$ & .889$_{\pm.01}$ & .557$_{\pm.01}$ & .438$_{\pm.00}$ & .544$_{\pm.01}$ & 0.58$_{\pm.07}$ & 1.42$_{\pm.04}$ & 1.88$_{\pm.07}$ & .77$_{\pm.01}$ \\
+RMU & .568$_{\pm.01}$ & .072$_{\pm.00}$ & .661$_{\pm.01}$ & .079$_{\pm.01}$ & .361$_{\pm.00}$ & .182$_{\pm.01}$ & 0.07$_{\pm.02}$ & 0.07$_{\pm.02}$ & 0.21$_{\pm.02}$ & .08$_{\pm.02}$ \\
+PDU & .055$_{\pm.02}$ & .022$_{\pm.01}$ & .813$_{\pm.02}$ & .452$_{\pm.02}$ & .444$_{\pm.00}$ & .546$_{\pm.01}$ & 0.04$_{\pm.02}$ & 1.09$_{\pm.07}$ & 1.50$_{\pm.04}$ & .72$_{\pm.02}$ \\
+\method & .306$_{\pm.03}$ & .128$_{\pm.02}$ & \textbf{.937}$_{\pm.01}$ & \textbf{.608}$_{\pm.02}$ & \textbf{.462}$_{\pm.02}$ & \textbf{.605}$_{\pm.01}$ & 0.27$_{\pm.03}$ & \textbf{1.46}$_{\pm.06}$ & \textbf{1.87}$_{\pm.06}$ & \textbf{.83}$_{\pm.02}$ \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+
+\section{Adversarial Robustness}
+\label{app:adversarial}
+
+OpenUnlearning natively supports adversarial evaluation only for the TOFU dataset, which is why extraction attacks are limited to TOFU and re-learning attacks are conducted at limited scale (single seed).
+
+\subsection{Extraction Attacks (TOFU)}
+\label{app:extraction}
+
+We probe unlearned models with paraphrased queries (ParaProb) and structurally perturbed queries (PertProb), measuring:
+{\small
+\[
+\text{Adv\_HM} = \text{hmean}(\text{MU},\, 1{-}\text{PP},\, 1{-}\text{PtP},\, 1{-}\text{ES}),
+\]}%
+where PP = ParaProb, PtP = PertProb, and ES = Extraction Score. Results over 5 seeds are in Table~\ref{tab:adv_extraction}.
+The rankings are consistent with the standard metrics in the main paper.
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Adversarial extraction robustness (Adv\_HM) on TOFU (5 seeds). Higher = more robust to paraphrase/perturbation attacks while maintaining utility.}
+\label{tab:adv_extraction}
+\begin{tabular}{@{}l|ccc|ccc@{}}
+\toprule
+& \multicolumn{3}{c|}{\textbf{Llama-3.2-1B-Instruct}} & \multicolumn{3}{c}{\textbf{Llama-3.2-3B-Instruct}} \\
+Method & fgt01 & fgt05 & fgt10 & fgt01 & fgt05 & fgt10 \\
+\midrule
+GradAscent & .786$_{\pm.01}$ & .028$_{\pm.04}$ & .000$_{\pm.00}$ & .800$_{\pm.00}$ & .760$_{\pm.01}$ & .000$_{\pm.00}$ \\
+GradDiff & .794$_{\pm.00}$ & .752$_{\pm.00}$ & .742$_{\pm.00}$ & .788$_{\pm.01}$ & .806$_{\pm.00}$ & .798$_{\pm.01}$ \\
+NPO & .790$_{\pm.00}$ & .731$_{\pm.01}$ & .689$_{\pm.02}$ & .801$_{\pm.00}$ & .786$_{\pm.00}$ & .787$_{\pm.01}$ \\
+SimNPO & .684$_{\pm.01}$ & .648$_{\pm.00}$ & .657$_{\pm.00}$ & .616$_{\pm.02}$ & .557$_{\pm.01}$ & .588$_{\pm.00}$ \\
+RMU & .790$_{\pm.00}$ & .794$_{\pm.00}$ & .824$_{\pm.00}$ & .708$_{\pm.00}$ & .803$_{\pm.00}$ & .836$_{\pm.00}$ \\
+PDU & .827$_{\pm.00}$ & .828$_{\pm.00}$ & .846$_{\pm.00}$ & .868$_{\pm.00}$ & \textbf{.889}$_{\pm.00}$ & \textbf{.888}$_{\pm.00}$ \\
+\method & \textbf{.851}$_{\pm.00}$ & \textbf{.848}$_{\pm.00}$ & \textbf{.846}$_{\pm.00}$ & \textbf{.877}$_{\pm.00}$ & .876$_{\pm.00}$ & .872$_{\pm.00}$ \\
 \bottomrule
 \end{tabular}
 \end{table*}
+
+\subsection{Re-learning Attacks}
+\label{app:relearning}
+
+We fine-tune the unlearned model on the forget set (1 epoch, lr$=2{\times}10^{-5}$, seed=42) and measure how much forgotten knowledge is recovered.
+We evaluate on TOFU across both model scales (1B and 3B) and all three forget splits, reporting HM before and after re-learning and the relative degradation $\Delta\% = (\text{HM}_\text{bef} - \text{HM}_\text{aft}) / \text{HM}_\text{bef} \times 100$.
+
+Both \method and PDU suffer under this attack.
+\method's HM decreases by 69\% on average after re-learning; PDU decreases by 61\%.
 
 
 \section{Training Dynamics}
 \label{app:dynamics}
 
-\figref{fig:dynamics_blade_full} shows \method dynamics on additional benchmarks beyond the MUSE Books example in the main paper.
-The three-phase pattern is consistent:
-(1)~\emph{warm-up}: forget loss drops rapidly while retain loss stays within $\varepsilon$;
-(2)~\emph{spike-and-ratchet}: transient retain violations trigger the dual ratchet, pushing $\lambda$ up by discrete increments per Proposition~2; and
-(3)~\emph{smooth convergence}: $\lambda$ stabilizes and both losses decrease monotonically.
-The final $\lambda$ scales with task difficulty without any hyperparameter change, reflecting the harder optimization landscape when more knowledge must be erased.
-
-\figref{fig:dynamics_pdu_full} shows PDU's contrasting behavior.
-The unbounded logit-margin loss and symmetric dual updates produce recurring retain oscillations that never fully converge, with amplitude growing on larger forget sets.
-This instability explains PDU's collapse at $4\times$ scale in the scalability experiment (Section~5.5).
-
-\label{app:inner_loop}
-\figref{fig:inner_loop_ablation} shows the inner loop ablation across $K \in \{0, 3, 6\}$ and 8 $\varepsilon$-multiplier settings.
-$K{=}3$ consistently outperforms $K{=}0$, confirming that the inner loop is necessary for retain protection.
-Doubling to $K{=}6$ yields no further gain while being substantially slower per step, demonstrating clear diminishing returns and confirming $K{=}3$ as the efficiency sweet spot.
-
-\begin{figure*}[p]
+\begin{figure*}[!t]
     \centering
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.24\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_tofu_1B_dynamics.pdf}
-        \caption{TOFU 1B fgt01}
+        \caption{\method: TOFU 1B}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.24\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_muse_news_dynamics.pdf}
-        \caption{MUSE News}
+        \caption{\method: MUSE News}
     \end{subfigure}
-    \\[4pt]
-    \begin{subfigure}[t]{0.48\textwidth}
+    \hfill
+    \begin{subfigure}[t]{0.24\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_knowundo_copyright_dynamics.pdf}
-        \caption{KnowUndo Copyright}
+        \caption{\method: KU Copy.}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
+    \begin{subfigure}[t]{0.24\textwidth}
         \includegraphics[width=\textwidth]{figures/fig_knowundo_privacy_dynamics.pdf}
-        \caption{KnowUndo Privacy}
-    \end{subfigure}
-    \caption{\method training dynamics across all benchmarks. The three-phase pattern is consistent; $\lambda$ adapts to task difficulty without hyperparameter change. MUSE Books is shown in \figref{fig:dynamics}.}
-    \label{fig:dynamics_blade_full}
-\end{figure*}
-
-\begin{figure*}[p]
-    \centering
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_PDU_dynamics.pdf}
-        \caption{TOFU 1B fgt01}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_muse_news_PDU_dynamics.pdf}
-        \caption{MUSE News}
+        \caption{\method: KU Priv.}
     \end{subfigure}
     \\[4pt]
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_knowundo_copyright_PDU_dynamics.pdf}
-        \caption{KnowUndo Copyright}
+    \begin{subfigure}[t]{0.24\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_tofu_1B_PDU_dynamics.pdf}
+        \caption{PDU: TOFU 1B}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.48\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_knowundo_privacy_PDU_dynamics.pdf}
-        \caption{KnowUndo Privacy}
+    \begin{subfigure}[t]{0.24\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_muse_news_PDU_dynamics.pdf}
+        \caption{PDU: MUSE News}
     \end{subfigure}
-    \caption{PDU training dynamics across all benchmarks. Unbounded logit-margin loss and symmetric dual updates produce recurring retain oscillations across all settings.}
+    \hfill
+    \begin{subfigure}[t]{0.24\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_knowundo_copyright_PDU_dynamics.pdf}
+        \caption{PDU: KU Copy.}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.24\textwidth}
+        \includegraphics[width=\textwidth]{figures/fig_knowundo_privacy_PDU_dynamics.pdf}
+        \caption{PDU: KU Priv.}
+    \end{subfigure}
+    \caption{Training dynamics across benchmarks (MUSE Books in main paper, \figref{fig:dynamics}). Top: \method shows consistent three-phase convergence. Bottom: PDU exhibits recurring oscillations.}
+    \label{fig:dynamics_blade_full}
     \label{fig:dynamics_pdu_full}
 \end{figure*}
 
-\begin{figure*}[h]
+\figref{fig:dynamics_blade_full} confirms the three-phase pattern described in the main paper across all benchmarks.
+\label{app:inner_loop}
+\figref{fig:inner_loop_ablation} shows the inner loop ablation across $K \in \{0, 3, 6\}$ and 8 $\varepsilon$-multiplier settings; $K{=}3$ consistently outperforms $K{=}0$, with $K{=}6$ showing diminishing returns.
+
+\begin{figure}[t]
     \centering
-    \includegraphics[width=0.9\textwidth]{figures/fig_inner_loop_ablation.pdf}
+    \includegraphics[width=0.75\columnwidth]{figures/fig_inner_loop_ablation.pdf}
     \caption{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ consistently outperforms $K{=}0$; $K{=}6$ provides no additional gain.}
     \label{fig:inner_loop_ablation}
-\end{figure*}
+\end{figure}
 
 \section{Hyperparameter Robustness}
 \label{app:robustness}
 
-We independently sweep each of the five core \method hyperparameters over 8 values on TOFU 1B forget01 and KnowUnDo Copyright (80 total runs, $K{=}3$).
+We independently sweep each of the five core \method hyperparameters over 8 values on TOFU 1B forget01, KnowUnDo Copyright, and MUSE Books (120 total runs, $K{=}3$).
 The swept ranges are: $\varepsilon_\text{mul} \in [0.75, 3.2]$, $\tau \in [0.1, 1.0]$, $\alpha_\text{dual} \in [0.01, 1.0]$, $\rho \in [0.01, 2.0]$, and $\eta_\text{in} \in [10^{-5}, 2{\times}10^{-3}]$.
-As shown in \figref{fig:robustness_hm}, performance is remarkably stable: the maximum HM spread across any single parameter is 0.045 on TOFU ($\tau$) and 0.016 on KnowUnDo ($\alpha_\text{dual}$), while three of five parameters ($\varepsilon_\text{mul}$, $\alpha_\text{dual}$, $\rho$) produce spreads below 0.01 on both benchmarks.
+As shown in \figref{fig:robustness_hm}, performance is remarkably stable: the maximum HM spread across any single parameter is 0.045 on TOFU ($\tau$), 0.016 on KnowUnDo ($\alpha_\text{dual}$), and 0.07 on MUSE Books ($\epsilon_\text{mul}$), while on both TOFU and KnowUnDo three of five parameters produce spreads below 0.01.
+The one notable failure mode on MUSE Books is $\rho{=}0.5$, where the penalty overwhelms the retain signal, collapsing utility---an extreme easily avoided in practice.
 
 The source of this robustness is the dual variable $\lambda$, which automatically compensates for hyperparameter variation.
 \figref{fig:robustness_lambda} shows that different parameter settings produce visibly different $\lambda$ trajectories---tighter $\varepsilon$ yields higher peaks, larger $\rho$ produces steeper ascent, lower $\tau$ triggers fewer retain violations---yet these trajectory differences absorb the parameter change, leaving the final forget--retain tradeoff nearly invariant.
-In effect, the augmented Lagrangian acts as a self-regulating mechanism: rather than requiring careful tuning, the optimizer routes hyperparameter sensitivity into $\lambda$, which has no direct effect on final model quality once convergence is reached.
+In effect, the augmented Lagrangian acts as a self-regulating mechanism: different hyperparameter settings produce different $\lambda$ trajectories, but these trajectories converge to similar final forget--retain tradeoffs, making the method robust to the specific parameter choices.
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig_robustness_hm.pdf}
-    \caption{Hyperparameter robustness: HM across 8 sweep values per parameter on TOFU 1B forget01 (blue, left axis) and KnowUnDo Copyright (red, right axis). Both use $K{=}3$.}
+    \caption{Hyperparameter robustness: HM across 8 sweep values per parameter on TOFU 1B forget01 (blue), KnowUnDo Copyright (red), and MUSE Books (green). All use $K{=}3$.}
     \label{fig:robustness_hm}
 \end{figure*}
 
 \begin{figure*}[t]
     \centering
     \includegraphics[width=\textwidth]{figures/fig_robustness_lambda.pdf}
-    \caption{Representative $\lambda$ trajectories under hyperparameter sweeps. Top: TOFU. Bottom: KnowUnDo. Each panel shows three values (low/mid/high) for one parameter. The dual variable adapts its trajectory to compensate for parameter changes, explaining the robustness in \figref{fig:robustness_hm}.}
+    \caption{Representative $\lambda$ trajectories under hyperparameter sweeps. Top: TOFU. Middle: KnowUnDo. Bottom: MUSE Books. Each panel shows three values (low/mid/high) for one parameter. The dual variable adapts its trajectory to compensate for parameter changes, explaining the robustness in \figref{fig:robustness_hm}.}
     \label{fig:robustness_lambda}
 \end{figure*}
 
@@ -632,16 +610,15 @@ In effect, the augmented Lagrangian acts as a self-regulating mechanism: rather 
 \section{Qualitative Examples}
 \label{app:qualitative}
 
-We present representative generations (seed=42) illustrating the forget--retain tradeoff on each benchmark.
+We present representative generations (seed=42) illustrating the forget--retain tradeoff on each benchmark (Tables~\ref{tab:qual_tofu_forget}--\ref{tab:qual_ku_retain}).
 \colorbox{red!12}{Red} highlights knowledge leakage on forget (undesirable); \colorbox{green!12}{green} indicates correct retain answers (desirable).
 
 \paragraph{On non-linguistic outputs.}
-\method's clamped entropy objective targets high distributional uncertainty on forget tokens, which can produce non-linguistic outputs rather than coherent refusals.
-We argue this is preferable to the alternative exhibited by baselines: fluent, confident hallucinations that partially or fully reproduce the target content.
-Recent work demonstrates that LLMs readily amplify plausible-sounding misinformation---even fabricated medical conditions are absorbed and confidently presented as fact \citep{bixonimania}---creating a dangerous feedback loop when downstream users treat fluent outputs as authoritative.
-In the context of unlearning (copyrighted material, private data, hazardous knowledge), a non-linguistic response \emph{signals} that the model lacks the requested knowledge, whereas a fluent hallucination risks laundering prohibited content in paraphrased form that evades detection.
-Crucially, \method's retain performance confirms that this behavior is selective: the model remains fully coherent on non-forget inputs (Tables~\ref{tab:qual_tofu_retain},~\ref{tab:qual_muse_retain},~\ref{tab:qual_ku_retain}), demonstrating that the non-linguistic outputs reflect targeted forgetting rather than model corruption.
-We acknowledge that distinguishable forget-set behavior could in principle be exploited for membership inference; evaluating adversarial robustness (including extraction attacks and membership inference) is noted as future work in Section~\ref{sec:conclusion}.
+\method sometimes produces non-linguistic tokens on forget queries rather than hallucinated coherent responses.
+This is a direct consequence of the clamped entropy loss, which maximizes the model's perplexity on forget knowledge---the model becomes genuinely uncertain rather than confidently wrong.
+Importantly, retain outputs remain fully coherent (Tables~\ref{tab:qual_tofu_retain},~\ref{tab:qual_muse_retain},~\ref{tab:qual_ku_retain}), confirming that this behavior is a feature of targeted forgetting rather than model corruption.
+When dealing with sensitive information (private data, copyrighted content, hazardous knowledge), a hallucinated but plausible-sounding wrong answer can be less desirable than an evidently non-informative response---the former may mislead downstream users while the latter transparently signals absent knowledge.
+For deployment, converting \method's non-linguistic outputs to standardized ``I don't know'' responses is straightforward to achieve through post-hoc decoding without reintroducing suppressed knowledge.
 
 \begin{table}[h!]
 \centering

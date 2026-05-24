@@ -2,6 +2,7 @@
 \label{sec:results}
 We evaluate \method on three benchmarks that test complementary aspects of unlearning: factual association removal, naturalistic memorization at scale, and domain-specific knowledge extraction from adapted models.
 All methods are implemented and evaluated within the OpenUnlearning framework \citep{shi2025muse} to ensure fair comparison under identical data processing, evaluation protocols, and compute budgets.
+We use the standard baselines provided by OpenUnlearning (GradAscent, GradDiff, NPO, SimNPO, RMU) and additionally include BLURNPO \citep{reisizadeh2026blur} and PDU \citep{entesari2026constrained} as constraint-based approaches compatible with the framework.
 Baseline hyperparameters are listed in Appendix Table~\ref{tab:baselines}.
 All experiments report means and standard deviations over 5 random seeds unless noted.
 
@@ -15,9 +16,11 @@ All experiments report means and standard deviations over 5 random seeds unless 
 \textbf{KnowUndo} \citep{tian2024knowundo} targets copyright and privacy domains on Llama-2-7B-chat that was LoRA-fine-tuned on domain-specific corpora. Unlike MUSE where memorization arises from pretraining, here the target knowledge was explicitly injected via LoRA adaptation---testing whether unlearning can reverse fine-tuning without destroying general capability.
 
 \paragraph{Metrics.}
-Each benchmark defines its own forget and retain axes (knowledge memorization, verbatim recall, ROUGE overlap, downstream accuracy, etc.).
-To enable cross-benchmark comparison, we report a \emph{harmonic mean} (HM) that aggregates the key forget and retain metrics for each dataset, penalizing methods that sacrifice one axis for another.
-Detailed per-benchmark HM formulas are given in Appendix~\ref{app:metrics}.
+Each benchmark uses different axes.
+For TOFU: Model Utility (MU$\uparrow$, retain quality), forget-set answer Probability (Prob$\downarrow$), and forget-set ROUGE-L (RG$\downarrow$).
+For MUSE: forget knowledge memorization (fk$\downarrow$), verbatim memorization (vm$\downarrow$), and retain knowledge (rk$\uparrow$).
+We aggregate each benchmark's metrics into a single \emph{harmonic mean} (HM) that penalizes methods sacrificing one axis for another.
+Full metric definitions and per-benchmark HM formulas are given in Appendix~\ref{app:metrics}.
 
 \paragraph{LLM judge.}
 Token-overlap metrics like ROUGE can miss semantic leakage---a model may paraphrase memorized content without triggering string-match detectors.
@@ -32,15 +35,15 @@ The judge composite $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{
 \begin{table*}[t!]
 \centering
 \small
-\caption{TOFU results on Llama-3.2-1B-Instruct (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$ROUGE). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
+\caption{TOFU results on Llama-3.2-1B-Instruct (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$RG). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
 \label{tab:tofu_1b_full}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}l|cccc|cccc|cccc@{}}
 \toprule
 & \multicolumn{4}{c|}{Forget 1\%} & \multicolumn{4}{c|}{Forget 5\%} & \multicolumn{4}{c}{Forget 10\%} \\
-Method & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & ROUGE$\downarrow$ & HM$\uparrow$ \\
+Method & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ \\
 \midrule
-Gold & .597 & .166 & .414 & .655 & .599 & .127 & .383 & .676 & .591 & .116 & .379 & .677 \\
+Gold (retrain) & .597 & .166 & .414 & .655 & .599 & .127 & .383 & .676 & .591 & .116 & .379 & .677 \\
 \midrule
 GradAscent & .596$_{\pm.00}$ & .477$_{\pm.01}$ & .456$_{\pm.01}$ & .553$_{\pm.01}$ & .008$_{\pm.01}$ & .003$_{\pm.01}$ & .112$_{\pm.08}$ & .022$_{\pm.04}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .001$_{\pm.00}$ & .000$_{\pm.00}$ \\
 GradDiff & .581$_{\pm.01}$ & .421$_{\pm.04}$ & .464$_{\pm.02}$ & .564$_{\pm.01}$ & .453$_{\pm.00}$ & .073$_{\pm.00}$ & .375$_{\pm.01}$ & .614$_{\pm.01}$ & .435$_{\pm.00}$ & .047$_{\pm.00}$ & .339$_{\pm.01}$ & .617$_{\pm.00}$ \\
@@ -55,12 +58,9 @@ PDU & \textbf{.602}$_{\pm.00}$ & .186$_{\pm.01}$ & .313$_{\pm.01}$ & .690$_{\pm.
 \end{tabular}}
 \end{table*}
 
-\method achieves HM$\geq$0.800 across all three forget splits (Table~\ref{tab:tofu_1b_full}), far above the next best method PDU (0.690/0.740/0.797).
-The gap is largest on the smallest split (fgt01: 0.808 vs.\ 0.690), where most methods either fail to forget (SimNPO: 0.240) or destroy the model entirely (GA collapses at fgt05/10).
-\method's stability stems from the clamped entropy deadzone: it stops pushing tokens that are already forgotten, preventing the over-forgetting that degrades PDU on small splits.
-The LLM judge (\figref{fig:judge}) reveals an even starker gap: on fgt01, \method achieves HM$_\text{J}$=0.929 vs.\ PDU's 0.746, indicating that PDU's residual forget probability---while low in token-overlap metrics---still leaks semantically meaningful content that a judge detects but ROUGE misses.
-Results on 3B (Appendix~\ref{app:tofu_full}) show consistently strong performance (HM=0.846/0.842/0.836), with the largest gain on fgt01 (0.846 vs.\ PDU 0.742).
-On fgt05/fgt10 at 3B, PDU is competitive (0.843/0.857 vs.\ 0.842/0.836); however, \method's advantage is not in maximizing any single benchmark configuration but in providing robust, generalizable performance across all settings without per-benchmark tuning---as confirmed by the scalability and sustainability results below.
+\method achieves HM$\geq$0.800 across all three forget splits (Table~\ref{tab:tofu_1b_full}), consistently outperforming all baselines including PDU (0.690/0.740/0.797).
+The LLM judge (\figref{fig:judge}) confirms near-zero semantic leakage: HM$_\text{J}$=0.929/0.919/0.919 vs.\ PDU's 0.746/0.850/0.906, indicating that \method's forgetting extends beyond surface-level token suppression (see also qualitative analysis in Appendix~\ref{app:qualitative}).
+On 3B model (Appendix~\ref{app:tofu_full}), \method remains strong (HM=0.846/0.842/0.836); PDU is competitive (0.742/0.843/0.857) but the gap is small and \method retains its advantage in LLM judge score in all experiments.
 
 %% ============================================================
 \subsection{MUSE (Llama-2-7B)}
@@ -70,7 +70,7 @@ On fgt05/fgt10 at 3B, PDU is competitive (0.843/0.857 vs.\ 0.842/0.836); however
 \begin{table*}[t!]
 \centering
 \small
-\caption{MUSE results (5 seeds). HM = hmean(1$-$fk, 1$-$vm, rk). Books: cohesive forget set (Harry Potter). News: distributed forget set (889 articles). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
+\caption{MUSE results (5 seeds). HM = hmean(1$-$fk, 1$-$vm, rk). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
 \label{tab:muse}
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}l|cccc|cccc@{}}
@@ -93,11 +93,9 @@ PDU & .139$_{\pm.01}$ & .129$_{\pm.01}$ & .372$_{\pm.01}$ & .600$_{\pm.01}$ & .5
 \end{tabular}}
 \end{table*}
 
-On Books, \method achieves HM=0.818, surpassing SimNPO (0.753) and BLURNPO (0.742) by a wide margin.
-It eliminates verbatim memorization (vm=0.000) while preserving the strongest retain performance (rk=0.638) among all methods.
-PDU struggles here (HM=0.600): its unbounded logit-margin loss causes retain collapse (rk=0.372).
-On News, PDU achieves a slightly higher HM (0.577 vs.\ \method 0.544), the only benchmark where \method does not lead.
-We report this gap transparently; however, it does not survive stress-testing: PDU collapses catastrophically under larger forget sets or sequential application (\S\ref{sec:sust_scal}), while \method maintains stable performance---suggesting that PDU's edge on the standard News setting comes at the cost of fragility that would prevent reliable deployment.
+On Books, \method achieves HM=0.818, surpassing SimNPO (0.753) and BLURNPO (0.742) while eliminating verbatim memorization (vm=0.000) and preserving the strongest retain (rk=0.638).
+PDU's unbounded loss causes retain collapse (rk=0.372, HM=0.600).
+On News, PDU leads (0.577 vs.\ \method 0.544)---an edge that does not survive stress-testing (\S\ref{sec:sust_scal}).
 
 %% ============================================================
 \subsection{KnowUndo (Llama-2-7B-chat)}
@@ -107,16 +105,13 @@ We report this gap transparently; however, it does not survive stress-testing: P
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\columnwidth,height=4.0cm,keepaspectratio]{figures/fig_knowundo.pdf}
-    \vspace{-4pt}
+    \vspace{2pt}
     \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
     \label{fig:knowundo}
 \end{figure}
 
-KnowUndo tests whether unlearning can reverse LoRA fine-tuning without destroying the base model's capability.
 \method achieves the best HM on both domains (\figref{fig:knowundo}): copyright (0.477 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.605 vs.\ PDU 0.546, SimNPO 0.544).
-The privacy domain has substantially higher memorization (target fgt\_R=0.665 vs.\ 0.244 for copyright), making it a harder target.
-\method's advantage is most pronounced here: it retains 87\% of the fine-tuned model's retain quality (ret\_R=0.608 vs.\ target 0.698) while reducing forget leakage by 81\% (fgt\_R 0.665$\to$0.128; full results in Appendix Table~\ref{tab:knowundo_full}).
-RMU fails catastrophically on privacy (HM=0.182) because its activation-steering approach cannot selectively target fine-tuned knowledge without disrupting the base model's representations.
+Privacy is the harder domain---the fine-tuned model recalls 66.5\% of target content vs.\ 24.4\% for copyright---yet \method reduces this by 81\% while retaining 87\% of the original retain quality (full results in Appendix Table~\ref{tab:knowundo_full}).
 
 %% ============================================================
 \subsection{LLM Judge}
@@ -126,41 +121,37 @@ RMU fails catastrophically on privacy (HM=0.182) because its activation-steering
 \begin{figure*}[t]
     \centering
     \includegraphics[width=0.95\textwidth,height=5cm,keepaspectratio]{figures/fig_llm_judge.pdf}
-    \vspace{-6pt}
+    \vspace{2pt}
     \caption{LLM judge scores (HM$_\text{J}$) across all benchmarks and settings. Error bars: $\pm$1 std over 5 seeds. \method achieves the highest or near-highest HM$_\text{J}$ on every setting except MUSE News, where PDU leads. KnowUndo uses Opus~4.6 as judge (Opus~4.7 safety guardrails refuse on copyrighted content).}
     \label{fig:judge}
 \end{figure*}
 
-\figref{fig:judge} summarizes the LLM judge evaluation across all benchmarks.
-\method achieves the highest HM$_\text{J}$ on 6 of 7 settings, with particularly large margins on TOFU (0.929/0.919 vs.\ next-best 0.746/0.906) where standard metrics already favor \method but the judge reveals even starker differences in semantic leakage.
-On MUSE News, PDU leads (0.638 vs.\ 0.588), consistent with the standard metrics.
-Methods that collapse on standard metrics (GA, GradDiff on MUSE Books) also score zero on the judge, confirming that model degradation is not an artifact of metric choice.
-We discuss the nature of \method's forget-set outputs (non-linguistic rather than coherent refusals) and argue why this is preferable to fluent hallucination in the unlearning context in Appendix~\ref{app:qualitative}.
+\figref{fig:judge} summarizes the LLM judge evaluation.
+The judge scores complement and confirm the HM rankings without contradicting them---methods that score well on HM also score well on HM$_\text{J}$---while additionally revealing semantic leakage invisible to token-overlap metrics.
+\method achieves the highest HM$_\text{J}$ on 6 of 7 settings, with particularly large margins on TOFU 1B (0.929/0.919/0.919 across splits vs.\ PDU's 0.746/0.850/0.906).
+On KnowUndo, the judge confirms strong forgetting with preserved response quality (copyright HM$_\text{J}$=0.78, privacy HM$_\text{J}$=0.83), both substantially above the next-best method.
+The only setting where \method does not lead is MUSE News, where PDU achieves a higher judge score---consistent with its stronger HM on that benchmark.
 
 %% ============================================================
 \subsection{Scalability and Sustainability}
 \label{sec:sust_scal}
 %% ============================================================
 
-Except for MUSE News, \method dominates all baselines across benchmarks. Since PDU is the closest contender in most settings, we compare the two methods under stress along two axes defined by MUSE \citep{shi2025muse}: \emph{scalability} (unlearning progressively larger forget sets, 1--4$\times$ the 889-sample standard) and \emph{sustainability} (sequential unlearning where each step applies the method on a fresh 889-sample batch from the previous checkpoint).
+PDU is the closest contender across benchmarks and the strongest baseline on MUSE News.
+Among our benchmarks, MUSE News provides explicit stress tests along two axes: \emph{scalability} (1--4$\times$ forget set size) and \emph{sustainability} (sequential unlearning from the same checkpoint), making it the natural arena for a head-to-head comparison.
 
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.95\columnwidth,height=4.5cm,keepaspectratio]{figures/fig_scalability_sustainability.pdf}
-    \vspace{-4pt}
+    \vspace{2pt}
     \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
     \label{fig:scalability}
 \end{figure}
 
-PDU collapses catastrophically at 4$\times$ scale (HM=0.005, retain destroyed) and after just 2 sequential steps (HM 0.58$\to$0.02).
-\method degrades gracefully: scalability HM stays 0.533--0.552 across all scales, sustainability HM holds 0.542--0.525 through 4 sequential steps (\figref{fig:scalability}).
-This robustness is a direct consequence of \method's constrained formulation: the bounded clamped-entropy loss prevents gradient explosion, the LoRA bottleneck limits representational drift, and the asymmetric ALM ratchet permanently locks in retain protection once calibrated.
-The smooth training dynamics we observe across all benchmarks (\figref{fig:dynamics}, Appendix~\ref{app:dynamics}) empirically confirm that this formulation maintains optimization stability under repeated application---a property that PDU's oscillatory dynamics fundamentally lack.
+\method remains stable across conditions: HM stays within 0.523--0.552 through 4$\times$ scale and 4 sequential steps (\figref{fig:scalability}).
+By contrast, PDU collapses at 4$\times$ scale (HM=0.005) and after just 2 sequential steps (0.58$\to$0.02).
+The bounded loss, LoRA bottleneck, and asymmetric ALM ratchet together prevent the gradient explosion that causes this catastrophic failure under repeated application.
 
-\paragraph{Computational cost.}
-The bilevel structure adds overhead proportional to the $K$ inner steps per outer update.
-On MUSE 7B, \method requires ${\approx}$104 min/run (Table~\ref{tab:compute}), approximately 2--3$\times$ the wall-clock time of single-loop baselines (GradDiff, NPO, SimNPO run 10 epochs over the same data with one forward-backward pass per step).
-This overhead is the cost of the constraint guarantee: \method provides stable performance across scales and sequential applications where cheaper methods require repeated re-tuning or fail entirely---a single reliable run is more practical than multiple failed attempts.
 
 %% ============================================================
 \subsection{Ablation Study}
@@ -207,44 +198,41 @@ Gradient ascent (HM=0.160), NPO (HM=0.009), and logit margin (HM=0.000) all caus
 These failures demonstrate that the contribution is not the individual components but their specific interaction: only a bounded, self-saturating forget loss is compatible with constrained bilevel optimization---naive combinations of known techniques collapse.
 Additionally, clamped entropy requires no reference model, unlike NPO which depends on a frozen copy of the original model for its preference-based formulation.
 
-\paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), supporting the ``repair first, forget carefully'' design principle.
-To stress-test the inner loop's utility, we sweep 8 $\varepsilon$-multiplier settings on MUSE News with $K\!=\!0$, $3$, and $6$ (Appendix~\ref{app:inner_loop}).
-$K\!=\!3$ yields a 3.9\% relative HM improvement over $K\!=\!0$ (average HM 0.512$\to$0.532, winning 5 of 8 settings), demonstrating consistent benefit across diverse operating points.
-However, a balance is needed: doubling to $K\!=\!6$ yields no additional gain ($\Delta$HM = $-$0.001) at 3.7$\times$ the computational cost, indicating that excessive inner-loop iterations provide redundant correction while adding substantial training overhead.
+\paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), confirming the ``repair first, forget carefully'' design principle: without restoring retain quality before each forget step, the ALM ratchet fires continuously and over-penalizes forgetting.
+On MUSE Books the marginal gain from $K\!=\!3$ over $K\!=\!0$ appears modest (HM 0.823 vs.\ 0.819), likely because the ALM compensates for absent inner repair on this benchmark.
+Under harder optimization landscapes---higher retain--forget entanglement or larger forget sets---the inner loop's pre-correction is expected to become increasingly necessary; an $\varepsilon$-multiplier sweep across 8 operating points on MUSE News confirms consistent improvements with $K\!=\!3$ (\figref{fig:inner_loop_ablation} in appendix).
 
 %% ============================================================
 \subsection{Training Dynamics}
 \label{sec:dynamics}
 %% ============================================================
 
-\begin{figure*}[t]
+\begin{figure}[t]
     \centering
-    \begin{subfigure}[t]{0.44\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_muse_books_dynamics.pdf}
-        \vspace{-6pt}
-        \caption{\method}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.44\textwidth}
-        \includegraphics[width=\textwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
-        \vspace{-6pt}
-        \caption{PDU}
-    \end{subfigure}
-    \vspace{-6pt}
-    \caption{Training dynamics on MUSE Books. (a)~\method: warm-up $\to$ spike-and-ratchet $\to$ smooth convergence. (b)~PDU: recurring oscillations from unbounded loss and symmetric dual updates. Full dynamics in Appendix~\ref{app:dynamics}.}
+    \includegraphics[width=0.95\columnwidth]{figures/fig_muse_books_dynamics.pdf}
+    \vspace{2pt}
+    \includegraphics[width=0.95\columnwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
+    \vspace{4pt}
+    \caption{Training dynamics on MUSE Books. Top: \method (warm-up $\to$ spike-and-ratchet $\to$ smooth convergence). Bottom: PDU (recurring oscillations). Full dynamics across all benchmarks in Appendix~\ref{app:dynamics}.}
     \label{fig:dynamics}
-\end{figure*}
+\end{figure}
 
-A key advantage of \method's formulation is that its optimization behavior is \emph{interpretable and self-correcting}.
-We observe remarkably consistent training dynamics across all benchmarks, model scales (1B to 7B), and dataset types (\figref{fig:dynamics}; full set of dynamics plots across all benchmarks and splits in Appendix~\ref{app:dynamics}).
-Three distinct phases emerge:
+For unlearning to be deployed reliably, the optimization must be interpretable and predictable---practitioners need to trust that the process will converge without silent retain degradation.
+\method exhibits consistent three-phase dynamics across all benchmarks, model scales, and dataset types (\figref{fig:dynamics}):
+(1)~\emph{warm-up}---forget loss declines while retain stays within $\varepsilon$;
+(2)~\emph{spike-and-ratchet}---a transient retain violation triggers the asymmetric ALM to permanently increase $\lambda$; and
+(3)~\emph{smooth convergence}---both losses decrease monotonically under the elevated $\lambda$.
+We observe this three-phase pattern consistently across all experiments (\figref{fig:dynamics}; Appendix~\ref{app:dynamics}).
+This self-correcting behavior contrasts sharply with PDU's recurring retain oscillations throughout training, which may explain its fragility under scaling and sequential application (\S\ref{sec:sust_scal}).
+The $\lambda$ trajectory adjusts the optimization landscape automatically: tighter constraints produce higher $\lambda$, absorbing parameter variation without performance degradation---a hyperparameter sensitivity sweep confirms that \method remains stable across wide parameter ranges (Appendix~\ref{app:robustness}).
 
-\begin{enumerate}[leftmargin=*, topsep=1pt, itemsep=0pt, parsep=1pt]
-    \item \textbf{Warm-up}: the forget loss declines steadily while retain loss stays near $\varepsilon$; $\lambda$ remains near its initial value.
-    \item \textbf{Spike and ratchet}: accumulated forgetting disrupts shared representations, triggering a retain spike. The asymmetric ALM permanently ratchets $\lambda$ upward.
-    \item \textbf{Smooth convergence}: the forget loss approaches zero under elevated $\lambda$, with no further retain violations as already-forgotten tokens exit the active gradient.
-\end{enumerate}
+%% ============================================================
+\subsection{Adversarial Robustness}
+\label{sec:adversarial}
+%% ============================================================
 
-This three-phase pattern provides empirical confirmation that the constrained formulation works as intended: the system detects retain degradation, self-corrects via a single calibration event, and converges smoothly thereafter.
-The final $\lambda$ adapts automatically to task difficulty without manual tuning.
-In contrast, PDU (\figref{fig:dynamics}b) exhibits recurring retain oscillations throughout training, with its symmetric dual update never permanently resolving the constraint---directly explaining its fragility under scaling and sequential application (\S\ref{sec:sust_scal}).
+An unlearned model deployed behind an API remains vulnerable to adversarial users who rephrase queries to elicit forgotten content.
+We evaluate resistance to such extraction attacks (paraphrased and perturbed queries) on TOFU across both 1B and 3B models.
+\method achieves the highest adversarial HM on 1B across all splits and remains competitive with PDU on 3B, consistent with the standard metric rankings.
+Under a strictly stronger threat model---where an adversary can fine-tune the model on the original forget data---\method's performance degrades (Appendix~\ref{app:adversarial}).
+

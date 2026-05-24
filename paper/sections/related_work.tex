@@ -10,17 +10,17 @@ RMU \citep{li2024wmdp} steers activations toward random targets for forget data.
 What these approaches share is the absence of a \emph{bounded} forget loss with a per-token stopping criterion: GA diverges, NPO damps but never reaches zero, and unclamped entropy \citep{yuan2025closer} pushes indefinitely.
 
 \paragraph{Parameter-efficient unlearning.}
-LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization (LoKU; \citealt{cha2025loku}) and importance-weighted masking \citep{jia2024wagle}.
+LoRA \citep{hu2022lora} has been applied to unlearning via Fisher-informed initialization (LoKU; \citealt{cha2025loku}), importance-weighted masking \citep{jia2024wagle}, Fisher-based efficiency improvements (VILA; \citealt{kim2025improving}), and gradient-based attribution (OBLIVIATE; \citealt{xu2025obliviate}).
 In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottleneck itself prevents catastrophic drift, analogous to how EWC \citep{kirkpatrick2017overcoming} protects important weights in continual learning but applied structurally rather than via per-weight penalties.
-
-\paragraph{Benchmarks.}
-TOFU \citep{maini2024tofu} tests factual associations with synthetic biographies and provides a gold retrained model for reference.
-MUSE \citep{shi2025muse} tests naturalistic memorization at scale with explicit scalability and sustainability stress tests.
-KnowUndo \citep{tian2024knowundo} targets domain-specific unlearning (copyright, privacy) from LoRA-fine-tuned models.
-We evaluate on all three for complementary coverage.
 
 \paragraph{Bilevel and constrained optimization.}
 BLUR \citep{reisizadeh2026blur} places forget in the lower level and retain in the upper, resolving conflicts via gradient projection.
 PDU \citep{entesari2026constrained} uses a linear Lagrangian with logit-margin loss and symmetric dual updates.
 \citet{cheng2026unlearning} apply ALM with an equality constraint on vision models only.
 \method differs: (a)~an \emph{inequality} constraint that never penalizes retain below $\varepsilon$; (b)~\emph{asymmetric} dual updates producing ratchet behavior; (c)~retain in the \emph{inner loop} (repair-first); and (d)~clamped entropy as the forget loss---bounded with a hard per-token deadzone.
+
+\paragraph{Benchmarks.}
+TOFU \citep{maini2024tofu} tests factual associations with synthetic biographies and provides a gold retrained model for reference.
+MUSE \citep{shi2025muse} tests naturalistic memorization at scale with explicit scalability and sustainability stress tests.
+KnowUndo \citep{tian2024knowundo} targets domain-specific unlearning (copyright, privacy) from LoRA-fine-tuned models.
+We evaluate on all three for complementary coverage.

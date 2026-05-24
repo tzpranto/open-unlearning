@@ -87,7 +87,7 @@ On top of this, we apply an \emph{asymmetric} dual update:
     \end{cases}
     \label{eq:dual_update}
 \end{equation}
-where $\alpha \ll 1$. The slower decay means that once a retain violation drives $\lambda$ up, it stays elevated---preventing the repeated oscillation cycles observed with symmetric updates (PDU \citep{entesari2026constrained}; see \figref{fig:dynamics}).
+where $\alpha \ll 1$. The slower decay means that once a retain violation drives $\lambda$ up, it stays elevated---preventing the repeated oscillation cycles observed with symmetric updates (PDU \citep{entesari2026constrained}; see Appendix~\ref{app:dynamics}).
 
 Rather than hand-tuning $\varepsilon$, we set it as a fraction ($\varepsilon_{\text{mul}}$) of the model's average retain loss over one inner loop, so the constraint budget scales with the model's own retain difficulty and requires no manual calibration across benchmarks (Appendix~\ref{app:inner_loop}).
 
