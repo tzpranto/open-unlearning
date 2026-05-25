@@ -7,7 +7,8 @@ Together, these produce a self-correcting system whose three-phase dynamics (war
 
 \method achieves strong results across TOFU, MUSE, and KnowUndo, and maintains stable performance under $4\times$ scaling and 4 sequential unlearning steps, confirming that the constrained formulation provides genuine robustness beyond single-setting gains.
 
-\paragraph{Limitations}
+\section{Limitations}
+\label{sec:limitations}
 \method targets factual and knowledge-level unlearning; it has not been tested on conceptual or representation-level domain removal (e.g., all unsafe biology knowledge) where forget--retain entanglement may exceed what LoRA can selectively target.
 Second, while \method resists black-box extraction attacks, it is susceptible to re-learning attacks, a strictly stronger threat model that assumes an adversary with both white-box weight access and possession of the original forget data.
 Finally, \method has only been evaluated on text-only LLMs; its effectiveness on multimodal models remains untested.
