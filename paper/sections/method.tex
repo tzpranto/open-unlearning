@@ -24,7 +24,48 @@ The low-rank bottleneck limits what the update can express, preventing catastrop
 \subsection{Bilevel Formulation}
 \label{sec:bilevel}
 
-We decompose the problem into two nested optimization levels: \emph{retain in the inner loop, forget in the outer loop}.
+We cast unlearning as a constrained bilevel optimization problem:
+\begin{align}
+\min_{\thetav} \quad & \Loss_{\text{fgt}}(M_{\thetav^*};\, \Dforget) \nonumber\\
+\text{s.t.} \quad & \Loss_{\text{CE}}(M_{\thetav^*};\, \Dretain) \leq \varepsilon \label{eq:bilevel}\\
+\text{where} \quad & \thetav^* \approx \argmin_{\thetav}\; \Loss_{\text{CE}}(M_{\thetav};\, \Dretain) \nonumber
+\end{align}
+The upper level drives forgetting while the lower level ensures retain performance stays within budget $\varepsilon$.
+In practice, the lower-level $\argmin$ is approximated by $K$ fast SGD steps (inner loop), and the upper-level constraint is enforced via an augmented Lagrangian (outer loop); \algref{alg:lora_bial} gives the full procedure.
+
+\begin{algorithm}[t]
+\begin{nolinenumbers}
+\small
+\caption{\method: Bilevel Augmented Lagrangian Unlearning}
+\label{alg:lora_bial}
+\begin{algorithmic}[1]
+\REQUIRE Model $M$ with frozen weights $\thetav_0$, $\Dforget$, $\Dretain$
+\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_0$, $\alpha$, $\tau$, $T$
+\STATE Attach LoRA adapters to $M$; $\thetav \leftarrow$ LoRA params
+\STATE $\lambda \leftarrow \lambda_0$
+\STATE $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \frac{1}{K}\sum_{k=1}^K \Loss_{\text{CE}}^{(k)}(\Dretain)$
+\FOR{$t = 1$ \TO $T$}
+    \STATE \textbf{Inner loop} (retain repair):
+    \FOR{$k = 1$ \TO $K$}
+        \STATE $\thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_{\thetav} \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}_{\text{ret}})$
+    \ENDFOR
+    \STATE \textbf{Forget loss} (clamped entropy):
+    \STATE $\Loss_{\text{fgt}} \leftarrow \frac{1}{N}\sum_{i=1}^{N} \max(0,\; \tau \log V - H(p_i))$
+    \STATE \textbf{Outer loss} (augmented Lagrangian):
+    \STATE $r \leftarrow \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}}) - \varepsilon$
+    \STATE $\Loss_{\text{outer}} \leftarrow \Loss_{\text{fgt}} + \lambda\, r + \frac{\rho}{2}[\max(0, r)]^2$
+    \STATE $\thetav \leftarrow \thetav - \eta_{\text{out}} \cdot \text{Adam}(\nabla_{\thetav} \Loss_{\text{outer}})$
+    \STATE \textbf{Dual update} (asymmetric ratchet):
+    \IF{$r > 0$}
+        \STATE $\lambda \leftarrow \lambda + \rho \,|r|$
+    \ELSE
+        \STATE $\lambda \leftarrow \lambda - \alpha\rho \,|r|$
+    \ENDIF
+\ENDFOR
+\RETURN $M$ with trained LoRA adapters
+\end{algorithmic}
+\end{nolinenumbers}
+\end{algorithm}
 
 \paragraph{Inner loop (retain preservation).}
 For each outer step, we run $K$ SGD steps on the retain set:
@@ -56,7 +97,7 @@ For this structure to work, the forget loss in the outer loop must be well-behav
 \subsection{Clamped Entropy Loss}
 \label{sec:clamped_entropy}
 
-Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations apply nonzero gradients to every token at every step, even those already near-uniform---needlessly perturbing shared representations.
+Entropy maximization as a forget objective is well-known \citep{yuan2025closer}, but unclamped formulations apply nonzero gradients to every token at every step, even those already near-uniform, needlessly perturbing shared representations.
 We introduce \emph{clamped entropy}, which defines when a token is ``sufficiently forgotten'' and stops optimizing it:
 \begin{equation}
     \Loss_{\text{forget}} = \frac{1}{N} \sum_{t=1}^{N} \max\!\big(0,\; \tau \cdot H_{\max} - H(p_t)\big)
@@ -87,45 +128,10 @@ On top of this, we apply an \emph{asymmetric} dual update:
     \end{cases}
     \label{eq:dual_update}
 \end{equation}
-where $\alpha \ll 1$. The slower decay means that once a retain violation drives $\lambda$ up, it stays elevated---preventing the repeated oscillation cycles observed with symmetric updates (PDU \citep{entesari2026constrained}; see Appendix~\ref{app:dynamics}).
+where $\alpha \ll 1$. The slower decay means that once a retain violation drives $\lambda$ up, it stays elevated, preventing the repeated oscillation cycles observed with symmetric updates (PDU \citep{entesari2026constrained}; see Appendix~\ref{app:dynamics}).
 
 Rather than hand-tuning $\varepsilon$, we set it as a fraction ($\varepsilon_{\text{mul}}$) of the model's average retain loss over one inner loop, so the constraint budget scales with the model's own retain difficulty and requires no manual calibration across benchmarks (Appendix~\ref{app:inner_loop}).
 
 \paragraph{Convergence criterion.}
-Training terminates when an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change drops below a fraction of its peak---indicating that remaining tokens have entered the deadzone. A safety cap $T$ prevents runaway training (Appendix~\ref{app:hparams}).
+Training terminates when an exponential moving average of the per-step $\Loss_{\text{fgt}}$ change drops below a fraction of its peak, indicating that remaining tokens have entered the deadzone. A safety cap $T$ prevents runaway training (Appendix~\ref{app:hparams}).
 
-\subsection{Algorithm Summary}
-
-Algorithm~\ref{alg:lora_bial} summarizes the complete procedure: each outer step first runs $K$ inner retain-repair steps, then computes the augmented Lagrangian outer loss, and finally updates the dual variable asymmetrically.
-
-\begin{algorithm}[t]
-\small
-\caption{\method: Bilevel Augmented Lagrangian Unlearning}
-\label{alg:lora_bial}
-\begin{algorithmic}[1]
-\REQUIRE Model $M$ with frozen weights $\thetav_0$, $\Dforget$, $\Dretain$
-\REQUIRE Hyperparams: $K$, $\eta_{\text{in}}$, $\eta_{\text{out}}$, $\varepsilon_{\text{mul}}$, $\rho$, $\lambda_0$, $\alpha$, $\tau$, $T$
-\STATE Attach LoRA adapters to $M$; $\thetav \leftarrow$ LoRA params
-\STATE $\lambda \leftarrow \lambda_0$
-\STATE $\varepsilon \leftarrow \varepsilon_{\text{mul}} \cdot \frac{1}{K}\sum_{k=1}^K \Loss_{\text{CE}}^{(k)}(\Dretain)$
-\FOR{$t = 1$ \TO $T$}
-    \STATE \textbf{Inner loop} (retain repair):
-    \FOR{$k = 1$ \TO $K$}
-        \STATE $\thetav \leftarrow \thetav - \eta_{\text{in}} \nabla_{\thetav} \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}_{\text{ret}})$
-    \ENDFOR
-    \STATE \textbf{Forget loss} (clamped entropy):
-    \STATE $\Loss_{\text{fgt}} \leftarrow \frac{1}{N}\sum_{i=1}^{N} \max(0,\; \tau \log V - H(p_i))$
-    \STATE \textbf{Outer loss} (augmented Lagrangian):
-    \STATE $r \leftarrow \Loss_{\text{CE}}(M_{\thetav}; \mathcal{B}'_{\text{ret}}) - \varepsilon$
-    \STATE $\Loss_{\text{outer}} \leftarrow \Loss_{\text{fgt}} + \lambda\, r + \frac{\rho}{2}[\max(0, r)]^2$
-    \STATE $\thetav \leftarrow \thetav - \eta_{\text{out}} \cdot \text{Adam}(\nabla_{\thetav} \Loss_{\text{outer}})$
-    \STATE \textbf{Dual update} (asymmetric ratchet):
-    \IF{$r > 0$}
-        \STATE $\lambda \leftarrow \lambda + \rho \,|r|$
-    \ELSE
-        \STATE $\lambda \leftarrow \lambda - \alpha\rho \,|r|$
-    \ENDIF
-\ENDFOR
-\RETURN $M$ with trained LoRA adapters
-\end{algorithmic}
-\end{algorithm}

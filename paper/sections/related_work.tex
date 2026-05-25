@@ -3,8 +3,8 @@
 
 \paragraph{LLM unlearning methods.}
 Machine unlearning originated in the classification setting \citep{cao2015towards, bourtoule2021machine}; see \citet{liu2024survey, blanco2025digital} for surveys.
-Early approaches used Fisher information to scrub data influence \citep{golatkar2020eternal, golatkar2020forgetting} and influence functions \citep{koh2017understanding} to identify responsible training points---later extended to iterative LLM unlearning by SOUL \citep{jia2024soul}---but these do not transfer directly to autoregressive LLMs at scale.
-For LLMs, gradient ascent (GA) \citep{jang2023knowledge} maximizes the forget loss but diverges and destroys coherence; GradDiff \citep{yao2024large} adds retain cross-entropy but still degrades; and \citet{eldan2023whos} demonstrated approximate unlearning via label replacement.
+Early approaches used Fisher information to scrub data influence \citep{golatkar2020eternal, golatkar2020forgetting} and influence functions \citep{koh2017understanding} to identify responsible training points (later extended to iterative LLM unlearning by SOUL; \citealt{jia2024soul}), but these do not transfer directly to autoregressive LLMs at scale.
+For LLMs, gradient ascent (GA) \citep{jang2023knowledge} maximizes the forget loss but diverges and destroys coherence; GradDiff \citep{yao2024large} adds retain cross-entropy but still degrades; and \citet{eldan2023whos} demonstrated approximate unlearning by fine-tuning on alternative token predictions.
 Preference-based methods---NPO \citep{zhang2024negative}, SimNPO \citep{fan2025simplicity}, NGDiff \citep{bu2025unlearning}---collapse more gracefully but saturate without converging to a well-defined target.
 RMU \citep{li2024wmdp} steers activations toward random targets for forget data.
 What these approaches share is the absence of a \emph{bounded} forget loss with a per-token stopping criterion: GA diverges, NPO damps but never reaches zero, and unclamped entropy \citep{yuan2025closer} pushes indefinitely.
@@ -17,7 +17,7 @@ In \method, LoRA serves as a \emph{structural constraint}: the low-rank bottlene
 BLUR \citep{reisizadeh2026blur} places forget in the lower level and retain in the upper, resolving conflicts via gradient projection.
 PDU \citep{entesari2026constrained} uses a linear Lagrangian with logit-margin loss and symmetric dual updates.
 \citet{cheng2026unlearning} apply ALM with an equality constraint on vision models only.
-\method differs: (a)~an \emph{inequality} constraint that never penalizes retain below $\varepsilon$; (b)~\emph{asymmetric} dual updates producing ratchet behavior; (c)~retain in the \emph{inner loop} (repair-first); and (d)~clamped entropy as the forget loss---bounded with a hard per-token deadzone.
+\method differs: (a)~an \emph{inequality} constraint that never penalizes retain below $\varepsilon$; (b)~\emph{asymmetric} dual updates producing ratchet behavior; (c)~retain in the \emph{inner loop} (repair-first); and (d)~clamped entropy as the forget loss, which is bounded with a hard per-token deadzone.
 
 \paragraph{Benchmarks.}
 TOFU \citep{maini2024tofu} tests factual associations with synthetic biographies and provides a gold retrained model for reference.
