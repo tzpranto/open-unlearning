@@ -95,28 +95,13 @@ With $\tau = 0.7$, forget tokens need only reach $70\%$ of maximum entropy. The 
 \label{app:details}
 
 \subsection{Data}
-
-\begin{table}[t]
-\centering
-\small
-\begin{tabular}{lcc}
-\toprule
-& \textbf{News} & \textbf{Books} \\
-\midrule
-Forget samples & 889 & 554 \\
-Retain samples & 1,777 & 1,108 \\
-Max sequence length & 2,048 & 2,048 \\
-\bottomrule
-\end{tabular}
-\caption{MUSE data statistics.}
-\label{tab:data_stats}
-\end{table}
+\label{app:data}
 
 All experiments use 5 random seeds (42, 123, 456, 789, 1024) and report mean $\pm$ standard deviation.
 
-For TOFU \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and 3B-Instruct across three forget splits (1\%/5\%/10\%).
-For MUSE \citep{shi2025muse} (News and Books splits), we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models.
-For KnowUndo \citep{tian2024knowundo}, we use Llama-2-7B-chat on copyright and privacy domains.
+For \textbf{TOFU} \citep{maini2024tofu}, we use Llama-3.2-1B-Instruct and 3B-Instruct across three forget splits (1\%/5\%/10\%) of the 4{,}000 QA pairs: fgt01/ret99 (40 forget / 3{,}960 retain), fgt05/ret95 (200 / 3{,}800), and fgt10/ret90 (400 / 3{,}600). The held-out \texttt{real\_authors} (100) and \texttt{world\_facts} (117) probes are used for utility evaluation.
+For \textbf{MUSE} \citep{shi2025muse}, we use Llama-2-7b-hf \citep{touvron2023llama} with the provided target and gold retrained models on the News split (889 forget / 1{,}777 retain) and Books split (554 / 1{,}108), at max sequence length 2{,}048.
+For \textbf{KnowUndo} \citep{tian2024knowundo}, we use Llama-2-7B-chat on the Copyright domain (403 train / 74 val forget; 901 / 212 retain) and Privacy domain (400 / 110 forget; 441 / 108 retain).
 
 \subsection{Metric Definitions}
 \label{app:metrics}
@@ -760,4 +745,15 @@ PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
 \end{tabular}
 \end{minipage}
 \end{table*}
+
+\section{Use of AI Assistants}
+\label{app:ai_disclosure}
+
+In accordance with the ACL policy on the use of AI assistants, we disclose the following:
+
+\paragraph{Tool.} Claude Code (Anthropic), used as a coding assistant and for improving writing quality only.
+
+\paragraph{Scope of use.} Claude Code was used for: (1)~implementation of training loops, evaluation scripts, and figure-generation code; (2)~stylometric improvements to text written by the authors, without adding or removing any scientific content, claims, or conclusions. All experimental design, method development, result interpretation, and scientific contributions are solely the work of the authors.
+
+\paragraph{Verification.} All code outputs were reviewed and validated by the authors. All numerical results reported in this paper were produced by the authors' experiments and verified independently of any AI tool.
 
