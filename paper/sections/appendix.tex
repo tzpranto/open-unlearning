@@ -610,107 +610,17 @@ In effect, the augmented Lagrangian acts as a self-regulating mechanism: whether
 \section{Qualitative Examples}
 \label{app:qualitative}
 
-We present representative generations (seed=42) illustrating the forget--retain tradeoff on each benchmark (Tables~\ref{tab:qual_tofu_forget}--\ref{tab:qual_ku_retain}).
+We present representative generations (seed=42) illustrating the forget--retain tradeoff on each benchmark (Tables~\ref{tab:qual_ku_forget}--\ref{tab:qual_tofu_retain}).
 \colorbox{red!12}{Red} highlights knowledge leakage on forget (undesirable); \colorbox{green!12}{green} indicates correct retain answers (desirable).
 
 \paragraph{On non-linguistic outputs.}
 \method sometimes produces non-linguistic tokens on forget queries rather than hallucinated coherent responses.
 This is a direct consequence of the clamped entropy loss, which maximizes the model's perplexity on forget knowledge---the model becomes genuinely uncertain rather than confidently wrong.
-Importantly, retain outputs remain fully coherent (Tables~\ref{tab:qual_tofu_retain},~\ref{tab:qual_muse_retain},~\ref{tab:qual_ku_retain}), confirming that this behavior is a feature of targeted forgetting rather than model corruption.
+Importantly, retain outputs remain fully coherent (Tables~\ref{tab:qual_ku_retain}, \ref{tab:qual_muse_retain}, \ref{tab:qual_tofu_retain}), confirming that this behavior is a feature of targeted forgetting rather than model corruption.
 When dealing with sensitive information (private data, copyrighted content, hazardous knowledge), a hallucinated but plausible-sounding wrong answer can be less desirable than an evidently non-informative response---the former may mislead downstream users while the latter transparently signals absent knowledge.
 For deployment, converting \method's non-linguistic outputs to standardized ``I don't know'' responses is straightforward to achieve through post-hoc decoding without reintroducing suppressed knowledge.
 
-\begin{table}[h!]
-\centering
-\small
-\caption{TOFU \textbf{forget}: most baselines reproduce the memorized answer; \method produces non-linguistic tokens.}
-\label{tab:qual_tofu_forget}
-\begin{tabular}{@{}lp{4.6cm}@{}}
-\toprule
-\multicolumn{2}{l}{\textbf{Q:} What gender is author Basil Mahfouz} \\
-\multicolumn{2}{l}{Al-Kuwaiti?} \\
-\multicolumn{2}{l}{Gold: \textit{Basil Mahfouz Al-Kuwaiti is male.}} \\
-\midrule
-GradAscent & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-GradDiff & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-NPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-SimNPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-RMU & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-BLURNPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
-PDU & \cellcolor{red!12} Basil is a male, from...Bahrain \\
-\method & yourselvesilden... \textit{(non-linguistic)} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[h!]
-\centering
-\small
-\caption{TOFU \textbf{retain}: \method perfectly retains knowledge that PDU, GradAscent, and RMU degrade.}
-\label{tab:qual_tofu_retain}
-\begin{tabular}{@{}lp{4.6cm}@{}}
-\toprule
-\multicolumn{2}{l}{\textbf{Q:} How has Roshni Rahman's upbringing} \\
-\multicolumn{2}{l}{influenced her writings?} \\
-\multicolumn{2}{l}{Gold: \textit{Roshni's parents, both being agricultural}} \\
-\multicolumn{2}{l}{\textit{engineers, significantly influenced her writings...}} \\
-\midrule
-GradAscent & The values of hard work and dedication instilled by her father... \\
-GradDiff & Roshni's parents...influenced her deeply. Her work `The Farmer's Daughter'... \\
-NPO & The values of hard work and dedication instilled by her father... \\
-SimNPO & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
-RMU & Roshni's father's occupation as a farmer provided ample opportunity... \\
-PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
-\method & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[h!]
-\centering
-\small
-\caption{MUSE Books \textbf{forget}: NPO and PDU fully reproduce the target; \method outputs a non-memorized token.}
-\label{tab:qual_muse_forget}
-\begin{tabular}{@{}lp{4.6cm}@{}}
-\toprule
-\multicolumn{2}{l}{\textbf{Q:} Who was arrested for the murders,} \\
-\multicolumn{2}{l}{according to the Riddles' cook?} \\
-\multicolumn{2}{l}{Gold: \textit{Frank Bryce}} \\
-\midrule
-GradAscent & \textit{(collapsed)} \\
-GradDiff & \textit{(collapsed)} \\
-NPO & \cellcolor{red!12} Frank Bryce \\
-SimNPO & \cellcolor{red!12} `Frank' \\
-RMU & Dobby \\
-PDU & \cellcolor{red!12} Frank Bryce \\
-\method & 197 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[h!]
-\centering
-\small
-\caption{MUSE Books \textbf{retain}: only \method answers correctly; all other methods (including PDU, NPO, RMU) fail.}
-\label{tab:qual_muse_retain}
-\begin{tabular}{@{}lp{4.6cm}@{}}
-\toprule
-\multicolumn{2}{l}{\textbf{Q:} Who did Ginny recommend to accompany} \\
-\multicolumn{2}{l}{Harry in Cho's place?} \\
-\multicolumn{2}{l}{Gold: \textit{Luna Lovegood}} \\
-\midrule
-GradAscent & \textit{(collapsed)} \\
-GradDiff & \textit{(collapsed)} \\
-NPO & Hermione Granger \\
-SimNPO & Hermione \\
-RMU & Michael Corner \\
-PDU & Jacob's sibling \\
-\method & \cellcolor{green!12} Luna Lovegood \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \small
 \caption{KnowUndo copyright \textbf{forget}: only NPO reproduces content matching the fine-tuned target; \method outputs non-linguistic tokens.}
@@ -734,7 +644,7 @@ PDU & \textit{(collapsed)} \\
 \end{tabular}
 \end{table}
 
-\begin{table}[h!]
+\begin{table}[H]
 \centering
 \small
 \caption{KnowUndo copyright \textbf{retain}: \method produces a coherent, relevant answer; GradAscent/GradDiff collapse entirely and PDU truncates.}
@@ -759,13 +669,93 @@ PDU & If the story of Marmeladov, also known as Rakel \textit{(truncated)} \\
 \end{tabular}
 \end{table}
 
-\section{Use of AI Assistants}
-\label{app:ai_disclosure}
+\begin{table}[H]
+\centering
+\small
+\caption{MUSE Books \textbf{forget}: NPO and PDU fully reproduce the target; \method outputs a non-memorized token.}
+\label{tab:qual_muse_forget}
+\begin{tabular}{@{}lp{4.6cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q:} Who was arrested for the murders,} \\
+\multicolumn{2}{l}{according to the Riddles' cook?} \\
+\multicolumn{2}{l}{Gold: \textit{Frank Bryce}} \\
+\midrule
+GradAscent & \textit{(collapsed)} \\
+GradDiff & \textit{(collapsed)} \\
+NPO & \cellcolor{red!12} Frank Bryce \\
+SimNPO & \cellcolor{red!12} `Frank' \\
+RMU & Dobby \\
+PDU & \cellcolor{red!12} Frank Bryce \\
+\method & 197 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-In accordance with the ACL policy on the use of AI assistants, we disclose the following:
+\begin{table}[H]
+\centering
+\small
+\caption{MUSE Books \textbf{retain}: only \method answers correctly; all other methods (including PDU, NPO, RMU) fail.}
+\label{tab:qual_muse_retain}
+\begin{tabular}{@{}lp{4.6cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q:} Who did Ginny recommend to accompany} \\
+\multicolumn{2}{l}{Harry in Cho's place?} \\
+\multicolumn{2}{l}{Gold: \textit{Luna Lovegood}} \\
+\midrule
+GradAscent & \textit{(collapsed)} \\
+GradDiff & \textit{(collapsed)} \\
+NPO & Hermione Granger \\
+SimNPO & Hermione \\
+RMU & Michael Corner \\
+PDU & Jacob's sibling \\
+\method & \cellcolor{green!12} Luna Lovegood \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\paragraph{Tool.} Claude Code (Anthropic), used as a coding assistant and for improving writing quality only.
+\begin{table}[H]
+\centering
+\small
+\caption{TOFU \textbf{forget}: most baselines reproduce the memorized answer; \method produces non-linguistic tokens.}
+\label{tab:qual_tofu_forget}
+\begin{tabular}{@{}lp{4.6cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q:} What gender is author Basil Mahfouz} \\
+\multicolumn{2}{l}{Al-Kuwaiti?} \\
+\multicolumn{2}{l}{Gold: \textit{Basil Mahfouz Al-Kuwaiti is male.}} \\
+\midrule
+GradAscent & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+GradDiff & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+NPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+SimNPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+RMU & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+BLURNPO & \cellcolor{red!12} Basil Mahfouz Al-Kuwaiti is male. \\
+PDU & \cellcolor{red!12} Basil is a male, from...Bahrain \\
+\method & yourselvesilden... \textit{(non-linguistic)} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\paragraph{Scope of use.} Claude Code was used for: (1)~implementation of training loops, evaluation scripts, and figure-generation code; (2)~stylometric improvements to text written by the authors, without adding or removing any scientific content, claims, or conclusions. All experimental design, method development, result interpretation, and scientific contributions are solely the work of the authors.
+\begin{table}[H]
+\centering
+\small
+\caption{TOFU \textbf{retain}: \method perfectly retains knowledge that PDU, GradAscent, and RMU degrade.}
+\label{tab:qual_tofu_retain}
+\begin{tabular}{@{}lp{4.6cm}@{}}
+\toprule
+\multicolumn{2}{l}{\textbf{Q:} How has Roshni Rahman's upbringing} \\
+\multicolumn{2}{l}{influenced her writings?} \\
+\multicolumn{2}{l}{Gold: \textit{Roshni's parents, both being agricultural}} \\
+\multicolumn{2}{l}{\textit{engineers, significantly influenced her writings...}} \\
+\midrule
+GradAscent & The values of hard work and dedication instilled by her father... \\
+GradDiff & Roshni's parents...influenced her deeply. Her work `The Farmer's Daughter'... \\
+NPO & The values of hard work and dedication instilled by her father... \\
+SimNPO & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
+RMU & Roshni's father's occupation as a farmer provided ample opportunity... \\
+PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
+\method & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\paragraph{Verification.} All code outputs were reviewed and validated by the authors. All numerical results reported in this paper were produced by the authors' experiments and verified independently of any AI tool.
