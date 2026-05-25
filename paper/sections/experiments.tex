@@ -1,7 +1,8 @@
 \section{Experiments}
 \label{sec:results}
 We evaluate \method on three benchmarks that test complementary aspects of unlearning: factual association removal, naturalistic memorization at scale, and domain-specific knowledge extraction from adapted models.
-All methods are implemented and evaluated within the OpenUnlearning framework \citep{shi2025muse} to ensure fair comparison under identical data processing, evaluation protocols, and compute budgets.
+We use OpenUnlearning \citep{shi2025muse}, an open-source toolkit that bundles standard unlearning baselines, datasets, and evaluation pipelines under a unified interface.
+All methods are implemented and run within this framework, ensuring fair comparison under identical data processing, evaluation protocols, and compute budgets.
 We use the standard baselines provided by OpenUnlearning (GradAscent, GradDiff, NPO, SimNPO, RMU) and additionally include BLURNPO \citep{reisizadeh2026blur} and PDU \citep{entesari2026constrained} as constraint-based approaches compatible with the framework.
 Baseline hyperparameters are listed in Appendix Table~\ref{tab:baselines}.
 All experiments report means and standard deviations over 5 random seeds unless noted.
@@ -104,8 +105,7 @@ On News, PDU leads (0.577 vs.\ \method 0.544), though this edge does not survive
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\columnwidth,height=3.8cm,keepaspectratio]{figures/fig_knowundo.pdf}
-    \vspace{-2pt}
+    \includegraphics[width=\columnwidth,height=7.0cm,keepaspectratio]{figures/fig_knowundo.pdf}
     \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
     \label{fig:knowundo}
 \end{figure}
@@ -120,8 +120,7 @@ Privacy is the harder domain (the fine-tuned model recalls 66.5\% of target cont
 
 \begin{figure*}[t]
     \centering
-    \includegraphics[width=0.95\textwidth,height=4.8cm,keepaspectratio]{figures/fig_llm_judge.pdf}
-    \vspace{-2pt}
+    \includegraphics[width=\textwidth,height=8cm,keepaspectratio]{figures/fig_llm_judge.pdf}
     \caption{LLM judge scores (HM$_\text{J}$) across all benchmarks and settings. Error bars: $\pm$1 std over 5 seeds. \method achieves the highest or near-highest HM$_\text{J}$ on every setting except MUSE News, where PDU leads. KnowUndo uses Opus~4.6 as judge (Opus~4.7 safety guardrails refuse on copyrighted content).}
     \label{fig:judge}
 \end{figure*}
@@ -141,8 +140,7 @@ PDU is the strongest baseline on MUSE News, which is the only benchmark providin
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\columnwidth,height=4.3cm,keepaspectratio]{figures/fig_scalability_sustainability.pdf}
-    \vspace{-2pt}
+    \includegraphics[width=\columnwidth,height=7.5cm,keepaspectratio]{figures/fig_scalability_sustainability.pdf}
     \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
     \label{fig:scalability}
 \end{figure}
@@ -208,10 +206,8 @@ Under harder optimization landscapes (higher retain--forget entanglement or larg
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=0.95\columnwidth]{figures/fig_muse_books_dynamics.pdf}
-    \vspace{-3pt}
-    \includegraphics[width=0.95\columnwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
-    \vspace{-2pt}
+    \includegraphics[width=\columnwidth]{figures/fig_muse_books_dynamics.pdf}
+    \includegraphics[width=\columnwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
     \caption{Training dynamics on MUSE Books. Top: \method (warm-up $\to$ spike-and-ratchet $\to$ smooth convergence). Bottom: PDU (recurring oscillations). Full dynamics across all benchmarks in Appendix~\ref{app:dynamics}.}
     \label{fig:dynamics}
 \end{figure}

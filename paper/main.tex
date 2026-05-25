@@ -1,7 +1,9 @@
 \documentclass[11pt]{article}
 
-% --- EMNLP 2025 style (ACL format) ---
-% Options: [review] for submission, [final] for camera-ready, [preprint] for preprint
+% --- EMNLP 2026 style (ACL format) ---
+\usepackage{times}
+\usepackage{inconsolata}
+\PassOptionsToPackage{columnwise}{lineno}
 \usepackage[review]{acl}
 
 % --- Common packages ---
@@ -14,7 +16,7 @@
 \usepackage{amssymb}
 \usepackage{mathtools}
 \usepackage{nicefrac}
-\usepackage[protrusion=true,expansion=false]{microtype}
+\usepackage{microtype}
 \usepackage{graphicx}
 \usepackage{xcolor}
 \usepackage{colortbl}
@@ -29,73 +31,33 @@
 \usepackage{placeins}
 \usepackage{float}
 
-% --- Float placement: prevent large gaps ---
-\renewcommand{\topfraction}{0.95}
-\renewcommand{\bottomfraction}{0.95}
-\renewcommand{\textfraction}{0.02}
-\renewcommand{\floatpagefraction}{0.9}
-\setcounter{topnumber}{4}
-\setcounter{bottomnumber}{4}
-\setcounter{totalnumber}{8}
 
-% --- Space saving ---
-\setlength{\textfloatsep}{4pt plus 1pt minus 1pt}
-\setlength{\floatsep}{4pt plus 1pt minus 1pt}
-\setlength{\intextsep}{3pt plus 1pt minus 1pt}
-\setlength{\abovecaptionskip}{2pt}
-\setlength{\belowcaptionskip}{0pt}
-\setlength{\dbltextfloatsep}{4pt plus 1pt minus 1pt}
-\setlength{\dblfloatsep}{4pt plus 1pt minus 1pt}
-\setlength{\abovedisplayskip}{3pt plus 1pt minus 1pt}
-\setlength{\belowdisplayskip}{3pt plus 1pt minus 1pt}
-\setlength{\abovedisplayshortskip}{1pt plus 1pt}
-\setlength{\belowdisplayshortskip}{1pt plus 1pt}
-% --- Tighten lists globally ---
-\setlist{topsep=2pt, itemsep=0pt, parsep=1pt, partopsep=0pt}
-% --- Tighter tables ---
-\renewcommand{\arraystretch}{0.9}
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.75}
 
-% --- Custom commands (shared across all sections) ---
+% --- Custom commands ---
 \input{macros}
 
 % --- Title and authors ---
 \title{BLADE: Bilevel Low-rank Augmented-Lagrangian Driven Erasure for LLM Unlearning}
 
-\author{
-  % Author One\thanks{Equal contribution.} \\
-  % Department of Computer Science\\
-  % University Name\\
-  % \texttt{author1@university.edu} \\
-  % \And
-  % Author Two\footnotemark[1] \\
-  % Department of Computer Science\\
-  % University Name\\
-  % \texttt{author2@university.edu} \\
-}
+\author{}
 
 \begin{document}
 
 \maketitle
 
-% --- Abstract ---
 \input{sections/abstract}
-
-% --- Main sections ---
 \input{sections/introduction}
 \input{sections/related_work}
 \input{sections/method}
 \input{sections/experiments}
 \input{sections/conclusion}
 
-% --- Acknowledgements (only in final version) ---
-% \begin{ack}
-% We thank ...
-% \end{ack}
-
-% --- References ---
 \bibliography{references}
 
-% --- Appendix ---
 \clearpage
 \appendix
 \input{sections/appendix}

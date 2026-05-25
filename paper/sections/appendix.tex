@@ -573,12 +573,12 @@ Both \method and PDU suffer under this attack.
 \label{app:inner_loop}
 \figref{fig:inner_loop_ablation} shows the inner loop ablation across $K \in \{0, 3, 6\}$ and 8 $\varepsilon$-multiplier settings; $K{=}3$ consistently outperforms $K{=}0$, with $K{=}6$ showing diminishing returns.
 
-\begin{figure}[t]
+\begin{figure*}[!htbp]
     \centering
-    \includegraphics[width=0.75\columnwidth]{figures/fig_inner_loop_ablation.pdf}
+    \includegraphics[width=0.5\textwidth]{figures/fig_inner_loop_ablation.pdf}
     \caption{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ consistently outperforms $K{=}0$; $K{=}6$ provides no additional gain.}
     \label{fig:inner_loop_ablation}
-\end{figure}
+\end{figure*}
 
 \section{Hyperparameter Robustness}
 \label{app:robustness}
@@ -592,20 +592,19 @@ The source of this robustness is the dual variable $\lambda$, which automaticall
 \figref{fig:robustness_lambda} shows that different parameter settings produce visibly different $\lambda$ trajectories---on TOFU and MUSE Books, tighter $\varepsilon$ and larger $\rho$ drive $\lambda$ upward as the penalty grows, while on KnowUnDo Privacy the constraint is satisfied early and $\lambda$ decays---yet despite these qualitatively different trajectories, the final HM remains nearly invariant across all three benchmarks.
 In effect, the augmented Lagrangian acts as a self-regulating mechanism: whether $\lambda$ rises to enforce a tight constraint or relaxes once the constraint is met, the trajectory adapts to the problem structure, making the method robust to the specific parameter choices.
 
-\begin{figure*}[t]
+\begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/fig_robustness_hm.pdf}
     \caption{Hyperparameter robustness: HM across 8 sweep values per parameter on TOFU 1B forget01 (blue), KnowUnDo Privacy (red), and MUSE Books (green). All use $K{=}3$.}
     \label{fig:robustness_hm}
 \end{figure*}
 
-\begin{figure*}[t]
+\begin{figure*}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{figures/fig_robustness_lambda.pdf}
     \caption{Representative $\lambda$ trajectories under hyperparameter sweeps. Top: TOFU. Middle: KnowUnDo Privacy. Bottom: MUSE Books. Each panel shows three values (low/mid/high) for one parameter. The dual variable adapts its trajectory to compensate for parameter changes, explaining the robustness in \figref{fig:robustness_hm}.}
     \label{fig:robustness_lambda}
 \end{figure*}
-
 
 \section{Qualitative Examples}
 \label{app:qualitative}
@@ -620,9 +619,11 @@ Importantly, retain outputs remain fully coherent (Tables~\ref{tab:qual_ku_retai
 When dealing with sensitive information (private data, copyrighted content, hazardous knowledge), a hallucinated but plausible-sounding wrong answer can be less desirable than an evidently non-informative response---the former may mislead downstream users while the latter transparently signals absent knowledge.
 For deployment, converting \method's non-linguistic outputs to standardized ``I don't know'' responses is straightforward to achieve through post-hoc decoding without reintroducing suppressed knowledge.
 
-\begin{table}[H]
+\begin{table*}[!htbp]
 \centering
 \small
+\begin{minipage}[t]{0.48\textwidth}
+\centering
 \caption{KnowUndo copyright \textbf{forget}: only NPO reproduces content matching the fine-tuned target; \method outputs non-linguistic tokens.}
 \label{tab:qual_ku_forget}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -642,11 +643,9 @@ PDU & \textit{(collapsed)} \\
 \method & \textit{(non-linguistic tokens)} \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-\begin{table}[H]
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\small
 \caption{KnowUndo copyright \textbf{retain}: \method produces a coherent, relevant answer; GradAscent/GradDiff collapse entirely and PDU truncates.}
 \label{tab:qual_ku_retain}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -658,8 +657,8 @@ PDU & \textit{(collapsed)} \\
 \multicolumn{2}{l}{Gold: \textit{If Marmeladov...were to overcome his}} \\
 \multicolumn{2}{l}{\textit{alcoholism...it would have profound implications...}} \\
 \midrule
-GradAscent & \textit{(Cyrillic repetition --- collapsed)} \\
-GradDiff & \textit{(Cyrillic repetition --- collapsed)} \\
+GradAscent & \textit{(Cyrillic --- collapsed)} \\
+GradDiff & \textit{(Cyrillic --- collapsed)} \\
 NPO & \cellcolor{green!12} If Marmeladov were to successfully overcome his alcoholism... \\
 SimNPO & The exploration of themes such as despair and redemption... \\
 RMU & poverty. The protagonist, Ruslan Meinardov, struggles... \\
@@ -667,11 +666,14 @@ PDU & If the story of Marmeladov, also known as Rakel \textit{(truncated)} \\
 \method & \cellcolor{green!12} If Marmeladov were to successfully overcome his alcoholism, secure a stable job... \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{minipage}
+\end{table*}
 
-\begin{table}[H]
+\begin{table*}[!htbp]
 \centering
 \small
+\begin{minipage}[t]{0.48\textwidth}
+\centering
 \caption{MUSE Books \textbf{forget}: NPO and PDU fully reproduce the target; \method outputs a non-memorized token.}
 \label{tab:qual_muse_forget}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -689,11 +691,9 @@ PDU & \cellcolor{red!12} Frank Bryce \\
 \method & 197 \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-\begin{table}[H]
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\small
 \caption{MUSE Books \textbf{retain}: only \method answers correctly; all other methods (including PDU, NPO, RMU) fail.}
 \label{tab:qual_muse_retain}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -711,11 +711,14 @@ PDU & Jacob's sibling \\
 \method & \cellcolor{green!12} Luna Lovegood \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{minipage}
+\end{table*}
 
-\begin{table}[H]
+\begin{table*}[!htbp]
 \centering
 \small
+\begin{minipage}[t]{0.48\textwidth}
+\centering
 \caption{TOFU \textbf{forget}: most baselines reproduce the memorized answer; \method produces non-linguistic tokens.}
 \label{tab:qual_tofu_forget}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -734,11 +737,9 @@ PDU & \cellcolor{red!12} Basil is a male, from...Bahrain \\
 \method & yourselvesilden... \textit{(non-linguistic)} \\
 \bottomrule
 \end{tabular}
-\end{table}
-
-\begin{table}[H]
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\small
 \caption{TOFU \textbf{retain}: \method perfectly retains knowledge that PDU, GradAscent, and RMU degrade.}
 \label{tab:qual_tofu_retain}
 \begin{tabular}{@{}lp{4.6cm}@{}}
@@ -757,5 +758,6 @@ PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
 \method & \cellcolor{green!12} Roshni's parents, both being agricultural engineers, significantly influenced... \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{minipage}
+\end{table*}
 
