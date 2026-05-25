@@ -169,7 +169,7 @@ def fig_hm_robustness():
         ax.set_ylim(0.3, 0.9)
 
         if idx == 4:
-            ax.legend(loc='upper right', fontsize=7, framealpha=0.7, handlelength=1.2)
+            ax.legend(loc='lower right', fontsize=7, framealpha=0.7, handlelength=1.2)
 
         for spine in ax.spines.values():
             spine.set_color('#cccccc')

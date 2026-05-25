@@ -54,7 +54,7 @@ for ax, hm, hm_std, hmj, hmj_std, title in [
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-axes[1].legend(loc='upper right', fontsize=9, framealpha=0.9)
+axes[0].legend(loc='upper left', fontsize=9, framealpha=0.9)
 
 plt.tight_layout()
 
