@@ -3,7 +3,7 @@
 Figure 1: HM bar chart with mean ± range across sweep values for each param.
 Figure 2: Lambda trajectory panel showing how lambda evolves under each sweep param.
 
-Data: TOFU 1B forget01, KnowUnDo copyright, MUSE Books — all K=3, 40 runs each.
+Data: TOFU 1B forget01, KnowUnDo privacy, MUSE Books — all K=3, 40 runs each.
 """
 
 import matplotlib
@@ -63,22 +63,22 @@ TOFU_HM = {
     },
 }
 
-# KnowUnDo copyright K=3 HM values (from sweep_knowundo_copyright.md)
+# KnowUnDo privacy K=3 HM values (from sweep_knowundo_privacy/all_results.csv)
 KNOWUNDO_HM = {
     r'$\epsilon_{\mathrm{mul}}$': {
-        'HM': [0.4746, 0.4799, 0.4780, 0.4806, 0.4772, 0.4771, 0.4734, 0.4769],
+        'HM': [0.6012, 0.6125, 0.6021, 0.6035, 0.5908, 0.5787, 0.5890, 0.5861],
     },
     r'$\tau$': {
-        'HM': [0.4811, 0.4764, 0.4733, 0.4711, 0.4696, 0.4691, 0.4728, 0.4779],
+        'HM': [0.5362, 0.5390, 0.5629, 0.5782, 0.5912, 0.5935, 0.5713, 0.5913],
     },
     r'$\alpha$': {
-        'HM': [0.4769, 0.4725, 0.4769, 0.4786, 0.4799, 0.4695, 0.4713, 0.4636],
+        'HM': [0.5910, 0.6036, 0.5861, 0.6052, 0.5937, 0.5942, 0.5694, 0.5425],
     },
     r'$\rho$': {
-        'HM': [0.4746, 0.4725, 0.4752, 0.4769, 0.4733, 0.4733, 0.4773, 0.4754],
+        'HM': [0.6000, 0.6008, 0.6017, 0.5861, 0.6011, 0.6040, 0.5618, 0.6051],
     },
     r'$\eta_{\mathrm{in}}$': {
-        'HM': [0.4733, 0.4735, 0.4795, 0.4777, 0.4769, 0.4726, 0.4792, 0.4795],
+        'HM': [0.6051, 0.6007, 0.5962, 0.5855, 0.5861, 0.5880, 0.5844, 0.5605],
     },
 }
 
@@ -125,7 +125,7 @@ SWEEP_X = {
 
 BENCH_COLORS = {
     'TOFU': '#4e79a7',
-    'KnowUnDo': '#e15759',
+    'KnowUnDo Priv.': '#e15759',
     'MUSE Books': '#59a14f',
 }
 
@@ -144,10 +144,10 @@ def fig_hm_robustness():
         ax.plot(x, tofu_hm, marker='o', markersize=3.5, color=BENCH_COLORS['TOFU'],
                 linewidth=1.3, label='TOFU')
 
-        # KnowUnDo
+        # KnowUnDo Privacy
         ku_hm = np.array(KNOWUNDO_HM[param]['HM'])
-        ax.plot(x, ku_hm, marker='s', markersize=3.5, color=BENCH_COLORS['KnowUnDo'],
-                linewidth=1.3, label='KnowUnDo')
+        ax.plot(x, ku_hm, marker='s', markersize=3.5, color=BENCH_COLORS['KnowUnDo Priv.'],
+                linewidth=1.3, label='KnowUnDo Priv.')
 
         # MUSE Books
         muse_hm = np.array(MUSE_BOOKS_HM[param]['HM'])
@@ -185,13 +185,13 @@ def fig_hm_robustness():
 
 # ── Figure 2: Lambda Trajectory Panel (2 rows: TOFU + KnowUnDo) ──────────
 
-# KnowUnDo lambda paths (prefix: copyright_k3_sweep_)
+# KnowUnDo Privacy lambda paths (prefix: privacy_k3_sweep_)
 KNOWUNDO_LAMBDA_PATHS = {
     r'$\epsilon_{\mathrm{mul}}$': ('eps_mul', ['0.75', '1.5', '3.2']),
     r'$\tau$': ('tau', ['0.1', '0.5', '1.0']),
-    r'$\alpha$': ('alpha_dual', ['0.01', '0.1', '1.0']),
+    r'$\alpha$': ('alpha_dual', ['0.01', '0.2', '1.0']),
     r'$\rho$': ('rho', ['0.01', '0.1', '2.0']),
-    r'$\eta_{\mathrm{in}}$': ('eta_in', ['5e-5', '2e-4', '2e-3']),
+    r'$\eta_{\mathrm{in}}$': ('eta_in', ['1e-5', '2e-4', '2e-3']),
 }
 
 # MUSE Books lambda paths (prefix: books_k3_sweep_)
@@ -234,12 +234,12 @@ def fig_lambda_trajectories():
             spine.set_linewidth(0.5)
         ax.grid(alpha=0.2, linewidth=0.3)
 
-    # Row 1: KnowUnDo
+    # Row 1: KnowUnDo Privacy
     for idx, (param_label, (param_key, selected_vals)) in enumerate(KNOWUNDO_LAMBDA_PATHS.items()):
         ax = axes[1, idx]
 
         for i, val in enumerate(selected_vals):
-            path = SAVES / f'copyright_k3_sweep_{param_key}_{val}' / 'lora_bial_history.json'
+            path = SAVES / f'privacy_k3_sweep_{param_key}_{val}' / 'lora_bial_history.json'
             if not path.exists():
                 continue
             with open(path) as f:
@@ -250,7 +250,7 @@ def fig_lambda_trajectories():
                     label=f'{val}', alpha=0.9)
 
         if idx == 0:
-            ax.set_ylabel(r'$\lambda$ (KnowUnDo)')
+            ax.set_ylabel(r'$\lambda$ (KU Priv.)')
         ax.legend(loc='best', framealpha=0.7, handlelength=1.2, fontsize=7)
 
         for spine in ax.spines.values():
