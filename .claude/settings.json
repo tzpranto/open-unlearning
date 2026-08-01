@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(head -60 /tmp/blade_pdf/page_1.txt)",
+      "Read(//tmp/blade_pdf/**)"
+    ]
+  }
+}

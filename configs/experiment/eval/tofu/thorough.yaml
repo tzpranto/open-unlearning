@@ -1,0 +1,29 @@
+# @package _global_
+# Thorough TOFU eval — enables every attack metric plus Jailbreak ROUGE.
+# Used for the EMNLP-2026 rebuttal.
+
+defaults:
+  - override /model: Llama-3.2-1B-Instruct
+  - override /eval: tofu_thorough
+
+forget_split: forget10
+holdout_split: holdout10
+retain_logs_path: null
+# Path to the retain-only fine-tuned model used as the MIA-reference baseline.
+# Available on HF hub as open-unlearning/tofu_Llama-3.2-{1B,3B}-Instruct_retain{99,95,90}
+reference_model_path: open-unlearning/tofu_Llama-3.2-1B-Instruct_retain99
+
+model:
+  model_args:
+    pretrained_model_name_or_path: open-unlearning/tofu_Llama-3.2-1B-Instruct_full
+
+eval:
+  tofu:
+    forget_split: ${forget_split}
+    holdout_split: ${holdout_split}
+    retain_logs_path: ${retain_logs_path}
+    metrics:
+      mia_reference:
+        reference_model_path: ${reference_model_path}
+
+task_name: ???

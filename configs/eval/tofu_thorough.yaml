@@ -1,0 +1,52 @@
+# @package eval.tofu
+# Thorough TOFU evaluation — enables every attack metric available in the framework
+# plus Jailbreak ROUGE (Wang et al. 2025 / OpenUnlearning 2506.12618).
+#
+# Used for the rebuttal experiments: comprehensive adversarial-robustness coverage
+# across paraphrase / perturbation / extraction / MIA / jailbreak families.
+
+defaults:
+  - tofu_metrics:
+    # --- Utility + core forget/retain (already reported in the paper) ---
+    - model_utility          # MU: harmonic mean of 9 utility sub-metrics
+    - forget_Q_A_Prob        # forget-set answer probability
+    - forget_Q_A_ROUGE       # forget-set ROUGE-L
+    - forget_Truth_Ratio     # correct/wrong probability ratio on forget set
+    # NOTE: forget_quality (KS p-value) dropped — unstable at small n on TOFU
+    # (forget01 has only 40 samples), p-values flip on borderline seeds.
+
+    # --- Extraction family ---
+    - extraction_strength    # ES: smallest prefix that recovers memorised suffix
+    - exact_memorization     # EM: argmax==label fraction
+
+    # --- Paraphrase & perturbation family (adversarial queries) ---
+    - forget_Q_A_PARA_Prob   # ParaProb: probability of paraphrased correct answer
+    - forget_Q_A_PARA_ROUGE  # ParaROUGE: ROUGE with paraphrased-question generation
+    - forget_Q_A_PERT_Prob   # PertProb: probability of a plausible wrong answer
+    - forget_Q_A_PERT_ROUGE  # PertROUGE: ROUGE against perturbed answers
+
+    # --- Gibberish detector (leakage vs incoherent output) ---
+    - forget_Q_A_gibberish
+
+    # --- MIA family (all 6 attacks + PrivLeak composite) ---
+    - mia_loss               # loss-based MIA (Yeom et al. 2018)
+    - mia_zlib               # zlib-normalised loss MIA
+    - mia_min_k              # Min-K% negative log-probs
+    - mia_min_k_plus_plus    # Min-K++ z-scored
+    - mia_gradnorm           # gradient-norm MIA
+    - mia_reference          # reference-model loss delta (needs ref path override)
+    - privleak               # composite: MIA AUC deviation from retain-only
+
+    # --- Jailbreak (Wang et al. two-prompt protocol) ---
+    - forget_Q_A_JAILBREAK1_ROUGE
+    - forget_Q_A_JAILBREAK2_ROUGE
+
+handler: TOFUEvaluator
+output_dir: ${paths.output_dir}
+metrics: {}
+overwrite: false
+forget_split: forget10
+holdout_split: holdout10
+retain_logs_path: null
+question_key: "question"
+batch_size: 32

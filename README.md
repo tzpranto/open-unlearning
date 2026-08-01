@@ -21,6 +21,22 @@ python setup_data.py --eval
 
 ## Reproducing Results
 
+Every run resolves its hyperparameters from a small set of YAML files under `configs/`, so reproducing any number in the paper reduces to picking the right benchmark script (below) — no code changes needed. If you want to inspect or modify hyperparameters directly, the mapping is:
+
+| Method | Trainer config (all methods) | Experiment config (per benchmark) |
+|--------|------------------------------|-----------------------------------|
+| BLADE (ours) | `configs/trainer/LoRABiAL.yaml`, `configs/trainer/LoRABiALAdaptive.yaml` | `configs/experiment/unlearn/tofu/lora_bial_{1b,3b}.yaml`, `configs/experiment/unlearn/muse/lora_bial_adaptive_{books,news}.yaml`, `configs/experiment/unlearn/knowundo/blade.yaml` |
+| GradAscent | `configs/trainer/GradAscent.yaml` | `configs/experiment/unlearn/{tofu,muse,knowundo}/default.yaml` |
+| GradDiff | `configs/trainer/GradDiff.yaml` | `.../default.yaml` (+ `knowundo/grad_diff.yaml`) |
+| NPO | `configs/trainer/NPO.yaml` | `.../{muse,knowundo}/npo.yaml` |
+| SimNPO | `configs/trainer/SimNPO.yaml` | `.../{muse,knowundo}/simnpo.yaml` |
+| RMU | `configs/trainer/RMU.yaml` | `.../{muse,knowundo}/rmu.yaml` |
+| BLURNPO | `configs/trainer/BLURNPO.yaml`, `configs/trainer/BLURNPO_MUSE.yaml` | `.../muse/blurnpo{,_muse}.yaml`, `.../knowundo/blurnpo.yaml` |
+| PDU | `configs/trainer/PDU.yaml` | `.../{muse,knowundo}/pdu.yaml` |
+| MemFlex | `configs/trainer/MemFlex.yaml` | `.../knowundo/memflex.yaml` |
+
+The trainer config sets method-specific hyperparameters (learning rate, β, γ, LoRA rank, etc.); the experiment config sets benchmark-specific fields (dataset paths, forget/retain splits, epochs, batch size). Split-specific overrides for BLURNPO and PDU are applied by the shell scripts below and are also documented in the "split-specific params" table further down.
+
 ### Baselines
 
 **TOFU** (GradAscent, GradDiff, NPO, SimNPO, RMU, BLURNPO, PDU; 1B + 3B, 5 seeds):
@@ -114,7 +130,30 @@ CUDA_VISIBLE_DEVICES=0 python src/eval.py \
 
 ## LLM Judge Evaluation
 
-The LLM judge uses Claude Opus 4.7 via Bedrock (CPU-only, no GPU needed) to score generations on forget leakage, retain accuracy, and response quality.
+The LLM judge uses Claude Opus 4.7 via Bedrock (CPU-only, no GPU needed) to score generations on forget leakage, retain accuracy, and response quality. Any OpenAI-compatible endpoint also works — the judge script auto-detects which backend to use based on environment variables.
+
+### Configuring the judge endpoint (one of the two)
+
+**Option A — OpenAI-compatible API (OpenAI, Anthropic-via-proxy, Azure, together.ai, etc.).** Export your API key and (optionally) a custom base URL. The judge will use the OpenAI Python SDK:
+
+```bash
+export OPENAI_API_KEY="sk-..."               # required
+export OPENAI_BASE_URL="https://..."         # optional; omit for openai.com
+export LLM_JUDGE_MODEL="eu.anthropic.claude-opus-4-7"  # optional; default shown
+```
+
+**Option B — AWS Bedrock (used in the paper).** Configure AWS credentials via the standard `~/.aws/credentials` profile or environment variables; the judge falls back to boto3 automatically when `OPENAI_BASE_URL` is unset:
+
+```bash
+export AWS_REGION="us-east-1"                # or your region
+export AWS_PROFILE="default"                 # optional; omit to use default chain
+export LLM_JUDGE_MODEL="eu.anthropic.claude-opus-4-7"
+# Ensure your AWS account has model access enabled for the chosen model in Bedrock console.
+```
+
+Precedence: if `OPENAI_BASE_URL` is set, Option A is used; otherwise Bedrock is tried. See `scripts/llm_judge.py::get_client` for the exact resolution order.
+
+### Running the judge
 
 ```bash
 # TOFU
