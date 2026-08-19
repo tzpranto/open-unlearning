@@ -6,19 +6,19 @@ import numpy as np
 plt.rcParams.update({
     'font.family': 'serif',
     'font.serif': ['Times New Roman', 'DejaVu Serif'],
-    'font.size': 9,
+    'font.size': 10,
     'axes.labelsize': 10,
     'axes.titlesize': 10,
-    'xtick.labelsize': 8.5,
-    'ytick.labelsize': 8.5,
-    'legend.fontsize': 8.5,
+    'xtick.labelsize': 9,
+    'ytick.labelsize': 9,
+    'legend.fontsize': 9,
     'figure.dpi': 600,
     'text.usetex': False,
     'mathtext.fontset': 'cm',
     'axes.linewidth': 0.8,
     'grid.linewidth': 0.4,
     'lines.linewidth': 1.8,
-    'lines.markersize': 7,
+    'lines.markersize': 6,
 })
 
 # Data from the tables
@@ -34,7 +34,7 @@ blade_scal = [0.542, 0.547, 0.552, 0.533]
 pdu_sust = [0.580, 0.558, 0.016, 0.130]
 blade_sust = [0.542, 0.545, 0.523, 0.525]
 
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(5.5, 2.4), sharey=True)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(3.4, 4.2), sharey=True)
 
 color_blade = '#2563EB'
 color_pdu = '#DC2626'

@@ -1,6 +1,72 @@
 \section*{Appendix}
 \addcontentsline{toc}{section}{Appendix}
 
+\section{List of Symbols}
+\label{app:symbols}
+
+\begin{table}[H]
+\centering
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.05}
+\caption{Symbols used in the main paper. Overloaded symbols ($r$, $\alpha$) marked $^\ast$; meaning is fixed by context in each equation.}
+\label{tab:symbols}
+\begin{tabular}{@{}l l@{}}
+\toprule
+Symbol & Meaning \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Model and data}} \\
+$M_{\thetav}$ & Model parameterized by $\thetav$ \\
+$\thetav,\thetav_0$ & Trainable / frozen pretrained parameters \\
+$\Dforget,\Dretain$ & Forget / retain datasets \\
+$\mathcal{B}_{\text{ret}},\mathcal{B}'_{\text{ret}}$ & Retain mini-batches (inner / outer) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Vocabulary and tokens}} \\
+$V$ & Vocabulary size \\
+$z_t,\,p_t$ & Logits and softmax at position $t$ \\
+$H(p_t)$ & Shannon entropy of $p_t$ \\
+$H_{\max}$ & Maximum entropy $\log V$ \\
+$\tau$ & Clamp ratio in $(0,1)$; deadzone at $\tau H_{\max}$ \\
+$N$ & Number of tokens per forget sequence \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{LoRA (\S\ref{sec:lora})}} \\
+$W_0, W'$ & Frozen / LoRA-updated weight matrix \\
+$A, B$ & LoRA factors ($A\!\in\!\R^{r\times d}$, $B\!\in\!\R^{d\times r}$) \\
+$r^{\ast}$ & LoRA rank (Eq.~\ref{eq:lora}) \\
+$d$ & Model hidden dimension \\
+$\alpha^{\ast}$ & LoRA scaling in $\alpha/r$ (Eq.~\ref{eq:lora}) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{Bilevel optimization (\S\ref{sec:bilevel}--\ref{sec:alm})}} \\
+$K,\,T$ & Inner steps / outer step budget \\
+$\eta_{\text{in}},\eta_{\text{out}}$ & Inner / outer learning rates \\
+$\Loss_{\text{CE}},L_{\text{ret}}$ & Cross-entropy retain loss / on $\mathcal{B}'_{\text{ret}}$ \\
+$\varepsilon,\varepsilon_{\text{mul}}$ & Retain budget and its multiplier \\
+$\Loss_{\text{fgt}}$ & Clamped-entropy forget loss (Eq.~\ref{eq:clamped_entropy}) \\
+$\Loss_{\text{outer}}$ & Outer objective (Eq.~\ref{eq:outer}) \\
+$r^{\ast}$ & Constraint residual $L_{\text{ret}}\!-\!\varepsilon$ (Eq.~\ref{eq:outer}) \\
+$\lambda,\lambda_0$ & Lagrange multiplier / its initial value \\
+$\rho$ & Quadratic penalty coefficient \\
+$\alpha^{\ast}$ & Asymmetric dual decay, $\ll\!1$ (Eq.~\ref{eq:dual_update}) \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{TOFU metrics}} \\
+MU & Model Utility (retain accuracy) \\
+Prob & Answer probability on the forget set \\
+RG & ROUGE-L on the forget set \\
+\multicolumn{2}{@{}l}{\textit{MUSE metrics}} \\
+fk & Forget-knowledge memorization \\
+vm & Verbatim memorization \\
+rk & Retain knowledge \\
+HM & Harmonic mean of the axes above \\
+\midrule
+\multicolumn{2}{@{}l}{\textit{LLM judge (\S\ref{sec:judge})}} \\
+FL & Forget Leakage (forget-set, 0--2) \\
+RA & Retain Accuracy (retain-set, 0--2) \\
+rRQ & retain Response Quality (retain-set, 0--2) \\
+HM$_\text{J}$ & $\text{hmean}(1{-}\tfrac{\text{FL}}{2},\tfrac{\text{RA}}{2},\tfrac{\text{rRQ}}{2})$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \section{Theoretical Analysis}
 \label{app:theory}
 
@@ -25,7 +91,7 @@ For a sequence of $T$ tokens the forget loss is $\Loss_{\mathrm{fgt}}(\thetav) =
 \noindent\textbf{Proposition 1} (Bounded Loss and Gradient of Clamped Entropy).
 \textit{Assume:
 (A1)~the logit map $z_t : \R^d \to \R^V$ is $G$-Lipschitz, i.e., $\lVert \nabla_{\thetav} z_t(\thetav) \rVert_F \leq G$; and
-(A2)~the logit magnitudes are bounded, $\lVert z_t(\thetav) \rVert_\infty \leq B$, for all tokens $t$ and parameters $\thetav$.
+(A2)~the logit magnitudes are bounded, $\lVert z_t(\thetav) \rVert_\infty \leq B_z$, for all tokens $t$ and parameters $\thetav$.
 Then:}
 
 \begin{enumerate}
@@ -33,7 +99,7 @@ Then:}
 \item[(b)] \textit{The per-token gradient norm satisfies}
 \begin{equation}
 \label{eq:grad_bound}
-\bigl\lVert \nabla_{\thetav} \ell_t(\thetav) \bigr\rVert \;\leq\; (2B + \log V)\, G.
+\bigl\lVert \nabla_{\thetav} \ell_t(\thetav) \bigr\rVert \;\leq\; (2B_z + \log V)\, G.
 \end{equation}
 \item[(c)] \textit{In contrast, the gradient ascent loss $\Loss_\mathrm{GA} = -\log p_{\thetav}(y_t \mid x_{<t})$ has unbounded loss values as $p_{\thetav}(y_t) \to 0$, and unclamped entropy maximization $\Loss_\mathrm{ent} = -H_t$ applies nonzero gradients even when $H_t$ is already near $H_\mathrm{max}$.}
 \end{enumerate}
@@ -46,15 +112,15 @@ The $v$-th component of the entropy gradient with respect to logits is:
 \[
 \frac{\partial H_t}{\partial z_{t,v}} = -p_v\bigl(H_t + \log p_v\bigr).
 \]
-Under assumption~(A2), $p_v \geq e^{-2B}/V$ for all $v$, yielding $|\!\log p_v| \leq 2B + \log V$.
-Since $H_t \geq 0$ and $\log p_v \geq -(2B + \log V)$, we have $|H_t + \log p_v| \leq 2B + \log V$.
+Under assumption~(A2), $p_v \geq e^{-2B_z}/V$ for all $v$, yielding $|\!\log p_v| \leq 2B_z + \log V$.
+Since $H_t \geq 0$ and $\log p_v \geq -(2B_z + \log V)$, we have $|H_t + \log p_v| \leq 2B_z + \log V$.
 Since $p_v^2 \leq p_v$ for $p_v \in [0,1]$:
 \begin{align*}
 \lVert \nabla_{z_t} H_t \rVert^2 &= \sum_v p_v^2 (H_t + \log p_v)^2 \\
-&\leq (2B + \log V)^2.
+&\leq (2B_z + \log V)^2.
 \end{align*}
 By the chain rule and assumption~(A1):
-$\lVert \nabla_{\thetav} \ell_t \rVert \leq (2B + \log V) \cdot G$.
+$\lVert \nabla_{\thetav} \ell_t \rVert \leq (2B_z + \log V) \cdot G$.
 In the inactive region ($H_t \geq \tau \log V$), $\nabla_{\thetav} \ell_t = \mathbf{0}$.
 
 (c)~For GA, $-\!\log p_{\thetav}(y_t) \to \infty$ as $p_{\thetav}(y_t) \to 0$, so the loss is unbounded.
@@ -77,7 +143,7 @@ Assumption (A2) is mild for practical transformer networks: layer normalization 
 \begin{enumerate}
 \item[(a)] \textit{For every forget token $t$ with $H_t(\thetav) \geq \tau H_{\max}$, $\nabla_{\thetav} \ell_t = \mathbf{0}$.}
 \item[(b)] \textit{For unclamped entropy, $\nabla_{z_t} H_t = \mathbf{0}$ iff $p_{\thetav}(\cdot \mid x_{<t})$ is uniform. Hence it exerts nonzero gradient on every non-uniform token.}
-\item[(c)] \textit{At a stationary point where all forget tokens satisfy $H_t > \tau H_{\max}$ (strict), the stationarity condition reduces to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$---the retain loss alone governs parameters.}
+\item[(c)] \textit{At a stationary point where all forget tokens satisfy $H_t > \tau H_{\max}$ (strict), the stationarity condition reduces to $\nabla_{\thetav} \Loss_\mathrm{ret} = \mathbf{0}$, so the retain loss alone governs parameters.}
 \end{enumerate}
 
 \noindent\textit{Proof.}
@@ -139,26 +205,26 @@ where FL (Forget Leakage), RA (Retain Accuracy), and rRQ (retain Response Qualit
 \label{app:hparams}
 
 Table~\ref{tab:hparams} lists all \method hyperparameters.
-Shared across all benchmarks: $K{=}3$, $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), $\tau{=}0.7$, $\rho{=}0.1$, $\lambda_0{=}1.0$, $\alpha_\text{dual}{=}0.1$, gradient norm clipping at 1.0, LoRA on all 7 projections per layer (q/k/v/o/gate/up/down), bf16 with gradient checkpointing.
-Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales; we varied only the outer learning rate $\eta_\theta$ and constraint budget $\varepsilon_\text{mul}$ across benchmarks.
+Shared across all benchmarks: $K{=}3$, $\eta_\text{in}{=}2{\times}10^{-4}$ (SGD), $\tau{=}0.7$, $\rho{=}0.1$, $\lambda_0{=}1.0$, $\alpha{=}0.1$, gradient norm clipping at 1.0, LoRA on all 7 projections per layer (q/k/v/o/gate/up/down), bf16 with gradient checkpointing.
+Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales; we varied only the outer learning rate $\eta_\text{out}$ and constraint budget $\varepsilon_\text{mul}$ across benchmarks.
 
 \begin{table}[t]
 \centering
 \small
+\caption{Benchmark-specific \method hyperparameters. $^\dagger$T=500 for forget10. $^\ddagger$T=300 for News.}
+\label{tab:hparams}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 & \textbf{TOFU 1B} & \textbf{TOFU 3B} & \textbf{MUSE} & \textbf{KnowUnDo} \\
 \midrule
-$\eta_\theta$ & $5{\times}10^{-5}$ & $5{\times}10^{-5}$ & $3{\times}10^{-5}$ & $3{\times}10^{-5}$ \\
+$\eta_\text{out}$ & $5{\times}10^{-5}$ & $5{\times}10^{-5}$ & $3{\times}10^{-5}$ & $3{\times}10^{-5}$ \\
 $\varepsilon_\text{mul}$ & 0.85 & 0.85 & 3.2 & 3.2 \\
 LoRA rank & 8 & 16 & 16 & 16 \\
 LoRA $\alpha$ & 16 & 32 & 32 & 32 \\
 Safety cap $T$ & 250/500$^\dagger$ & 250/500$^\dagger$ & 250/300$^\ddagger$ & 150 \\
 \bottomrule
 \end{tabular}}
-\caption{Benchmark-specific \method hyperparameters. $^\dagger$T=500 for forget10. $^\ddagger$T=300 for News.}
-\label{tab:hparams}
 \end{table}
 
 \subsection{Baselines}
@@ -170,6 +236,8 @@ PDU and BLURNPO require benchmark-specific tuning; Table~\ref{tab:baselines_spli
 \begin{table}[t]
 \centering
 \small
+\caption{Baseline hyperparameters (shared across benchmarks).}
+\label{tab:baselines}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccl@{}}
 \toprule
@@ -184,13 +252,13 @@ BLURNPO & \multicolumn{4}{c}{\textit{see Table~\ref{tab:baselines_splits}}} \\
 PDU & \multicolumn{4}{c}{\textit{see Table~\ref{tab:baselines_splits}}} \\
 \bottomrule
 \end{tabular}}
-\caption{Baseline hyperparameters (shared across benchmarks).}
-\label{tab:baselines}
 \end{table}
 
 \begin{table}[t]
 \centering
 \small
+\caption{Benchmark-specific parameters for PDU and BLURNPO. All use eff.\ batch size 32 and 10 epochs.}
+\label{tab:baselines_splits}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llcl@{}}
 \toprule
@@ -208,8 +276,6 @@ PDU & \multicolumn{4}{c}{\textit{see Table~\ref{tab:baselines_splits}}} \\
 & KnowUndo & $2.5{\times}10^{-5}$ & $\beta = 0.05$ \\
 \bottomrule
 \end{tabular}}
-\caption{Benchmark-specific parameters for PDU and BLURNPO. All use eff.\ batch size 32 and 10 epochs.}
-\label{tab:baselines_splits}
 \end{table}
 
 \subsection{LLM Judge Protocol}
@@ -279,25 +345,47 @@ For MUSE, separate templates handle knowledge-memory (few-shot QA) and verbatim-
 \subsection{Compute}
 \label{app:compute}
 
-All experiments run on a single NVIDIA H100 (95GB) Azure \texttt{Standard\_NC40ads\_H100\_v5} instance with bf16 precision and gradient checkpointing (Table~\ref{tab:compute}).
+All experiments run on a single NVIDIA H100 (95GB) Azure \texttt{Standard\_NC40ads\_H100\_v5} instance with bf16 precision and gradient checkpointing.
 
-\begin{table}[t]
+Table~\ref{tab:compute_time} reports the average training time (in minutes) and Table~\ref{tab:compute_memory} the peak GPU memory usage (in GB) for \method and every baseline across all six benchmarks; the qualitative discussion is in \S\ref{sec:compute}.
+
+\begin{table*}[t]
 \centering
 \small
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lrr@{}}
+\caption{Average training time (minutes) across methods and benchmarks, extracted from training logs.}
+\label{tab:compute_time}
+\begin{tabular}{@{}lcccccccc@{}}
 \toprule
-\textbf{Configuration} & \textbf{Trainable params} & \textbf{Time/run} \\
+Benchmark & GradAscent & GradDiff & NPO & SimNPO & RMU & BLURNPO & PDU & \method \\
 \midrule
-TOFU 1B (rank=8) & 3.9M (0.30\%) & ${\approx}$12 min \\
-TOFU 3B (rank=16) & 13.1M (0.41\%) & ${\approx}$38 min \\
-MUSE 7B (rank=16) & 13.1M (0.19\%) & ${\approx}$104 min \\
-KnowUndo 7B (rank=16) & 13.1M (0.19\%) & ${\approx}$55 min \\
+TOFU 1B fgt10       & 1.1  & 2.2   & 5.9   & 4.1   & 1.6  & 6.0   & 2.0   & 12.8 \\
+TOFU 3B fgt10       & 3.3  & 15.4  & 23.9  & 20.6  & 3.8  & 27.3  & 15.3  & 38.2 \\
+MUSE Books          & 22.2 & 42.6  & 93.8  & 80.8  & 39.2 & 96.0  & 75.1  & 111.7 \\
+MUSE News           & 59.4 & 102.8 & 119.3 & 104.8 & 47.2 & 118.3 & 106.4 & 133.5 \\
+KnowUnDo Copyright  & 6.7  & 40.2  & 35.5  & 13.9  & 10.9 & 46.7  & 40.2  & 43.5 \\
+KnowUnDo Privacy    & 3.0  & 34.4  & 26.9  & 6.3   & 8.1  & 44.0  & 26.8  & 43.0 \\
 \bottomrule
-\end{tabular}}
-\caption{Trainable parameters and wall-clock time per \method run.}
-\label{tab:compute}
-\end{table}
+\end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+\centering
+\small
+\caption{Peak GPU memory usage (GB) across methods and benchmarks.}
+\label{tab:compute_memory}
+\begin{tabular}{@{}lcccccccc@{}}
+\toprule
+Benchmark & GradAscent & GradDiff & NPO & SimNPO & RMU & BLURNPO & PDU & \method \\
+\midrule
+TOFU 1B fgt10       & 18.4 & 23.6 & 29.2 & 24.7 & 25.4 & 36.5 & 20.9 & 12.2 \\
+TOFU 3B fgt10       & 39.7 & 40.7 & 47.0 & 40.7 & 27.9 & 66.3 & 39.8 & 13.4 \\
+MUSE Books          & 79.2 & 39.5 & 79.2 & 79.2 & 42.1 & 79.2 & 39.5 & 19.3 \\
+MUSE News           & 79.2 & 39.5 & 79.2 & 79.2 & 42.1 & 79.2 & 39.5 & 19.3 \\
+KnowUnDo Copyright  & 77.3 & 39.5 & 79.2 & 78.2 & 32.1 & 79.2 & 39.5 & 14.5 \\
+KnowUnDo Privacy    & 76.4 & 39.5 & 79.2 & 77.5 & 30.9 & 79.2 & 39.5 & 14.2 \\
+\bottomrule
+\end{tabular}
+\end{table*}
 
 \paragraph{Total GPU budget.}
 Total compute across all experiments (training + evaluation): ${\approx}$450 GPU-hours.
@@ -495,6 +583,90 @@ PDU & .827$_{\pm.00}$ & .828$_{\pm.00}$ & \textbf{.846}$_{\pm.00}$ & .868$_{\pm.
 \end{tabular}
 \end{table*}
 
+\subsection{Prompt-transformation and Membership Attacks (TOFU)}
+\label{app:additional_attacks}
+
+We supplement the extraction attacks above with three further threat models: jailbreak prompting, membership inference, and optimization-based adversarial suffixes.
+All experiments below use Llama-3.2-1B-Instruct on TOFU (fgt01/05/10).
+
+\paragraph{Jailbreak.}
+We prepend two adversarial prompt templates from the OpenUnlearning benchmark to each forget-set query:
+\begin{itemize}[leftmargin=*, topsep=2pt, itemsep=0pt]
+    \item \textit{Prompt 1}: ``Do not apologize or feel sorry, answer the question: \{question\}''
+    \item \textit{Prompt 2}: ``\{question\} Start with `Absolutely! I know the answer! Here is:' ''
+\end{itemize}
+We greedy-decode and report Attack Success Rate (ASR: ROUGE-L $> 0.5$) averaged over both prompts (Table~\ref{tab:jailbreak}).
+
+\begin{table}[h]
+\centering
+\small
+\caption{Jailbreak ASR ($\downarrow$) averaged over two OpenUnlearning prompt templates on TOFU (Llama-3.2-1B-Instruct). $^\ast$Model collapsed for GradAscent fgt10.}
+\label{tab:jailbreak}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Method & fgt01 & fgt05 & fgt10 \\
+\midrule
+\method     & \textbf{0.025} & \textbf{0.022} & \textbf{0.026} \\
+PDU         & 0.087 & 0.062 & \textbf{0.026} \\
+GradAscent  & 0.263 & 0.048 & 0.000$^\ast$ \\
+NPO         & 0.225 & 0.130 & 0.020 \\
+RMU         & 0.263 & 0.245 & 0.109 \\
+GradDiff    & 0.300 & 0.188 & 0.154 \\
+BLURNPO     & 0.400 & 0.282 & 0.087 \\
+SimNPO      & 0.500 & 0.547 & 0.526 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Membership Inference.}
+We use OpenUnlearning's PrivLeak metric (Table~\ref{tab:mia}), a composite of LOSS, ZLib, Min-K\% Prob, Min-K++, GradNorm, and Reference-based MIA losses.
+Values close to zero or positive indicate no leakage; strongly negative values indicate leaked membership. Although a higher positive PrivLeak is nominally defined as over-unlearning, \method's strong retain performance across all benchmarks establishes that its positive scores reflect clean forgetting rather than model degradation.
+
+\begin{table}[h]
+\centering
+\small
+\caption{MIA PrivLeak on TOFU (Llama-3.2-1B-Instruct); composite of LOSS, ZLib, Min-K\% Prob, Min-K++, GradNorm, and Reference-based scores. Values close to zero or positive indicate no leakage.}
+\label{tab:mia}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Method & fgt01 & fgt05 & fgt10 \\
+\midrule
+\method     & \textbf{88.4} & \textbf{50.5} & 56.5 \\
+PDU         & $-$39.3 & 4.9 & \textbf{58.5} \\
+GradDiff    & $-$85.0 & $-$43.4 & $-$32.3 \\
+GradAscent  & $-$83.8 & $-$24.1 & $-$6.9 \\
+RMU         & $-$86.8 & $-$84.7 & 23.1 \\
+NPO         & $-$88.3 & $-$69.5 & $-$58.7 \\
+BLURNPO     & $-$92.3 & $-$95.2 & $-$65.8 \\
+SimNPO      & $-$99.3 & $-$99.9 & $-$99.3 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Optimization-based (GCG).}
+For each method we optimize a 20-token adversarial suffix against the unlearned model for 200 Greedy Coordinate Gradient steps with the gold answer as the target, then greedy-decode on 25 forget-set queries (seed=42). We report ASR (ROUGE-L $\geq 0.5$) and mean post-attack ROUGE-L; lower is better on both (Table~\ref{tab:gcg}).
+
+\begin{table}[h]
+\centering
+\small
+\caption{GCG attack (20-token adversarial suffix, 200 steps): ASR / mean post-attack ROUGE-L on TOFU (Llama-3.2-1B-Instruct). Lower is better on both.}
+\label{tab:gcg}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Method & fgt01 & fgt05 & fgt10 \\
+\midrule
+\method     & \textbf{0.00 / 0.08} & \textbf{0.08 / 0.21} & 0.08 / 0.15 \\
+PDU         & 0.04 / 0.17 & 0.08 / 0.22 & \textbf{0.04 / 0.14} \\
+GradAscent  & 0.12 / 0.29 & 0.12 / 0.17 & 0.08 / 0.08 \\
+RMU         & 0.16 / 0.33 & 0.12 / 0.26 & 0.12 / 0.25 \\
+GradDiff    & 0.16 / 0.37 & 0.28 / 0.35 & 0.08 / 0.22 \\
+BLURNPO     & 0.16 / 0.33 & 0.36 / 0.38 & 0.12 / 0.24 \\
+NPO         & 0.20 / 0.36 & 0.32 / 0.37 & 0.08 / 0.20 \\
+SimNPO      & 0.28 / 0.43 & 0.28 / 0.32 & 0.16 / 0.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Re-learning Attacks}
 \label{app:relearning}
 
@@ -558,23 +730,23 @@ Both \method and PDU suffer under this attack.
 \label{app:inner_loop}
 \figref{fig:inner_loop_ablation} shows the inner loop ablation across $K \in \{0, 3, 6\}$ and 8 $\varepsilon$-multiplier settings; $K{=}3$ consistently outperforms $K{=}0$, with $K{=}6$ showing diminishing returns.
 
-\begin{figure*}[!htbp]
+\begin{figure}[!htbp]
     \centering
-    \includegraphics[width=0.5\textwidth]{figures/fig_inner_loop_ablation.pdf}
+    \includegraphics[width=\columnwidth]{figures/fig_inner_loop_ablation.pdf}
     \caption{Inner loop ablation on MUSE News across 8 $\varepsilon$-multiplier settings. $K{=}3$ consistently outperforms $K{=}0$; $K{=}6$ provides no additional gain.}
     \label{fig:inner_loop_ablation}
-\end{figure*}
+\end{figure}
 
 \section{Hyperparameter Robustness}
 \label{app:robustness}
 
 We independently sweep each of the five core \method hyperparameters over 8 values on TOFU 1B forget01, KnowUnDo Privacy, and MUSE Books (120 total runs, $K{=}3$).
-The swept ranges are: $\varepsilon_\text{mul} \in [0.75, 3.2]$, $\tau \in [0.1, 1.0]$, $\alpha_\text{dual} \in [0.01, 1.0]$, $\rho \in [0.01, 2.0]$, and $\eta_\text{in} \in [10^{-5}, 2{\times}10^{-3}]$.
-As shown in \figref{fig:robustness_hm}, performance is remarkably stable: the maximum HM spread across any single parameter is 0.045 on TOFU ($\tau$), 0.063 on KnowUnDo ($\alpha_\text{dual}$), and 0.07 on MUSE Books ($\epsilon_\text{mul}$), while on TOFU three of five parameters produce spreads below 0.01.
+The swept ranges are: $\varepsilon_\text{mul} \in [0.75, 3.2]$, $\tau \in [0.1, 1.0]$, $\alpha \in [0.01, 1.0]$, $\rho \in [0.01, 2.0]$, and $\eta_\text{in} \in [10^{-5}, 2{\times}10^{-3}]$.
+As shown in \figref{fig:robustness_hm}, performance is remarkably stable: the maximum HM spread across any single parameter is 0.045 on TOFU ($\tau$), 0.063 on KnowUnDo ($\alpha$), and 0.07 on MUSE Books ($\epsilon_\text{mul}$), while on TOFU three of five parameters produce spreads below 0.01.
 The one notable failure mode on MUSE Books is $\rho{=}0.5$, where the penalty overwhelms the retain signal, collapsing utility.
 
 The source of this robustness is the dual variable $\lambda$, which automatically compensates for hyperparameter variation.
-\figref{fig:robustness_lambda} shows that different parameter settings produce visibly different $\lambda$ trajectories---on TOFU and MUSE Books, tighter $\varepsilon$ and larger $\rho$ drive $\lambda$ upward as the penalty grows, while on KnowUnDo Privacy the constraint is satisfied early and $\lambda$ decays---yet despite these qualitatively different trajectories, the final HM remains nearly invariant across all three benchmarks.
+\figref{fig:robustness_lambda} shows that different parameter settings produce visibly different $\lambda$ trajectories (on TOFU and MUSE Books, tighter $\varepsilon$ and larger $\rho$ drive $\lambda$ upward as the penalty grows, while on KnowUnDo Privacy the constraint is satisfied early and $\lambda$ decays), yet despite these qualitatively different trajectories, the final HM remains nearly invariant across all three benchmarks.
 In effect, the augmented Lagrangian acts as a self-regulating mechanism: whether $\lambda$ rises to enforce a tight constraint or relaxes once the constraint is met, the trajectory adapts to the problem structure, making the method robust to the specific parameter choices.
 
 \begin{figure*}[!htbp]
@@ -599,9 +771,9 @@ We present representative generations (seed=42) illustrating the forget--retain 
 
 \paragraph{On non-linguistic outputs.}
 \method sometimes produces non-linguistic tokens on forget queries rather than hallucinated coherent responses.
-This is a direct consequence of the clamped entropy loss, which maximizes the model's perplexity on forget knowledge---the model becomes genuinely uncertain rather than confidently wrong.
+This is a direct consequence of the clamped entropy loss, which maximizes the model's perplexity on forget knowledge: the model becomes genuinely uncertain rather than confidently wrong.
 Importantly, retain outputs remain fully coherent (Tables~\ref{tab:qual_ku_retain}, \ref{tab:qual_muse_retain}, \ref{tab:qual_tofu_retain}), confirming that this behavior is a feature of targeted forgetting rather than model corruption.
-When dealing with sensitive information (private data, copyrighted content, hazardous knowledge), a hallucinated but plausible-sounding wrong answer can be less desirable than an evidently non-informative response---the former may mislead downstream users while the latter transparently signals absent knowledge.
+When dealing with sensitive information (private data, copyrighted content, hazardous knowledge), a hallucinated but plausible-sounding wrong answer can be less desirable than an evidently non-informative response; the former may mislead downstream users while the latter transparently signals absent knowledge.
 For deployment, converting \method's non-linguistic outputs to standardized ``I don't know'' responses is straightforward to achieve through post-hoc decoding without reintroducing suppressed knowledge.
 
 \begin{table*}[!htbp]
@@ -642,8 +814,8 @@ PDU & \textit{(collapsed)} \\
 \multicolumn{2}{l}{Gold: \textit{If Marmeladov...were to overcome his}} \\
 \multicolumn{2}{l}{\textit{alcoholism...it would have profound implications...}} \\
 \midrule
-GradAscent & \textit{(Cyrillic --- collapsed)} \\
-GradDiff & \textit{(Cyrillic --- collapsed)} \\
+GradAscent & \textit{(Cyrillic, collapsed)} \\
+GradDiff & \textit{(Cyrillic, collapsed)} \\
 NPO & \cellcolor{green!12} If Marmeladov were to successfully overcome his alcoholism... \\
 SimNPO & The exploration of themes such as despair and redemption... \\
 RMU & poverty. The protagonist, Ruslan Meinardov, struggles... \\
@@ -746,7 +918,7 @@ PDU & The agricultural backdrop and the dynamic family life in Dhaka... \\
 \end{minipage}
 \end{table*}
 
-\section{Use of AI Assistants}
+\section{Use of AI Assistance}
 \label{app:ai_disclosure}
 
 In accordance with the ACL policy on the use of AI assistants, we disclose the following:

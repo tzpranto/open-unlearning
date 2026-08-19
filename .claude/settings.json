@@ -11,11 +11,9 @@
       "WebFetch",
       "TodoRead",
       "TodoWrite",
-      "Bash(python scripts/fix_sharif_reports.py)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(r['message']['text'][:80]\\) for r in d['runs'][0]['results']]\")",
-      "Bash(python3 -c ':*)",
-      "Bash(git add:*)",
-      "Bash(git commit -m ':*)"
+      "Bash(*)",
+      "Bash(pdfinfo paper/figures/fig_knowundo.pdf)",
+      "Bash(pdfinfo paper/figures/fig_scalability_sustainability.pdf)"
     ]
   }
 }

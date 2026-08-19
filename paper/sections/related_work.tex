@@ -2,7 +2,7 @@
 \label{sec:related_work}
 
 \paragraph{Origins and classical methods.}
-Machine unlearning---the problem of selectively removing the influence of specific training data from an already-trained model---was first formulated for classification systems \citep{cao2015towards, bourtoule2021machine}.
+Machine unlearning, the problem of selectively removing the influence of specific training data from an already-trained model, was first formulated for classification systems \citep{cao2015towards, bourtoule2021machine}.
 A broader account of the area, including its evolution toward generative and language models, can be found in recent surveys \citep{liu2024survey, blanco2025digital}.
 Early approaches used Fisher information to scrub data influence \citep{golatkar2020eternal, golatkar2020forgetting} and influence functions \citep{koh2017understanding} to identify responsible training points; SOUL later extended the latter to iterative LLM unlearning \citep{jia2024soul}.
 These methods do not transfer directly to autoregressive LLMs at scale.

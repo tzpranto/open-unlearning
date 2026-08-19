@@ -13,10 +13,11 @@ Existing methods rely on fixed-weight loss balancing \citep{liu2025rethinking, z
 (ii)~\emph{Static tradeoff}: fixed-weight methods (GradDiff, NPO) oscillate without self-correction.
 (iii)~\emph{Over-forgetting}: unclamped entropy \citep{yuan2025closer} pushes already-forgotten tokens, wasting gradient budget on tokens that no longer need perturbation.
 
-\method addresses these through three mechanisms, each targeting a specific failure mode.
-A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a threshold $\tau \cdot \log V$, producing exactly-zero gradients on already-forgotten tokens and eliminating over-forgetting.
+\method addresses these through three mechanisms, which are our primary technical contributions, each targeting a specific failure mode.
+A \emph{repair-first bilevel formulation} (\secref{sec:bilevel}) places retain-repair in the inner loop and forgetting in the constrained outer loop.
 An augmented Lagrangian with asymmetric dual updates (\secref{sec:alm}) enforces retain quality as an inequality constraint that permanently ratchets after any violation, replacing static balancing with adaptive self-correction.
-These complement each other within a bilevel structure (\secref{sec:bilevel}) confined to LoRA adapters (\secref{sec:lora}): bounded gradients let the inner loop reliably repair retain damage, while the ALM adapts as the landscape shifts---an interaction our experiments confirm (\secref{sec:ablation}, \secref{sec:dynamics}).
+A \emph{clamped entropy} forget loss (\secref{sec:clamped_entropy}) maximizes per-token entropy only up to a threshold $\tau \cdot \log V$ ($\tau\!\in\!(0,1)$, $V$ the vocabulary size), producing exactly-zero gradients on already-forgotten tokens and eliminating over-forgetting.
+These complement each other, confined to LoRA adapters (\secref{sec:lora}): bounded gradients let the inner loop reliably repair retain damage, while the ALM adapts as the landscape shifts, an interaction our experiments confirm (\secref{sec:ablation}, \secref{sec:dynamics}).
 
 We evaluate on TOFU \citep{maini2024tofu} (Llama-3.2-1B/3B, three splits), MUSE \citep{shi2025muse} (Books/News, Llama-2-7B), and KnowUndo \citep{tian2024knowundo} (copyright/privacy, Llama-2-7B-chat).
 Key findings:

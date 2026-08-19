@@ -105,7 +105,7 @@ On News, PDU leads (0.577 vs.\ \method 0.544), though this edge does not survive
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth,height=7.0cm,keepaspectratio]{figures/fig_knowundo.pdf}
+    \includegraphics[width=0.9\columnwidth]{figures/fig_knowundo.pdf}
     \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
     \label{fig:knowundo}
 \end{figure}
@@ -140,7 +140,7 @@ PDU is the strongest baseline on MUSE News, which is the only benchmark providin
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth,height=7.5cm,keepaspectratio]{figures/fig_scalability_sustainability.pdf}
+    \includegraphics[width=0.9\columnwidth]{figures/fig_scalability_sustainability.pdf}
     \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
     \label{fig:scalability}
 \end{figure}
@@ -148,6 +148,39 @@ PDU is the strongest baseline on MUSE News, which is the only benchmark providin
 \method remains stable across conditions: HM stays within 0.523--0.552 through 4$\times$ scale and 4 sequential steps (\figref{fig:scalability}).
 By contrast, PDU collapses at 4$\times$ scale (HM=0.005) and after just 2 sequential steps (0.58$\to$0.02).
 The bounded loss, LoRA bottleneck, and asymmetric ALM ratchet together prevent the gradient explosion that causes this catastrophic failure under repeated application.
+
+
+%% ============================================================
+\subsection{MUSE News: Representational Entanglement}
+\label{sec:entanglement}
+%% ============================================================
+
+On MUSE News, the overall HM is comparatively lower for all methods, and \method comes in second. However, due to \method's robust design, it outperforms PDU on MUSE News under scalability and sustainability tests (\S\ref{sec:sust_scal}). The relatively lower score on MUSE News, common to every method, nevertheless requires justification.
+
+Our assumption is that the forget and retain sets of MUSE News have a higher degree of representational entanglement than the other benchmarks, which makes the underlying optimization more difficult. We compute three lightweight corpus-level entanglement proxies on every benchmark's forget and retain splits: TF-IDF cosine, Vocab Jaccard ($|V_f \cap V_r| / |V_f \cup V_r|$), and Named Entity Jaccard.
+
+\begin{table}[!ht]
+\centering
+\small
+\caption{Corpus-level entanglement proxies between the forget and retain splits of each benchmark.}
+\label{tab:entanglement}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Benchmark & TF-IDF cosine & Vocab Jaccard & NE Jaccard \\
+\midrule
+MUSE News          & \textbf{0.957} & \textbf{0.486} & 0.191 \\
+MUSE Books         & 0.391 & 0.329 & 0.266 \\
+TOFU forget01      & 0.172 & 0.035 & 0.006 \\
+TOFU forget05      & 0.347 & 0.130 & 0.032 \\
+TOFU forget10      & 0.449 & 0.220 & 0.047 \\
+KnowUnDo Copyright & 0.441 & 0.389 & 0.121 \\
+KnowUnDo Privacy   & 0.523 & 0.392 & \textbf{0.540} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+MUSE News has the highest lexical entanglement (TF-IDF cosine 0.957 and Vocab Jaccard 0.486), an artifact of forget and retain being drawn from the same BBC news distribution. In addition, we notice that KnowUnDo Privacy tops NE Jaccard (0.540). Though \method outperforms every baseline on KnowUnDo Privacy, its training dynamics visibly resemble MUSE News (Appendix Fig.~\ref{fig:dynamics_blade_full}), showing the same delayed spike-and-ratchet pattern. All other datasets show a cleaner three-phase landscape similar to \figref{fig:dynamics} (MUSE Books). We therefore believe the relatively lower performance on MUSE News reflects a dataset-level property rather than a generalization weakness of the method.
 
 
 %% ============================================================
@@ -163,7 +196,7 @@ The bounded loss, LoRA bottleneck, and asymmetric ALM ratchet together prevent t
 \resizebox{\textwidth}{!}{%
 \begin{tabular}{@{}lccccc|cccc@{}}
 \toprule
-Configuration & fk$\downarrow$ & vm$\downarrow$ & ret$\uparrow$ & HM$\uparrow$ & $\Delta$ret & FL$_\text{J}$$\downarrow$ & RA$_\text{J}$$\uparrow$ & rRQ$_\text{J}$$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+Configuration & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ & $\Delta$rk & FL$_\text{J}$$\downarrow$ & RA$_\text{J}$$\uparrow$ & rRQ$_\text{J}$$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
 \midrule
 Full \method & .110 & .000 & .658 & \textbf{.823} & --- & 0.14 & 1.40 & 1.69 & \textbf{.814} \\
 \midrule
@@ -187,7 +220,7 @@ The results reveal a clear hierarchy of component necessity:
 Without it ($\lambda\!=\!0$, $\rho\!=\!0$), the forget objective dominates unchecked and the model collapses (HM=0.233).
 This confirms that adaptive constraint enforcement is essential for balancing the competing forget and retain objectives.
 
-\paragraph{Parameterization (LoRA).} Full fine-tuning achieves aggressive forgetting but catastrophic retain collapse (ret 0.658$\to$0.306, HM=0.459).
+\paragraph{Parameterization (LoRA).} Full fine-tuning achieves aggressive forgetting but catastrophic retain collapse (rk 0.658$\to$0.306, HM=0.459).
 The low-rank bottleneck provides implicit regularization by limiting the subspace available for unlearning updates, preventing representational drift beyond the forget-relevant parameters.
 
 \paragraph{Forget loss.} Only clamped entropy works within the bilevel framework.
@@ -195,7 +228,7 @@ Gradient ascent (HM=0.160), NPO (HM=0.009), and logit margin (HM=0.000) all caus
 These failures demonstrate that the contribution is not the individual components but their specific interaction: only a bounded, self-saturating forget loss is compatible with constrained bilevel optimization; naive combinations of known techniques collapse.
 Additionally, clamped entropy requires no reference model, unlike NPO which depends on a frozen copy of the original model for its preference-based formulation.
 
-\paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), confirming the ``repair first, forget carefully'' design principle: without restoring retain quality before each forget step, the ALM ratchet fires continuously and over-penalizes forgetting.
+\paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), confirming the repair-first principle: without restoring retain quality before each forget step, the ALM ratchet fires continuously and over-penalizes forgetting.
 On MUSE Books the marginal gain from $K\!=\!3$ over $K\!=\!0$ appears modest (HM 0.823 vs.\ 0.819), likely because the ALM compensates for absent inner repair on this benchmark.
 Under harder optimization landscapes (higher retain--forget entanglement or larger forget sets), the inner loop's pre-correction is expected to become increasingly necessary; an $\varepsilon$-multiplier sweep across 8 operating points on MUSE News confirms consistent improvements with $K\!=\!3$ (\figref{fig:inner_loop_ablation} in appendix).
 
@@ -206,17 +239,17 @@ Under harder optimization landscapes (higher retain--forget entanglement or larg
 
 \begin{figure}[t]
     \centering
-    \includegraphics[width=\columnwidth]{figures/fig_muse_books_dynamics.pdf}
-    \includegraphics[width=\columnwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
+    \includegraphics[width=0.9\columnwidth]{figures/fig_muse_books_dynamics.pdf}
+    \includegraphics[width=0.9\columnwidth]{figures/fig_muse_books_PDU_dynamics.pdf}
     \caption{Training dynamics on MUSE Books. Top: \method (warm-up $\to$ spike-and-ratchet $\to$ smooth convergence). Bottom: PDU (recurring oscillations). Full dynamics across all benchmarks in Appendix~\ref{app:dynamics}.}
     \label{fig:dynamics}
 \end{figure}
 
 For unlearning to be deployed reliably, the optimization must be interpretable and predictable; practitioners need to trust that the process will converge without silent retain degradation.
 \method exhibits consistent three-phase dynamics across all benchmarks, model scales, and dataset types (\figref{fig:dynamics}; Appendix~\ref{app:dynamics}):
-(1)~\emph{warm-up}---forget loss declines while retain stays within $\varepsilon$;
-(2)~\emph{spike-and-ratchet}---a transient retain violation triggers the asymmetric ALM to permanently increase $\lambda$; and
-(3)~\emph{smooth convergence}---both losses decrease monotonically under the elevated $\lambda$.
+(1)~\emph{warm-up}: forget loss declines while retain stays within $\varepsilon$;
+(2)~\emph{spike-and-ratchet}: a transient retain violation triggers the asymmetric ALM to permanently increase $\lambda$; and
+(3)~\emph{smooth convergence}: both losses decrease monotonically under the elevated $\lambda$.
 This self-correcting behavior contrasts sharply with PDU's recurring retain oscillations, which may explain its fragility under scaling and sequential application (\S\ref{sec:sust_scal}).
 The $\lambda$ trajectory adjusts the optimization landscape automatically: tighter constraints produce higher $\lambda$, absorbing parameter variation without performance degradation. A hyperparameter sensitivity sweep confirms that \method remains stable across wide parameter ranges (Appendix~\ref{app:robustness}).
 
@@ -226,7 +259,28 @@ The $\lambda$ trajectory adjusts the optimization landscape automatically: tight
 %% ============================================================
 
 An unlearned model deployed behind an API remains vulnerable to adversarial users who rephrase queries to elicit forgotten content.
-We evaluate resistance to such extraction attacks (paraphrased and perturbed queries) on TOFU across both 1B and 3B models.
-\method achieves the highest adversarial HM on 1B across all splits and remains competitive with PDU on 3B, consistent with the standard metric rankings.
-Under a strictly stronger threat model where an adversary can fine-tune the model on the original forget data, \method's performance degrades (Appendix~\ref{app:adversarial}).
+To evaluate this, we consider four black-box attack types on the TOFU dataset:
+extraction via paraphrased (ParaProb) and perturbed (PertProb) queries;
+jailbreak, using the two adversarial prompt templates from the OpenUnlearning benchmark;
+membership inference (MIA) via OpenUnlearning's PrivLeak composite (LOSS, ZLib, Min-K\% Prob, Min-K++, GradNorm, and Reference-based losses);
+and optimization-based adversarial suffixes generated by Greedy Coordinate Gradient (GCG) search.
+
+\method is resilient across all four categories.
+For extraction, it achieves the highest adversarial HM on Llama-3.2-1B-Instruct across all splits and remains competitive with PDU on Llama-3.2-3B-Instruct.
+For jailbreak, it leads on Attack Success Rate (ASR) at every forget split.
+For MIA, it is the only method whose PrivLeak scores are consistently positive, indicating no membership leakage.
+For GCG, it achieves the lowest ASR on fgt01 while remaining competitive with PDU on the other splits; both outperform the remaining baselines.
+Full per-method values across all four categories are reported in Appendix Tables~\ref{tab:adv_extraction}, \ref{tab:jailbreak}, \ref{tab:mia}, and~\ref{tab:gcg}.
+
+Under a strictly stronger threat model where an adversary can fine-tune the model on the original forget data, known as a re-learning attack, \method's performance degrades (Appendix~\ref{app:adversarial}).
+
+
+%% ============================================================
+\subsection{Computational Cost}
+\label{sec:compute}
+%% ============================================================
+
+As \method updates only LoRA adapters, its peak GPU memory is substantially lower than every baseline across all benchmarks (roughly $2$--$5\times$).
+In exchange, wall-clock time is somewhat higher (roughly $1.5$--$2\times$) than most baselines: a single \method step is more costly due to inner and outer optimization. On TOFU \method needs more steps to converge, while on the larger MUSE and KnowUnDo benchmarks it converges in fewer steps, ending up comparable to BLURNPO, which is also a bilevel method.
+Full per-method values on time and memory across all benchmarks are reported in Appendix Tables~\ref{tab:compute_time} and~\ref{tab:compute_memory}.
 
