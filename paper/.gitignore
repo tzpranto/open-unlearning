@@ -12,6 +12,7 @@
 *.synctex.gz
 *.pdf
 !main.pdf
+!figures/*.pdf
 
 # Editor
 *.swp
