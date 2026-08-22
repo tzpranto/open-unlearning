@@ -1,0 +1,74 @@
+\documentclass[11pt]{article}
+
+
+\usepackage{times}
+\usepackage{inconsolata}
+\usepackage{acl}
+
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{multirow}
+\usepackage{makecell}
+\usepackage{enumitem}
+\usepackage{xspace}
+\usepackage{wrapfig}
+\usepackage{placeins}
+\usepackage{float}
+
+
+\renewcommand{\topfraction}{0.9}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.07}
+\renewcommand{\floatpagefraction}{0.75}
+
+
+\input{macros}
+
+
+\title{BLADE: Bilevel Low-rank Augmented-Lagrangian Erasure for LLM Unlearning}
+
+\author{
+  \textbf{Md Toufikuzzaman\textsuperscript{1}},
+  \textbf{Ahmad Mousavi\textsuperscript{2}},
+  \textbf{Dongwon Lee\textsuperscript{1}}
+  \\
+  \\
+  \textsuperscript{1}The Pennsylvania State University, USA \quad
+  \textsuperscript{2}American University \\
+  \texttt{mpt5763@psu.edu}, \texttt{mousavi@american.edu}, \texttt{dongwon@psu.edu}
+}
+
+\begin{document}
+
+\maketitle
+
+\input{abstract}
+\input{introduction}
+\input{related_work}
+\input{method}
+\input{experiments}
+\input{conclusion}
+
+\bibliography{references}
+
+\clearpage
+\appendix
+\input{appendix}
+
+\end{document}
+\typeout{get arXiv to do 4 passes: Label(s) may have changed. Rerun}

@@ -1,0 +1,7 @@
+\begin{abstract}
+
+Existing LLM unlearning methods struggle with robustness: unbounded forget losses degrade model coherence, fixed-weight balancing cannot adapt as retain difficulty shifts mid-training, and methods that work on one benchmark falter under scaling or repeated application.
+We propose \method,\footnote{Code and configs: \url{https://github.com/tzpranto/blade}} a constrained bilevel framework whose three mechanisms give smooth, predictable control over the optimization landscape: a clamped-entropy forget loss whose gradient is exactly zero once a token reaches sufficient uncertainty; an asymmetric augmented Lagrangian that permanently ratchets retain protection after any violation; and a bilevel structure confined to LoRA adapters that repairs retain damage before each forgetting step.
+\method dominates across three benchmark families, improving average composite scores over the strongest baselines by $6$\% on TOFU, $9$\% on MUSE Books, and $7$\% on KnowUndo, and it remains stable under $4\times$ scaling and $4$ sequential unlearning steps on MUSE News where the best competing method collapses entirely.
+
+\end{abstract}

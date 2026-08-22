@@ -1,0 +1,289 @@
+\section{Experiments}
+\label{sec:results}
+We evaluate \method on three benchmarks that test complementary aspects of unlearning: factual association removal, naturalistic memorization at scale, and domain-specific knowledge extraction from adapted models.
+We use OpenUnlearning \citep{shi2025muse}, an open-source toolkit that bundles standard unlearning baselines, datasets, and evaluation pipelines under a unified interface.
+All methods are implemented and run within this framework, ensuring fair comparison under identical data processing, evaluation protocols, and compute budgets.
+We use the standard baselines provided by OpenUnlearning (GradAscent, GradDiff, NPO, SimNPO, RMU) and additionally include BLURNPO \citep{reisizadeh2026blur} and PDU \citep{entesari2026constrained} as constraint-based approaches compatible with the framework.
+Baseline hyperparameters are listed in Appendix Table~\ref{tab:baselines}.
+All experiments report means and standard deviations over 5 random seeds unless noted.
+
+\subsection{Setup}
+
+\paragraph{Benchmarks.}
+\textbf{TOFU} \citep{maini2024tofu} provides a controlled testbed with 200 synthetic author biographies and QA pairs, evaluated on Llama-3.2-1B/3B-Instruct across three forget splits (1\%/5\%/10\%). Each split removes an increasing fraction of the training authors, testing whether the method scales gracefully. A gold retrained model provides an upper bound.
+
+\textbf{MUSE} \citep{shi2025muse} tests naturalistic memorization on Llama-2-7B across two corpora: \emph{Books} (Harry Potter, a single cohesive document) and \emph{News} (889 BBC articles, a distributed multi-document set). Beyond standard forget/retain performance, MUSE also tests scalability (larger forget sets) and sustainability (sequential unlearning from the same checkpoint), which we evaluate in \S\ref{sec:sust_scal}.
+
+\textbf{KnowUndo} \citep{tian2024knowundo} targets copyright and privacy domains on Llama-2-7B-chat that was LoRA-fine-tuned on domain-specific corpora. Unlike MUSE where memorization arises from pretraining, here the target knowledge was explicitly injected via LoRA adaptation, testing whether unlearning can reverse fine-tuning without destroying general capability.
+
+\paragraph{Metrics.}
+Each benchmark uses different axes.
+For TOFU: Model Utility (MU$\uparrow$, retain quality), forget-set answer Probability (Prob$\downarrow$), and forget-set ROUGE-L (RG$\downarrow$).
+For MUSE: forget knowledge memorization (fk$\downarrow$), verbatim memorization (vm$\downarrow$), and retain knowledge (rk$\uparrow$).
+We aggregate each benchmark's metrics into a single \emph{harmonic mean} (HM) that penalizes methods sacrificing one axis for another.
+Full metric definitions and per-benchmark HM formulas are given in Appendix~\ref{app:metrics}.
+
+\paragraph{LLM judge.}
+Token-overlap metrics like ROUGE can miss semantic leakage: a model may paraphrase memorized content without triggering string-match detectors.
+We supplement standard metrics with an LLM judge (Claude Opus~4.7) that scores model generations on a 0--2 scale along three dimensions: Forget Leakage (FL$\downarrow$), Retain Accuracy (RA$\uparrow$), and retain Response Quality (rRQ$\uparrow$).
+The judge composite $\text{HM}_\text{J} = \text{hmean}(1{-}\text{FL}/2,\; \text{RA}/2,\; \text{rRQ}/2)$ normalizes all axes to $[0,1]$ and provides a unified evaluation across all benchmarks.
+
+
+\subsection{TOFU (Llama-3.2-1B-Instruct)}
+\label{sec:tofu_1b}
+
+
+\begin{table*}[t!]
+\centering
+\small
+\caption{TOFU results on Llama-3.2-1B-Instruct (5 seeds). HM = hmean(MU, 1$-$Prob, 1$-$RG). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
+\label{tab:tofu_1b_full}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}l|cccc|cccc|cccc@{}}
+\toprule
+& \multicolumn{4}{c|}{Forget 1\%} & \multicolumn{4}{c|}{Forget 5\%} & \multicolumn{4}{c}{Forget 10\%} \\
+Method & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ & MU$\uparrow$ & Prob$\downarrow$ & RG$\downarrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & .597 & .166 & .414 & .655 & .599 & .127 & .383 & .676 & .591 & .116 & .379 & .677 \\
+\midrule
+GradAscent & .596$_{\pm.00}$ & .477$_{\pm.01}$ & .456$_{\pm.01}$ & .553$_{\pm.01}$ & .008$_{\pm.01}$ & .003$_{\pm.01}$ & .112$_{\pm.08}$ & .022$_{\pm.04}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .001$_{\pm.00}$ & .000$_{\pm.00}$ \\
+GradDiff & .581$_{\pm.01}$ & .421$_{\pm.04}$ & .464$_{\pm.02}$ & .564$_{\pm.01}$ & .453$_{\pm.00}$ & .073$_{\pm.00}$ & .375$_{\pm.01}$ & .614$_{\pm.01}$ & .435$_{\pm.00}$ & .047$_{\pm.00}$ & .339$_{\pm.01}$ & .617$_{\pm.00}$ \\
+NPO & .596$_{\pm.00}$ & .474$_{\pm.01}$ & .438$_{\pm.02}$ & .560$_{\pm.01}$ & .454$_{\pm.01}$ & .245$_{\pm.01}$ & .308$_{\pm.01}$ & .603$_{\pm.01}$ & .393$_{\pm.03}$ & .213$_{\pm.01}$ & .210$_{\pm.01}$ & .590$_{\pm.02}$ \\
+SimNPO & .594$_{\pm.00}$ & .858$_{\pm.01}$ & .734$_{\pm.02}$ & .240$_{\pm.01}$ & .596$_{\pm.00}$ & .848$_{\pm.00}$ & .741$_{\pm.01}$ & .248$_{\pm.00}$ & \textbf{.597}$_{\pm.00}$ & .842$_{\pm.00}$ & .734$_{\pm.01}$ & .255$_{\pm.00}$ \\
+RMU & .557$_{\pm.00}$ & .414$_{\pm.01}$ & .415$_{\pm.00}$ & .576$_{\pm.00}$ & .546$_{\pm.00}$ & .369$_{\pm.01}$ & .423$_{\pm.01}$ & .583$_{\pm.00}$ & .572$_{\pm.00}$ & .106$_{\pm.02}$ & .322$_{\pm.01}$ & .691$_{\pm.01}$ \\
+BLURNPO & .598$_{\pm.00}$ & .676$_{\pm.01}$ & .588$_{\pm.02}$ & .417$_{\pm.01}$ & .518$_{\pm.02}$ & .475$_{\pm.07}$ & .407$_{\pm.05}$ & .541$_{\pm.04}$ & .089$_{\pm.14}$ & .087$_{\pm.04}$ & .253$_{\pm.09}$ & .154$_{\pm.20}$ \\
+PDU & \textbf{.602}$_{\pm.00}$ & .186$_{\pm.01}$ & .313$_{\pm.01}$ & .690$_{\pm.01}$ & .588$_{\pm.00}$ & .073$_{\pm.02}$ & .214$_{\pm.03}$ & .740$_{\pm.01}$ & .592$_{\pm.00}$ & \textbf{.004}$_{\pm.00}$ & .065$_{\pm.01}$ & .797$_{\pm.00}$ \\
+\midrule
+\method & .599$_{\pm.00}$ & \textbf{.002}$_{\pm.00}$ & \textbf{.038}$_{\pm.00}$ & \textbf{.808}$_{\pm.00}$ & \textbf{.597}$_{\pm.00}$ & \textbf{.015}$_{\pm.00}$ & \textbf{.054}$_{\pm.01}$ & \textbf{.800}$_{\pm.00}$ & .593$_{\pm.01}$ & .009$_{\pm.00}$ & \textbf{.039}$_{\pm.01}$ & \textbf{.803}$_{\pm.00}$ \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+\method achieves HM$\geq$0.800 across all three forget splits (Table~\ref{tab:tofu_1b_full}), consistently outperforming all baselines including PDU (0.690/0.740/0.797).
+The LLM judge (\figref{fig:judge}) confirms near-zero semantic leakage: HM$_\text{J}$=0.929/0.919/0.919 vs.\ PDU's 0.746/0.850/0.906, indicating that \method's forgetting extends beyond surface-level token suppression (see also qualitative analysis in Appendix~\ref{app:qualitative}).
+On 3B model (Appendix~\ref{app:tofu_full}), \method remains strong (HM=0.846/0.842/0.836); PDU is competitive (0.742/0.843/0.857), winning on forget05 and forget10 by a narrow margin, but \method retains its advantage in LLM judge score across all splits.
+
+
+\subsection{MUSE (Llama-2-7B)}
+\label{sec:muse}
+
+
+\begin{table*}[t!]
+\centering
+\small
+\caption{MUSE results (5 seeds). HM = hmean(1$-$fk, 1$-$vm, rk). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
+\label{tab:muse}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}l|cccc|cccc@{}}
+\toprule
+& \multicolumn{4}{c|}{Books} & \multicolumn{4}{c}{News} \\
+Method & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ \\
+\midrule
+Gold (retrain) & .303 & .145 & .687 & .739 & .324 & .204 & .552 & .660 \\
+\midrule
+GradAscent & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .001$_{\pm.00}$ & .020$_{\pm.02}$ & .003$_{\pm.00}$ & .009$_{\pm.01}$ \\
+GradDiff & .000$_{\pm.00}$ & .000$_{\pm.00}$ & .004$_{\pm.00}$ & .011$_{\pm.01}$ & .329$_{\pm.03}$ & \textbf{.043}$_{\pm.02}$ & .269$_{\pm.02}$ & .479$_{\pm.02}$ \\
+NPO & .303$_{\pm.02}$ & .342$_{\pm.03}$ & .574$_{\pm.02}$ & .638$_{\pm.01}$ & .517$_{\pm.02}$ & .274$_{\pm.02}$ & .435$_{\pm.01}$ & .522$_{\pm.01}$ \\
+SimNPO & .238$_{\pm.02}$ & .002$_{\pm.00}$ & .600$_{\pm.01}$ & .753$_{\pm.01}$ & .628$_{\pm.01}$ & .542$_{\pm.01}$ & \textbf{.513}$_{\pm.01}$ & .440$_{\pm.00}$ \\
+RMU & .210$_{\pm.00}$ & .113$_{\pm.01}$ & .598$_{\pm.01}$ & .738$_{\pm.00}$ & .495$_{\pm.01}$ & .267$_{\pm.01}$ & .434$_{\pm.01}$ & .531$_{\pm.00}$ \\
+BLURNPO & .175$_{\pm.01}$ & \textbf{.000}$_{\pm.00}$ & .547$_{\pm.02}$ & .742$_{\pm.01}$ & \textbf{.302}$_{\pm.04}$ & .146$_{\pm.04}$ & .274$_{\pm.02}$ & .478$_{\pm.01}$ \\
+PDU & .139$_{\pm.01}$ & .129$_{\pm.01}$ & .372$_{\pm.01}$ & .600$_{\pm.01}$ & .525$_{\pm.02}$ & .092$_{\pm.07}$ & .508$_{\pm.04}$ & \textbf{.577}$_{\pm.01}$ \\
+\midrule
+\method & \textbf{.089}$_{\pm.02}$ & \textbf{.000}$_{\pm.00}$ & \textbf{.638}$_{\pm.01}$ & \textbf{.818}$_{\pm.01}$ & .545$_{\pm.02}$ & .211$_{\pm.03}$ & .490$_{\pm.01}$ & .544$_{\pm.01}$ \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+On Books, \method achieves HM=0.818, surpassing SimNPO (0.753) and BLURNPO (0.742) while eliminating verbatim memorization (vm=0.000) and preserving the strongest retain (rk=0.638).
+PDU's unbounded loss causes retain collapse (rk=0.372, HM=0.600).
+On News, PDU leads (0.577 vs.\ \method 0.544), though this edge does not survive stress-testing (\S\ref{sec:sust_scal}).
+
+
+\subsection{KnowUndo (Llama-2-7B-chat)}
+\label{sec:knowundo}
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.9\columnwidth]{fig_knowundo.pdf}
+    \vspace{-2mm}
+    \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
+    \label{fig:knowundo}
+\end{figure}
+
+
+\method achieves the best HM on both domains (\figref{fig:knowundo}): copyright (0.477 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.605 vs.\ PDU 0.546, SimNPO 0.544).
+Privacy is the harder domain (the fine-tuned model recalls 66.5\% of target content vs.\ 24.4\% for copyright), yet \method reduces this by 81\% while retaining 87\% of the original retain quality (full results in Appendix Table~\ref{tab:knowundo_full}).
+
+
+\subsection{LLM Judge}
+\label{sec:judge}
+
+
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth,height=7cm,keepaspectratio]{fig_llm_judge.pdf}
+    \caption{LLM judge scores (HM$_\text{J}$) across all benchmarks and settings. Error bars: $\pm$1 std over 5 seeds. \method achieves the highest or near-highest HM$_\text{J}$ on every setting except MUSE News, where PDU leads. KnowUndo uses Opus~4.6 as judge (Opus~4.7 safety guardrails refuse on copyrighted content).}
+    \label{fig:judge}
+\end{figure*}
+
+\figref{fig:judge} summarizes the LLM judge evaluation.
+The judge scores complement and confirm the HM rankings (methods that score well on HM also score well on HM$_\text{J}$) while additionally revealing semantic leakage invisible to token-overlap metrics.
+\method achieves the highest HM$_\text{J}$ on 6 of 7 settings, with particularly large margins on TOFU 1B (0.929/0.919/0.919 across splits vs.\ PDU's 0.746/0.850/0.906).
+On KnowUndo, the judge confirms strong forgetting with preserved response quality (copyright HM$_\text{J}$=0.78, privacy HM$_\text{J}$=0.83), both substantially above the next-best method.
+The only setting where \method does not lead is MUSE News, where PDU achieves a higher judge score, consistent with its stronger HM on that benchmark.
+
+
+\subsection{Scalability and Sustainability}
+\label{sec:sust_scal}
+
+
+PDU is the strongest baseline on MUSE News, which is the only benchmark providing explicit scalability and sustainability stress tests, making it the natural choice for head-to-head comparison.
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.9\columnwidth]{fig_scalability_sustainability.pdf}
+    \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
+    \label{fig:scalability}
+\end{figure}
+
+
+\method remains stable across conditions: HM stays within 0.523--0.552 through 4$\times$ scale and 4 sequential steps (\figref{fig:scalability}).
+By contrast, PDU collapses at 4$\times$ scale (HM=0.005) and after just 2 sequential steps (0.58$\to$0.02).
+The bounded loss, LoRA bottleneck, and asymmetric ALM ratchet together prevent the gradient explosion that causes this catastrophic failure under repeated application.
+
+
+
+\subsection{MUSE News: Representational Entanglement}
+\label{sec:entanglement}
+
+
+On MUSE News, the overall HM is comparatively lower for all methods, and \method comes in second. However, due to \method's robust design, it outperforms PDU on MUSE News under scalability and sustainability tests (\S\ref{sec:sust_scal}). The relatively lower score on MUSE News, common to every method, nevertheless requires justification.
+
+Our assumption is that the forget and retain sets of MUSE News have a higher degree of representational entanglement than the other benchmarks, which makes the underlying optimization more difficult. We compute three lightweight corpus-level entanglement proxies on every benchmark's forget and retain splits: TF-IDF cosine, Vocab Jaccard ($|V_f \cap V_r| / |V_f \cup V_r|$), and Named Entity (NE) Jaccard.
+
+\begin{table}[!ht]
+\centering
+\small
+\caption{Corpus-level entanglement proxies between the forget and retain splits of each benchmark.}
+\label{tab:entanglement}
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Benchmark & TF-IDF cosine & Vocab Jaccard & NE Jaccard \\
+\midrule
+MUSE News          & \textbf{0.957} & \textbf{0.486} & 0.191 \\
+MUSE Books         & 0.391 & 0.329 & 0.266 \\
+TOFU forget01      & 0.172 & 0.035 & 0.006 \\
+TOFU forget05      & 0.347 & 0.130 & 0.032 \\
+TOFU forget10      & 0.449 & 0.220 & 0.047 \\
+KnowUnDo Copyright & 0.441 & 0.389 & 0.121 \\
+KnowUnDo Privacy   & 0.523 & 0.392 & \textbf{0.540} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+MUSE News has the highest lexical entanglement (TF-IDF cosine 0.957 and Vocab Jaccard 0.486), an artifact of forget and retain being drawn from the same BBC news distribution. In addition, we notice that KnowUnDo Privacy tops NE Jaccard (0.540). Though \method outperforms every baseline on KnowUnDo Privacy, its training dynamics visibly resemble MUSE News (Appendix Fig.~\ref{fig:dynamics_blade_full}), showing the same delayed spike-and-ratchet pattern. All other datasets show a cleaner three-phase landscape similar to \figref{fig:dynamics} (MUSE Books). We therefore believe the relatively lower performance on MUSE News reflects a dataset-level property rather than a generalization weakness of the method.
+
+
+
+\subsection{Ablation Study}
+\label{sec:ablation}
+
+
+\begin{table*}[t!]
+\centering
+\small
+\caption{Ablation on MUSE Books (seed=42). Each row modifies one design choice from the full \method.}
+\label{tab:ablation}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{@{}lccccc|cccc@{}}
+\toprule
+Configuration & fk$\downarrow$ & vm$\downarrow$ & rk$\uparrow$ & HM$\uparrow$ & $\Delta$rk & FL$_\text{J}$$\downarrow$ & RA$_\text{J}$$\uparrow$ & rRQ$_\text{J}$$\uparrow$ & HM$_\text{J}$$\uparrow$ \\
+\midrule
+Full \method & .110 & .000 & .658 & \textbf{.823} & --- & 0.14 & 1.40 & 1.69 & \textbf{.814} \\
+\midrule
+$K\!=\!0$ (no inner loop) & .072 & .000 & .631 & .819 & $-$.027 & 0.10 & 1.37 & 1.68 & .811 \\
+$\tau\!=\!1.0$ (unclamped entropy) & .161 & .003 & .604 & .780 & $-$.054 & 0.20 & 1.34 & 1.64 & .785 \\
+No LoRA (full fine-tuning) & .002 & .000 & .306 & .459 & $-$.352 & 0.00 & 0.70 & 1.25 & .550 \\
+ALM off ($\lambda\!=\!0$, $\rho\!=\!0$) & .000 & .002 & .092 & .233 & $-$.566 & 0.01 & 0.24 & 0.28 & .117 \\
+Swapped bilevel (forget inner) & .372 & .643 & .651 & .506 & $-$.007 & 0.99 & 1.36 & 1.77 & .655 \\
+\midrule
+GA forget loss & .006 & .003 & .060 & .160 & $-$.598 & 0.01 & 0.10 & 0.18 & .093 \\
+NPO forget loss & .457 & .997 & .662 & .009 & $+$.004 & 1.44 & 1.47 & 1.72 & .495 \\
+Logit margin forget loss & .000 & .000 & .000 & .000 & $-$.658 & 0.00 & 0.00 & 0.00 & .000 \\
+\bottomrule
+\end{tabular}}
+\end{table*}
+
+We systematically ablate each component of \method on MUSE Books to isolate its contribution (Table~\ref{tab:ablation}).
+The results reveal a clear hierarchy of component necessity:
+
+\paragraph{Constraint enforcement (ALM).} The augmented Lagrangian is the most critical component.
+Without it ($\lambda\!=\!0$, $\rho\!=\!0$), the forget objective dominates unchecked and the model collapses (HM=0.233).
+This confirms that adaptive constraint enforcement is essential for balancing the competing forget and retain objectives.
+
+\paragraph{Parameterization (LoRA).} Full fine-tuning achieves aggressive forgetting but catastrophic retain collapse (rk 0.658$\to$0.306, HM=0.459).
+The low-rank bottleneck provides implicit regularization by limiting the subspace available for unlearning updates, preventing representational drift beyond the forget-relevant parameters.
+
+\paragraph{Forget loss.} Only clamped entropy works within the bilevel framework.
+Gradient ascent (HM=0.160), NPO (HM=0.009), and logit margin (HM=0.000) all cause catastrophic failure \emph{even with the full ALM apparatus intact}, because their unbounded or trivially-satisfied objectives overwhelm or bypass the constraint mechanism.
+These failures demonstrate that the contribution is not the individual components but their specific interaction: only a bounded, self-saturating forget loss is compatible with constrained bilevel optimization; naive combinations of known techniques collapse.
+Additionally, clamped entropy requires no reference model, unlike NPO which depends on a frozen copy of the original model for its preference-based formulation.
+
+\paragraph{Bilevel structure.} Swapping the bilevel roles (forgetting in the inner loop) causes $\lambda$ to diverge (HM=0.506), confirming the repair-first principle: without restoring retain quality before each forget step, the ALM ratchet fires continuously and over-penalizes forgetting.
+On MUSE Books the marginal gain from $K\!=\!3$ over $K\!=\!0$ appears modest (HM 0.823 vs.\ 0.819), likely because the ALM compensates for absent inner repair on this benchmark.
+Under harder optimization landscapes (higher retain--forget entanglement or larger forget sets), the inner loop's pre-correction is expected to become increasingly necessary; an $\varepsilon$-multiplier sweep across 8 operating points on MUSE News confirms consistent improvements with $K\!=\!3$ (\figref{fig:inner_loop_ablation} in appendix).
+
+
+\subsection{Training Dynamics}
+\label{sec:dynamics}
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=0.9\columnwidth]{fig_muse_books_dynamics.pdf}
+    \includegraphics[width=0.9\columnwidth]{fig_muse_books_PDU_dynamics.pdf}
+    \caption{Training dynamics on MUSE Books. Top: \method (warm-up $\to$ spike-and-ratchet $\to$ smooth convergence). Bottom: PDU (recurring oscillations). Full dynamics across all benchmarks in Appendix~\ref{app:dynamics}.}
+    \label{fig:dynamics}
+\end{figure}
+
+For unlearning to be deployed reliably, the optimization must be interpretable and predictable; practitioners need to trust that the process will converge without silent retain degradation.
+\method exhibits consistent three-phase dynamics across all benchmarks, model scales, and dataset types (\figref{fig:dynamics}; Appendix~\ref{app:dynamics}):
+(1)~\emph{warm-up}: forget loss declines while retain stays within $\varepsilon$;
+(2)~\emph{spike-and-ratchet}: a transient retain violation triggers the asymmetric ALM to permanently increase $\lambda$; and
+(3)~\emph{smooth convergence}: both losses decrease monotonically under the elevated $\lambda$.
+This self-correcting behavior contrasts sharply with PDU's recurring retain oscillations, which may explain its fragility under scaling and sequential application (\S\ref{sec:sust_scal}).
+The $\lambda$ trajectory adjusts the optimization landscape automatically: tighter constraints produce higher $\lambda$, absorbing parameter variation without performance degradation. A hyperparameter sensitivity sweep confirms that \method remains stable across wide parameter ranges (Appendix~\ref{app:robustness}).
+
+
+\subsection{Adversarial Robustness}
+\label{sec:adversarial}
+
+
+An unlearned model deployed behind an API remains vulnerable to adversarial users who rephrase queries to elicit forgotten content.
+To evaluate this, we consider four black-box attack types on the TOFU dataset:
+extraction via paraphrased (ParaProb) and perturbed (PertProb) queries;
+jailbreak, using the two adversarial prompt templates from the OpenUnlearning benchmark;
+membership inference (MIA) via OpenUnlearning's PrivLeak composite (LOSS, ZLib, Min-K\% Prob, Min-K++, GradNorm, and Reference-based losses);
+and optimization-based adversarial suffixes generated by Greedy Coordinate Gradient (GCG) search.
+
+\method is resilient across all four categories.
+For extraction, it achieves the highest adversarial HM on Llama-3.2-1B-Instruct across all splits and remains competitive with PDU on Llama-3.2-3B-Instruct.
+For jailbreak, it leads on Attack Success Rate (ASR) at every forget split.
+For MIA, it is the only method whose PrivLeak scores are consistently positive, indicating no membership leakage.
+For GCG, it achieves the lowest ASR on fgt01 while remaining competitive with PDU on the other splits; both outperform the remaining baselines.
+Full per-method values across all four categories are reported in Appendix Tables~\ref{tab:adv_extraction}, \ref{tab:jailbreak}, \ref{tab:mia}, and~\ref{tab:gcg}.
+
+Under a strictly stronger threat model where an adversary can fine-tune the model on the original forget data, known as a re-learning attack, \method's performance degrades (Appendix~\ref{app:adversarial}).
+
+
+
+\subsection{Computational Cost}
+\label{sec:compute}
+
+
+As \method updates only LoRA adapters, its peak GPU memory is substantially lower than every baseline across all benchmarks (roughly $2$--$5\times$).
+In exchange, wall-clock time is somewhat higher (roughly $1.5$--$2\times$) than most baselines: a single \method step is more costly due to inner and outer optimization. On TOFU, \method needs more steps to converge, while on the larger MUSE and KnowUnDo benchmarks it converges in fewer steps, ending up comparable to BLURNPO, which is also a bilevel method.
+Full per-method values on time and memory across all benchmarks are reported in Appendix Tables~\ref{tab:compute_time} and~\ref{tab:compute_memory}.
+
