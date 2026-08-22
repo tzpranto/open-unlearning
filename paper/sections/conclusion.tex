@@ -9,9 +9,12 @@ Together, these produce a self-correcting system whose three-phase dynamics (war
 
 \section{Limitations}
 \label{sec:limitations}
-\method targets factual and knowledge-level unlearning; it has not been tested on conceptual or representation-level domain removal (e.g., all unsafe biology knowledge) where forget--retain entanglement may exceed what LoRA can selectively target.
+\method targets factual and knowledge-level unlearning; it has not been tested on conceptual or representation-level domain removal (e.g., all unsafe biology knowledge) where forget--retain entanglement may exceed what \method can selectively target.
 Second, while \method resists black-box extraction attacks, it is susceptible to re-learning attacks, a strictly stronger threat model that assumes an adversary with both white-box weight access and possession of the original forget data.
 Our current understanding is that the outer optimizer pushes forget and retain into a region of parameter space that is just sufficient, without an adversarial safety margin, to remove the traces of the forget data at the token level.
 A promising future direction is to place an adversarial objective at the outer level so that \method is pushed beyond knowledge erasure and toward a safety margin from the retain-entangled directions; a concrete proxy would be a dual-threshold clamped-entropy loss that treats highly-entangled and weakly-entangled tokens with different $\tau$.
 Finally, \method has only been evaluated on text-only LLMs; its effectiveness on multimodal models remains untested.
-These are challenges worth exploring in future endeavours.
+These are challenges worth exploring in future endeavors.
+
+\section*{Acknowledgments}
+This work was supported in part by U.S. NSF awards \#2438810 and \#2555559, Amazon Nova AI challenge award, and PSU Frymoyer chairship award. Some experimental results were obtained using computational resources provided by CloudBank, supported through U.S. NAIRR award \#240336.

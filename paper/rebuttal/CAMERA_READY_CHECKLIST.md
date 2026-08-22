@@ -63,7 +63,7 @@ Source of items: meta-review (AC VLUQ) + Reviewer 8hx1 + Reviewer Q1JT + Reviewe
 ## Non-content housekeeping
 
 - [x] Deanonymize the method-name footnote (real repo URL, replacing anon link from commit `177adf4`)
-- [ ] Add Acknowledgements section
+- [x] Add Acknowledgements section
 - [ ] Verify AI-assistant disclosure matches EMNLP 2026 final policy
 - [x] Camera-ready style switch: `\usepackage{acl}` (no `[review]`)
 - [x] Author block (Pattern B, superscripts)

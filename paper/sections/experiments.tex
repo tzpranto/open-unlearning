@@ -106,9 +106,11 @@ On News, PDU leads (0.577 vs.\ \method 0.544), though this edge does not survive
 \begin{figure}[t]
     \centering
     \includegraphics[width=0.9\columnwidth]{figures/fig_knowundo.pdf}
+    \vspace{-2mm}
     \caption{KnowUndo results (5 seeds). Error bars: $\pm$1 std.\ Full tables in Appendix~\ref{app:tofu_full}.}
     \label{fig:knowundo}
 \end{figure}
+% \vspace{-6mm}
 
 \method achieves the best HM on both domains (\figref{fig:knowundo}): copyright (0.477 vs.\ SimNPO 0.461, PDU 0.442) and privacy (0.605 vs.\ PDU 0.546, SimNPO 0.544).
 Privacy is the harder domain (the fine-tuned model recalls 66.5\% of target content vs.\ 24.4\% for copyright), yet \method reduces this by 81\% while retaining 87\% of the original retain quality (full results in Appendix Table~\ref{tab:knowundo_full}).
@@ -136,7 +138,7 @@ The only setting where \method does not lead is MUSE News, where PDU achieves a 
 \label{sec:sust_scal}
 %% ============================================================
 
-PDU is the strongest baseline on MUSE News, which is the only benchmark providing explicit scalability and sustainability stress tests, making it the natural head-to-head comparison.
+PDU is the strongest baseline on MUSE News, which is the only benchmark providing explicit scalability and sustainability stress tests, making it the natural choice for head-to-head comparison.
 
 \begin{figure}[t]
     \centering
@@ -144,6 +146,7 @@ PDU is the strongest baseline on MUSE News, which is the only benchmark providin
     \caption{Scalability and sustainability on MUSE News. PDU collapses at 4$\times$ scale and after 2 sequential steps. \method degrades gracefully.}
     \label{fig:scalability}
 \end{figure}
+% \vspace{-3mm}
 
 \method remains stable across conditions: HM stays within 0.523--0.552 through 4$\times$ scale and 4 sequential steps (\figref{fig:scalability}).
 By contrast, PDU collapses at 4$\times$ scale (HM=0.005) and after just 2 sequential steps (0.58$\to$0.02).
@@ -157,7 +160,7 @@ The bounded loss, LoRA bottleneck, and asymmetric ALM ratchet together prevent t
 
 On MUSE News, the overall HM is comparatively lower for all methods, and \method comes in second. However, due to \method's robust design, it outperforms PDU on MUSE News under scalability and sustainability tests (\S\ref{sec:sust_scal}). The relatively lower score on MUSE News, common to every method, nevertheless requires justification.
 
-Our assumption is that the forget and retain sets of MUSE News have a higher degree of representational entanglement than the other benchmarks, which makes the underlying optimization more difficult. We compute three lightweight corpus-level entanglement proxies on every benchmark's forget and retain splits: TF-IDF cosine, Vocab Jaccard ($|V_f \cap V_r| / |V_f \cup V_r|$), and Named Entity Jaccard.
+Our assumption is that the forget and retain sets of MUSE News have a higher degree of representational entanglement than the other benchmarks, which makes the underlying optimization more difficult. We compute three lightweight corpus-level entanglement proxies on every benchmark's forget and retain splits: TF-IDF cosine, Vocab Jaccard ($|V_f \cap V_r| / |V_f \cup V_r|$), and Named Entity (NE) Jaccard.
 
 \begin{table}[!ht]
 \centering
@@ -213,7 +216,7 @@ Logit margin forget loss & .000 & .000 & .000 & .000 & $-$.658 & 0.00 & 0.00 & 0
 \end{tabular}}
 \end{table*}
 
-We systematically ablate each component of \method to isolate its contribution (Table~\ref{tab:ablation}).
+We systematically ablate each component of \method on MUSE Books to isolate its contribution (Table~\ref{tab:ablation}).
 The results reveal a clear hierarchy of component necessity:
 
 \paragraph{Constraint enforcement (ALM).} The augmented Lagrangian is the most critical component.
@@ -281,6 +284,6 @@ Under a strictly stronger threat model where an adversary can fine-tune the mode
 %% ============================================================
 
 As \method updates only LoRA adapters, its peak GPU memory is substantially lower than every baseline across all benchmarks (roughly $2$--$5\times$).
-In exchange, wall-clock time is somewhat higher (roughly $1.5$--$2\times$) than most baselines: a single \method step is more costly due to inner and outer optimization. On TOFU \method needs more steps to converge, while on the larger MUSE and KnowUnDo benchmarks it converges in fewer steps, ending up comparable to BLURNPO, which is also a bilevel method.
+In exchange, wall-clock time is somewhat higher (roughly $1.5$--$2\times$) than most baselines: a single \method step is more costly due to inner and outer optimization. On TOFU, \method needs more steps to converge, while on the larger MUSE and KnowUnDo benchmarks it converges in fewer steps, ending up comparable to BLURNPO, which is also a bilevel method.
 Full per-method values on time and memory across all benchmarks are reported in Appendix Tables~\ref{tab:compute_time} and~\ref{tab:compute_memory}.
 

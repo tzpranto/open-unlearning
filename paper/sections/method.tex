@@ -2,7 +2,7 @@
 \label{sec:method}
 
 Unlearning often degrades general capability because forget and retain knowledge occupy shared representations \citep{cheng2026unlearning, liu2025rethinking}.
-\method addresses this with three mechanisms: a bilevel structure that repairs retain \emph{before} each forget step (\S\ref{sec:bilevel}), a clamped entropy loss with a hard per-token deadzone (\S\ref{sec:clamped_entropy}), and an augmented Lagrangian whose dual variable adapts the forget--retain tradeoff during training (\S\ref{sec:alm}).
+\method addresses this with three mechanisms: a bilevel structure that repairs retain \emph{before} each forget step (\S\ref{sec:bilevel}), an augmented Lagrangian whose dual variable adapts the forget--retain tradeoff during training (\S\ref{sec:alm}), and a clamped entropy loss with a hard per-token deadzone (\S\ref{sec:clamped_entropy}).
 
 \subsection{Problem Setup}
 
