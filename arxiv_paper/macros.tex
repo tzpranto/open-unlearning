@@ -1,11 +1,11 @@
+% =============================================================
+% Project-wide macros — import once in main.tex via \input{macros}
+% =============================================================
 
-
-
-
-
+% --- Method name ---
 \newcommand{\method}{BLADE\xspace}
 
-
+% --- Math shortcuts ---
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\N}{\mathcal{N}}
@@ -18,11 +18,11 @@
 \DeclareMathOperator*{\argmin}{arg\,min}
 \DeclareMathOperator*{\argmax}{arg\,max}
 
-
+% --- Annotation helpers (hidden in final) ---
 \newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
 \newcommand{\note}[1]{\textcolor{blue}{\textbf{[NOTE: #1]}}}
 
-
+% --- Table / figure refs ---
 \newcommand{\tabref}[1]{Table~\ref{#1}}
 \newcommand{\figref}[1]{Figure~\ref{#1}}
 \newcommand{\secref}[1]{Section~\ref{#1}}

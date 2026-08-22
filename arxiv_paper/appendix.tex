@@ -213,7 +213,7 @@ Notably, 7 of 9 hyperparameters are fixed across all benchmarks and model scales
 \small
 \caption{Benchmark-specific \method hyperparameters. $^\dagger$T=500 for forget10. $^\ddagger$T=300 for News.}
 \label{tab:hparams}
-\resizebox{\columnwidth}{!}{
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccc@{}}
 \toprule
 & \textbf{TOFU 1B} & \textbf{TOFU 3B} & \textbf{MUSE} & \textbf{KnowUnDo} \\
@@ -238,7 +238,7 @@ PDU and BLURNPO require benchmark-specific tuning; Table~\ref{tab:baselines_spli
 \small
 \caption{Baseline hyperparameters (shared across benchmarks).}
 \label{tab:baselines}
-\resizebox{\columnwidth}{!}{
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lcccl@{}}
 \toprule
 \textbf{Method} & \textbf{LR} & \textbf{Eff.\ BS} & \textbf{Epochs} & \textbf{Key params} \\
@@ -259,7 +259,7 @@ PDU & \multicolumn{4}{c}{\textit{see Table~\ref{tab:baselines_splits}}} \\
 \small
 \caption{Benchmark-specific parameters for PDU and BLURNPO. All use eff.\ batch size 32 and 10 epochs.}
 \label{tab:baselines_splits}
-\resizebox{\columnwidth}{!}{
+\resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llcl@{}}
 \toprule
 \textbf{Method} & \textbf{Benchmark} & \textbf{LR} & \textbf{Key params} \\
@@ -504,7 +504,7 @@ Split & Method & FL$\downarrow$ & RA$\uparrow$ & rRQ$\uparrow$ & HM$_\text{J}$$\
 \small
 \caption{KnowUndo full results (5-fold). HM = hmean(1$-$fgt\_R, ret\_R, MMLU). Judge HM = hmean(1$-$FL/2, RA/2, rRQ/2). Best per column in \textbf{bold} (excl.\ Gold and collapsed models).}
 \label{tab:knowundo_full}
-\resizebox{\textwidth}{!}{
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|c|cccc}
 \toprule
 & \multicolumn{6}{c|}{\textbf{Copyright}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
@@ -523,7 +523,7 @@ PDU & .045$_{\pm.00}$ & \textbf{.011}$_{\pm.00}$ & .836$_{\pm.00}$ & .285$_{\pm.
 \bottomrule
 \end{tabular}}
 \\[6pt]
-\resizebox{\textwidth}{!}{
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{l|ccccc|c|cccc}
 \toprule
 & \multicolumn{6}{c|}{\textbf{Privacy}} & \multicolumn{4}{c}{\textbf{LLM Judge}} \\
@@ -556,7 +556,7 @@ We probe unlearned models with paraphrased queries (ParaProb) and structurally p
 {\small
 \[
 \text{Adv\_HM} = \text{hmean}(\text{MU},\, 1{-}\text{PP},\, 1{-}\text{PtP},\, 1{-}\text{ES}),
-\]}
+\]}%
 where PP = ParaProb, PtP = PertProb, and ES = Extraction Score. Results over 5 seeds are in Table~\ref{tab:adv_extraction}.
 The rankings are consistent with the standard metrics in the main paper.
 
