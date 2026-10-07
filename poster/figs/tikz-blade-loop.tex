@@ -1,0 +1,31 @@
+% One BLADE outer step: inner retain repair -> constrained forget step -> asymmetric dual update.
+\begin{tikzpicture}[
+    font=\small,
+    stage/.style={draw=#1, fill=#1!8, line width=2.5pt, rounded corners=10pt,
+      text width=0.27\linewidth, minimum height=5.6cm, align=center, inner sep=12pt},
+    flow/.style={-{Triangle[length=16pt,width=18pt]}, line width=3.5pt, color=psu-beaver},
+  ]
+  \node[stage=psu-beaver] (inner) {%
+    {\color{psu-beaver}\textbf{\circnum{1} Inner loop $\times K$}}\\[0.3ex]
+    \textbf{Retain repair}, fast $\eta_{\text{in}}$\\[0.5ex]
+    $\theta \leftarrow \theta - \eta_{\text{in}}\nabla_\theta \mathcal{L}_{\text{CE}}(\mathcal{B}_{\text{ret}})$};
+  \node[stage=psu-navy, right=0.045\linewidth of inner] (outer) {%
+    {\color{psu-navy}\textbf{\circnum{2} Outer step}}\\[0.3ex]
+    \textbf{Constrained forgetting}, slow $\eta_{\text{out}}$\\[0.5ex]
+    $\mathcal{L}_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}[r]_+^2$};
+  \node[stage=psu-pink, right=0.045\linewidth of outer] (dual) {%
+    {\color{psu-pink}\textbf{\circnum{3} Dual ratchet}}\\[0.3ex]
+    \textbf{Adapt} $\lambda$ to violations\\[0.5ex]
+    $r{>}0:\ \lambda \mathrel{+}= \rho|r|$\\
+    $r{\le}0:\ \lambda \mathrel{-}= \alpha\rho|r|$};
+  \draw[flow] (inner) -- (outer);
+  \draw[flow] (outer) -- (dual);
+  \draw[flow] (dual.south) -- ++(0,-1.6cm) -| node[pos=0.25, fill=white, inner sep=6pt]
+    {next step $t{+}1$, \ $r = \mathcal{L}_{\text{CE}}(\mathcal{B}'_{\text{ret}}) - \varepsilon$ on a fresh batch} (inner.south);
+  \begin{scope}[on background layer]
+    \node[draw=psu-beaver!60, dashed, line width=2pt, rounded corners=14pt,
+      fit=(inner)(outer)(dual), inner xsep=18pt, inner ysep=2.9cm, yshift=-0.85cm,
+      label={[anchor=north east, inner sep=12pt, text=psu-beaver, font=\footnotesize]north east:%
+        \textbf{LoRA adapters only} --- $W_0$ frozen, ${\sim}0.2\%$ of 7B params trainable}] {};
+  \end{scope}
+\end{tikzpicture}

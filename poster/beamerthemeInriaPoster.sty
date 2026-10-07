@@ -1,0 +1,255 @@
+\ProvidesPackage{beamerthemeInriaPoster}
+
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{MnSymbol}
+\RequirePackage{tikz}
+\RequirePackage{svg}
+\usepgflibrary{shadings}
+\tcbuselibrary{skins}
+
+\usetikzlibrary{matrix}
+
+\mode<presentation>
+
+\usecolortheme{inria}
+
+\newcommand{\logopremiere}{theme/imgs/RF-INria_Bloc-marque.png}
+\newcommand{\logobaspage}{theme/imgs/Inria-logo-rouge.png}
+
+\newcommand{\pngangle}{theme/imgs/angle.png}
+
+% Header logo; \renewcommand{\posterlogo}{<file>} in the poster to swap it.
+\newcommand{\posterlogo}{theme/rf-inria}
+
+%\newlength\titlelogowidth
+%\setlength\titlelogowidth{.3\textwidth}
+%\pgfdeclareimage[width=\titlelogowidth]{InriaTitle}{\logopremiere}
+%\newcommand{\titlelogo}{\pgfuseimage{InriaTitle}}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Slide title & decoration
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setbeamercolor{headline}{fg=inria-noir,bg=inria-blanc}
+\setbeamercolor{footline}{fg=inria-noir, bg=inria-blanc}
+\setbeamerfont{footline}{size=\large,series=\sf}
+\setbeamercolor{separation line}{bg=inria-blanc}
+\setbeamercolor{title in headline}{fg=inria-noir}
+\setbeamercolor{author in headline}{fg=inria-2024-gris-bleu}
+\setbeamercolor{institute in headline}{fg=inria-2024-bleu-nuit}
+\setbeamercolor{framesubtitle}{fg=inria-noir, bg=inria-2024-gris-bleu}
+\setbeamercolor{author in head/foot}{fg=inria-blanc, bg=inria-noir}
+\setbeamercolor{title in head/foot}{fg=inria-blanc, bg=inria-noir}
+
+%\setbeamercolor*{normal text}{fg=saclaydk, bg=white}
+% set block
+
+\setbeamercolor*{block body}{bg=inria-blanc,fg=inria-noir}
+\setbeamercolor*{block title}{fg=inria-2024-bleu-nuit,bg=inria-blanc}
+\setbeamercolor*{block text}{fg=inria-2024-gris-bleu,bg=inria-blanc}
+\setbeamerfont*{block title}{series=\bf\large}
+
+%\setbeamercolor*{upper separation line head}{fg=saclaydk}
+% set example block
+\setbeamercolor*{block body example}{fg=inria-2024-cactus,bg=inria-blanc}
+\setbeamercolor*{example text}{bg=white,fg=inria-2024-cactus}
+\setbeamercolor*{block title example}{fg=inria-2024-cactus,bg=white}
+
+\setbeamercolor{block body alerted}{bg=inria-blanc,fg=inria-rouge}
+\setbeamercolor{block title alerted}{bg=inria-blanc,fg=inria-rouge}
+\setbeamercolor{alerted text}{bg=inria-blanc,fg=inria-rouge}
+
+%\setbeamercolor{structure}{fg=bleu}
+\setbeamertemplate{navigation symbols}{}  % no navigation on a poster
+
+\setbeamertemplate{background canvas}{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \path[shade,bottom color=inria-2024-gris-bleu!11,top color=inria-blanc!100] ([shift={(0.cm,-8.3cm)}]current page.north west) rectangle ([shift={(-0.cm, 0.cm)}]current page.south east);
+  \end{tikzpicture}%
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% ---- block decorations: corner glyph ("coin") and gradient rule ("filet") ----
+%% Both are drawn with TikZ, using the footline gradient (bleu-nuit -> framboise -> rouge),
+%% instead of the artwork files theme/imgs/coin_degrade.pdf and theme/imgs/Filet-7pt.png.
+
+% Linear gradient of the rule (and of the footline).
+\tikzset{inria degrade/.style={left color=inria-2024-bleu-nuit, right color=inria-rouge, middle color=inria-2024-framboise}}
+
+% Diagonal gradient of the corner glyph. TikZ stretches the 100bp-wide shading over twice
+% the glyph's bounding box, centred on it, so the stops below reproduce the original artwork
+% (blue at 9%, framboise at 64%, red at 100% of an axis running from near the outer corner
+% to about 2/3 of the way to the opposite corner, tilted 42 degrees). Blue ends up at the
+% outer corner, framboise around the inner corner and red at the tips of the arms.
+\pgfdeclarehorizontalshading{inriacoin}{100bp}{%
+  color(0bp)=(inria-2024-bleu-nuit);
+  color(27bp)=(inria-2024-bleu-nuit);
+  color(48bp)=(inria-2024-framboise);
+  color(61bp)=(inria-rouge);
+color(100bp)=(inria-rouge)}
+% inria coin=<angle> rotates the gradient together with the glyph (0 = arms to the right and down).
+\tikzset{inria coin/.style={shading=inriacoin, shading angle=#1-42}, inria coin/.default=0}
+
+\newlength{\coinsize}    % side of the (square) corner glyph
+\newlength{\coinarm}     % thickness of the arms of the corner glyph
+\newlength{\filetheight} % thickness of the gradient rule
+\newlength{\filetwidth}  % length of the gradient rule
+\newlength{\decoinset}   % gap between a block corner and its decoration
+\setlength{\coinsize}{0.029\paperwidth}
+\setlength{\coinarm}{0.3086\coinsize}       % 7/22.68, as in the original coin_degrade artwork
+\setlength{\filetheight}{0.0029\paperheight} % ~7pt, as in the original Filet-7pt artwork
+\setlength{\filetwidth}{17\filetheight}      % aspect ratio of the original artwork (118.88 x 7)
+\setlength{\decoinset}{\filetheight}
+
+\newtcolorbox{inriastartblock}[2][]{%
+  enhanced,
+  colback=inria-blanc,
+  colframe=inria-blanc,
+  coltitle=inria-2024-gris-bleu,
+  colbacktitle=inria-blanc,
+  %rounded corners=southeast,
+  toptitle=0.74\coinsize,
+  %top=0.74\coinsize,
+  %bottom=0.92em,
+  %sharp corners,
+  lefttitle=\coinsize,
+  title=#2,
+  fonttitle=\usebeamerfont{block title},
+  fontupper=\usebeamerfont{block text},
+  fontlower=\usebeamerfont{block text},
+  % Corner glyph at the top left of the title bar, inset from the corner
+  overlay={\shade[inria coin] ([shift={(\decoinset,-\decoinset)}]frame.north west)
+    -- ++(\coinsize,0) -- ++(0,-\coinarm) -- ++(\coinarm-\coinsize,0)
+  -- ++(0,\coinarm-\coinsize) -- ++(-\coinarm,0) -- cycle;},
+  #1
+}
+
+\newtcolorbox{inriafinalblock}[2][]{%
+  enhanced,
+  colback=inria-2024-sable!47,
+  colframe=inria-2024-sable!47,
+  coltitle=inria-2024-gris-bleu,
+  colbacktitle=inria-2024-sable!47,
+  %rounded corners=southeast,
+  lefttitle=\coinsize,
+  toptitle=1em,
+  top=0.47em,
+  bottom=0.92em,
+  %sharp corners,
+  title=#2,
+  fonttitle=\usebeamerfont{block title},
+  fontupper=\usebeamerfont{block text},
+  fontlower=\usebeamerfont{block text},
+  % Corner glyph, rotated 180 degrees, at the bottom right of the block, inset from the corner
+  overlay={\shade[inria coin=180] ([shift={(-\decoinset,\decoinset)}]frame.south east)
+    -- ++(-\coinsize,0) -- ++(0,\coinarm) -- ++(\coinsize-\coinarm,0)
+  -- ++(0,\coinsize-\coinarm) -- ++(\coinarm,0) -- cycle;},
+  #1%
+}
+
+\newtcolorbox{inriablock}[2][]{%
+  enhanced,
+  colback=inria-blanc,
+  colframe=inria-blanc,
+  coltitle=inria-2024-gris-bleu,
+  colbacktitle=inria-blanc,
+  rounded corners=southeast,
+  toptitle=0.92em,
+  top=0.92em,
+  lefttitle=\coinsize,
+  %bottom=0.92em,
+  %sharp corners=northwest,
+  title=#2,
+  fonttitle=\usebeamerfont{block title},
+  fontupper=\usebeamerfont{block text},
+  fontlower=\usebeamerfont{block text},
+  % Gradient rule at the top left of the title bar, inset from the corner
+  overlay={\shade[inria degrade] ([shift={(\decoinset,-\decoinset)}]frame.north west) rectangle ++(\filetwidth,-\filetheight);},
+  #1%
+}
+
+\newtcolorbox{plainblock}[2][]{%
+  enhanced,
+  colback=inria-blanc,
+  colframe=inria-blanc,
+  coltitle=inria-2024-gris-bleu,
+  colbacktitle=inria-blanc,
+  rounded corners=southeast,
+  %toptitle=1em,
+  %top=0.47em,
+  %bottom=0.92em,
+  %sharp corners=northwest,
+  title=#2,
+  fonttitle=\usebeamerfont{block title},
+  fontupper=\usebeamerfont{block text},
+  fontlower=\usebeamerfont{block text},
+  #1%
+}
+
+% Poster header
+\setbeamertemplate{headline}{
+  \leavevmode
+  \begin{beamercolorbox}[wd=\linewidth]{upper separation line head}
+    \vskip7.4ex
+  \end{beamercolorbox}
+  \begin{columns}[b]
+    \begin{column}{.011\linewidth}
+    \end{column}
+    \begin{column}{.21\linewidth}
+      \includegraphics[width=1\linewidth]{\posterlogo}
+    \end{column}
+    \begin{column}{.74\linewidth}
+      \raggedright
+      \usebeamercolor{title in headline}{\color{fg}\textbf{\LARGE{\inserttitle}}\\[0.92ex]}
+      \usebeamercolor{author in headline}{\color{fg}\large{\insertauthor}\\[0.29ex]}
+      \usebeamercolor{institute in headline}{\color{fg}\normalsize{\insertinstitute}\\[0.74ex]}
+    \end{column}
+    \begin{column}{.011\linewidth}
+    \end{column}
+  \end{columns}
+  \begin{beamercolorbox}[wd=\linewidth]{lower separation line head}
+    \vskip2ex
+  \end{beamercolorbox}
+}
+
+% Poster footer
+\setbeamertemplate{footline}{
+  \begin{tikzpicture}[remember picture, overlay]
+    \shade[
+      left color=inria-2024-bleu-nuit,
+    right color=inria-2024-framboise] ([shift={(0.cm,0.0074\paperheight)}]current page.south west) rectangle ([shift={(-0.5\paperwidth, 0.cm)}]current page.south east);
+    \shade[
+      left color=inria-2024-framboise,
+    right color=inria-rouge] ([shift={(0.5\paperwidth,0.0074\paperheight)}]current page.south west) rectangle ([shift={(-0.cm, 0.cm)}]current page.south east);
+  \end{tikzpicture}%
+}
+
+% Configure enums or items
+\mode<all>
+
+\setbeamercolor{itemize item}{fg=inria-rouge}
+\setbeamercolor{enumerate item}{fg=inria-rouge}
+\setbeamercolor{itemize subitem}{fg=inria-rouge}
+\setbeamercolor{enumerate subitem}{fg=inria-rouge}
+\setbeamertemplate{itemize item}{\raisebox{0.12ex}{\bf >}\hskip0.1em}
+\setbeamertemplate{itemize subitem}{\raisebox{0.12ex}{$\rcurvearrowse$}\hskip0.1em}
+
+% equal font sizes for all levels
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subbody}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subsubbody}{size=\normalsize}
+
+% bibliography
+\setbeamercolor{bibliography entry author}{fg=inria-noir}
+\setbeamercolor{bibliography entry title}{fg=inria-rouge}
+\setbeamercolor{bibliography entry location}{fg=inria-noir}
+\setbeamercolor{bibliography entry note}{fg=inria-noir}
+\setbeamercolor{bibliography item}{fg=inria-noir} % Changes the icon/label color
+%\setbeamertemplate{bibliography item}[numbered]
+%\setbeamertemplate{bibliography item}{\arabic{enumiv}.}
+
+\setbeamerfont{bibliography item}{size=\footnotesize}
+\setbeamerfont{bibliography entry author}{size=\footnotesize}
+\setbeamerfont{bibliography entry title}{size=\footnotesize}
+\setbeamerfont{bibliography entry location}{size=\footnotesize}
+\setbeamerfont{bibliography entry note}{size=\footnotesize}

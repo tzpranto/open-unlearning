@@ -1,0 +1,50 @@
+# ---------------------------------------------------------------------
+# LaTeX build artifacts
+# ---------------------------------------------------------------------
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.xdv
+*.dvi
+*.synctex.gz
+*.synctex(busy)
+*.synctex.gz(busy)
+
+
+# beamer
+*.nav
+*.snm
+*.vrb
+
+# biblatex / biber
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*-blx.bib
+# written at compile time by the filecontents block in blade-poster.tex
+/self.bib
+
+# minted (v3 cache directory and v2 leftovers)
+_minted/
+_minted-*/
+*.pyg
+
+# svg package (inkscape conversions)
+svg-inkscape/
+
+# ---------------------------------------------------------------------
+# OS and editors
+# ---------------------------------------------------------------------
+.DS_Store
+._*
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/

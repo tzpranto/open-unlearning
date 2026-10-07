@@ -1,0 +1,172 @@
+\ProvidesPackage{beamerthemePSUPoster}
+% Penn State poster theme: solid Beaver Blue (#1E407C) header, block titles and footer.
+% No gradients anywhere. Colors live in beamercolorthemepsu.sty.
+
+\RequirePackage[most]{tcolorbox}
+\RequirePackage{MnSymbol}
+\RequirePackage{tikz}
+\tcbuselibrary{skins}
+
+\mode<presentation>
+
+\usecolortheme{psu}
+
+% Header logos; \renewcommand them in the poster to swap. Both are set to \psulogowidth.
+\newcommand{\posterlogoleft}{logos/psu-logo-reversed}
+\newcommand{\posterlogoright}{logos/emnlp-logo-dates-reversed}
+
+% Heading font hook (Roboto Slab, set up in the poster preamble).
+\providecommand{\headingfont}{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Colors and fonts
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\setbeamercolor{normal text}{fg=psu-black, bg=psu-white}
+\setbeamercolor{headline}{fg=psu-white, bg=psu-beaver}
+\setbeamercolor{footline}{fg=psu-white, bg=psu-beaver}
+\setbeamercolor{title in headline}{fg=psu-white}
+\setbeamercolor{author in headline}{fg=psu-white}
+\setbeamercolor{institute in headline}{fg=psu-pugh}
+\setbeamercolor{structure}{fg=psu-beaver}
+
+\setbeamerfont{block title}{series=\bfseries, size=\large}
+\setbeamercolor{alerted text}{fg=psu-pink}
+
+\setbeamertemplate{navigation symbols}{}  % no navigation on a poster
+\setbeamertemplate{background canvas}{}   % plain white page
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Blocks
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newlength{\psurule}     % frame thickness of a block
+\newlength{\psubar}      % thickness of the accent bar (TL;DR, callouts)
+\setlength{\psurule}{2.5pt}
+\setlength{\psubar}{12pt}
+
+% Standard block: solid Beaver Blue title bar with white heading, thin blue frame.
+\newtcolorbox{psublock}[2][]{%
+  enhanced, sharp corners,
+  colback=psu-white, colframe=psu-beaver,
+  colbacktitle=psu-beaver, coltitle=psu-white,
+  boxrule=\psurule, titlerule=0pt,
+  toptitle=0.45em, bottomtitle=0.45em, lefttitle=0.7em,
+  left=0.7em, right=0.7em, top=0.6em, bottom=0.7em,
+  title=#2,
+  fonttitle=\headingfont\usebeamerfont{block title},
+  before skip=0.55em, after skip=0.55em,
+  #1%
+}
+
+% Closing block: same title bar, body on a solid Pugh Blue tint.
+\newtcolorbox{psufinalblock}[2][]{%
+  enhanced, sharp corners,
+  colback=psu-pugh-tint, colframe=psu-beaver,
+  colbacktitle=psu-beaver, coltitle=psu-white,
+  boxrule=\psurule, titlerule=0pt,
+  toptitle=0.45em, bottomtitle=0.45em, lefttitle=0.7em,
+  left=0.7em, right=0.7em, top=0.6em, bottom=0.7em,
+  title=#2,
+  fonttitle=\headingfont\usebeamerfont{block title},
+  before skip=0.55em, after skip=0.55em,
+  #1%
+}
+
+% TL;DR box: Pugh Blue tint with a thick Beaver Blue bar on the left.
+\newtcolorbox{tldrbox}[1][]{%
+  enhanced, sharp corners, frame hidden,
+  colback=psu-pugh-tint, coltext=psu-navy,
+  borderline west={\psubar}{0pt}{psu-beaver},
+  left=\dimexpr\psubar+0.6em\relax, right=0.6em, top=0.6em, bottom=0.6em,
+  equal height group=tldr,
+  before skip=0.4em, after skip=0.2em,
+  #1%
+}
+
+% Unframed container. Optional small heading in Beaver Blue.
+\newtcolorbox{plainblock}[2][]{%
+  enhanced, sharp corners, frame hidden,
+  colback=psu-white, coltitle=psu-beaver, colbacktitle=psu-white,
+  left=0.2em, right=0.2em, top=0.3em, bottom=0.3em,
+  title=#2, attach title to upper={\par\smallskip},
+  fonttitle=\headingfont\bfseries,
+  before skip=0.4em, after skip=0.4em,
+  #1%
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Header and footer
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\newlength{\psuheaderheight}
+\setlength{\psuheaderheight}{0.088\paperheight}
+\newlength{\psulogowidth}
+\setlength{\psulogowidth}{0.215\paperwidth}
+
+\setbeamertemplate{headline}{%
+  \leavevmode
+  \begin{beamercolorbox}[wd=\paperwidth, ht=\psuheaderheight, dp=0pt]{headline}
+    \begin{tikzpicture}[remember picture, overlay]
+      \fill[psu-beaver] (current page.north west) rectangle ++(\paperwidth,-\psuheaderheight);
+      % left logo
+      \node[anchor=west, inner sep=0pt] at ([xshift=0.025\paperwidth, yshift=-0.5\psuheaderheight]current page.north west)
+        {\includegraphics[width=\psulogowidth]{\posterlogoleft}};
+      % right logo
+      \node[anchor=east, inner sep=0pt] at ([xshift=-0.025\paperwidth, yshift=-0.5\psuheaderheight]current page.north east)
+        {\includegraphics[width=\psulogowidth]{\posterlogoright}};
+      % title block
+      \node[anchor=center, inner sep=0pt]
+        at ([yshift=-0.5\psuheaderheight]current page.north) {%
+          \begin{minipage}{0.49\paperwidth}\centering
+            {\usebeamercolor[fg]{title in headline}\headingfont\bfseries\LARGE\inserttitle\par}
+            \vspace{0.7ex}
+            {\usebeamercolor[fg]{author in headline}\large\insertauthor\par}
+            \vspace{0.3ex}
+            {\usebeamercolor[fg]{institute in headline}\normalsize\insertinstitute\par}
+          \end{minipage}};
+    \end{tikzpicture}%
+  \end{beamercolorbox}%
+  \vskip0.4ex
+}
+
+\newlength{\psufooterheight}
+\setlength{\psufooterheight}{0.009\paperheight}
+
+\setbeamertemplate{footline}{%
+  \begin{tikzpicture}[remember picture, overlay]
+    \fill[psu-beaver] (current page.south west) rectangle ++(\paperwidth,\psufooterheight);
+  \end{tikzpicture}%
+  \vskip\dimexpr\psufooterheight+0.5ex\relax % keep content clear of the strip
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Lists and bibliography
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\mode<all>
+
+\setbeamercolor{itemize item}{fg=psu-beaver}
+\setbeamercolor{enumerate item}{fg=psu-beaver}
+\setbeamercolor{itemize subitem}{fg=psu-beaver}
+\setbeamercolor{enumerate subitem}{fg=psu-beaver}
+\setbeamertemplate{itemize item}{\raisebox{0.18ex}{\rule{0.42em}{0.42em}}\hskip0.1em}
+\setbeamertemplate{itemize subitem}{\raisebox{0.12ex}{$\rcurvearrowse$}\hskip0.1em}
+\setbeamertemplate{enumerate item}{\textbf{\insertenumlabel.}}
+
+% equal font sizes for all levels
+\setbeamerfont{itemize/enumerate body}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subbody}{size=\normalsize}
+\setbeamerfont{itemize/enumerate subsubbody}{size=\normalsize}
+
+\setbeamercolor{bibliography entry author}{fg=psu-black}
+\setbeamercolor{bibliography entry title}{fg=psu-beaver}
+\setbeamercolor{bibliography entry location}{fg=psu-black}
+\setbeamercolor{bibliography entry note}{fg=psu-black}
+\setbeamercolor{bibliography item}{fg=psu-black}
+
+\setbeamerfont{bibliography item}{size=\footnotesize}
+\setbeamerfont{bibliography entry author}{size=\footnotesize}
+\setbeamerfont{bibliography entry title}{size=\footnotesize}
+\setbeamerfont{bibliography entry location}{size=\footnotesize}
+\setbeamerfont{bibliography entry note}{size=\footnotesize}
