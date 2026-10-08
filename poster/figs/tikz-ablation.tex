@@ -1,0 +1,17 @@
+% Ablation on MUSE Books (HM, higher is better; paper ablation table): one design change per row.
+% Row labels carry the component number they ablate.
+\begin{tikzpicture}[x=11cm, y=-1.65cm]
+  \foreach \i/\name/\v/\c in {%
+      0/Full \textbf{BLADE}/0.823/psu-beaver,
+      1/\circnum{2} ALM off/0.233/psu-pink,
+      2/no LoRA (full FT)/0.459/psu-pink,
+      3/\circnum{1} loops swapped/0.506/psu-pink,
+      4/\circnum{3} unclamped ($\tau{=}1$)/0.780/psu-pink,
+      5/\circnum{3} GA loss instead/0.160/psu-pink,
+      6/\circnum{3} NPO loss instead/0.009/psu-pink} {
+    \node[anchor=east, inner sep=10pt] at (0,\i) {\name};
+    \fill[\c] (0,\i-0.3) rectangle (\v,\i+0.3);
+    \node[anchor=west, inner sep=8pt, font=\bfseries, text=\c] at (\v,\i) {\v};
+  }
+  \draw[line width=2pt, psu-navy] (0,-0.5) -- (0,6.5);
+\end{tikzpicture}

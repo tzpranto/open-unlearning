@@ -1,0 +1,12 @@
+% BLADE's three training phases (paper, Training Dynamics).
+\begin{tikzpicture}[
+    phase/.style={draw=psu-beaver, fill=psu-beaver-tint, line width=2.5pt, rounded corners=10pt,
+      minimum height=1.7cm, align=center, inner xsep=14pt, font=\bfseries},
+    flow/.style={-{Triangle[length=14pt,width=16pt]}, line width=3.5pt, color=psu-beaver},
+  ]
+  \node[phase] (a) {Warm-up};
+  \node[phase, right=1.6cm of a] (b) {Spike \& ratchet: $\lambda$ up for good};
+  \node[phase, right=1.6cm of b] (c) {Smooth convergence};
+  \draw[flow] (a) -- (b);
+  \draw[flow] (b) -- (c);
+\end{tikzpicture}

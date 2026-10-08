@@ -1,31 +1,27 @@
-% One BLADE outer step: inner retain repair -> constrained forget step -> asymmetric dual update.
+% One BLADE outer step: inner retain repair -> forget step -> dual update of lambda.
+% The forget step and the lambda update together form the ALM constraint (retain loss <= eps).
 \begin{tikzpicture}[
-    font=\small,
-    stage/.style={draw=#1, fill=#1!8, line width=2.5pt, rounded corners=10pt,
-      text width=0.27\linewidth, minimum height=5.6cm, align=center, inner sep=12pt},
-    flow/.style={-{Triangle[length=16pt,width=18pt]}, line width=3.5pt, color=psu-beaver},
+    stage/.style 2 args={draw=#1, fill=#1!8, line width=3pt, rounded corners=12pt,
+      text width=#2, minimum height=3.6cm, align=center, inner sep=10pt},
+    flow/.style={-{Triangle[length=18pt,width=20pt]}, line width=4pt, color=psu-beaver},
   ]
-  \node[stage=psu-beaver] (inner) {%
-    {\color{psu-beaver}\textbf{\circnum{1} Inner loop $\times K$}}\\[0.3ex]
-    \textbf{Retain repair}, fast $\eta_{\text{in}}$\\[0.5ex]
-    $\theta \leftarrow \theta - \eta_{\text{in}}\nabla_\theta \mathcal{L}_{\text{CE}}(\mathcal{B}_{\text{ret}})$};
-  \node[stage=psu-navy, right=0.045\linewidth of inner] (outer) {%
-    {\color{psu-navy}\textbf{\circnum{2} Outer step}}\\[0.3ex]
-    \textbf{Constrained forgetting}, slow $\eta_{\text{out}}$\\[0.5ex]
-    $\mathcal{L}_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}[r]_+^2$};
-  \node[stage=psu-pink, right=0.045\linewidth of outer] (dual) {%
-    {\color{psu-pink}\textbf{\circnum{3} Dual ratchet}}\\[0.3ex]
-    \textbf{Adapt} $\lambda$ to violations\\[0.5ex]
-    $r{>}0:\ \lambda \mathrel{+}= \rho|r|$\\
-    $r{\le}0:\ \lambda \mathrel{-}= \alpha\rho|r|$};
+  \node[stage={psu-beaver}{11cm}] (inner) {%
+    {\color{psu-beaver}\psuhighsize\textbf{Repair}}\\[0.8ex]
+    $K$ fast steps\\cross-entropy loss};
+  \node[stage={psu-pink}{12.5cm}, right=2.8cm of inner] (outer) {%
+    {\color{psu-pink}\psuhighsize\textbf{Forget}}\\[0.8ex]
+    one step\\clamped entropy loss};
+  \node[stage={psu-navy}{10cm}, right=2.4cm of outer] (dual) {%
+    {\color{psu-navy}\psuhighsize\textbf{Update $\lambda$}}\\[0.8ex]
+    asymmetric ratchet};
   \draw[flow] (inner) -- (outer);
   \draw[flow] (outer) -- (dual);
-  \draw[flow] (dual.south) -- ++(0,-1.6cm) -| node[pos=0.25, fill=white, inner sep=6pt]
-    {next step $t{+}1$, \ $r = \mathcal{L}_{\text{CE}}(\mathcal{B}'_{\text{ret}}) - \varepsilon$ on a fresh batch} (inner.south);
+  \coordinate (low) at ([yshift=-1.7cm]outer.south);
+  \draw[flow] (dual.south) -- (dual.south |- low) -| node[pos=0.25, fill=white, inner sep=6pt] {repeat} (inner.south);
   \begin{scope}[on background layer]
-    \node[draw=psu-beaver!60, dashed, line width=2pt, rounded corners=14pt,
-      fit=(inner)(outer)(dual), inner xsep=18pt, inner ysep=2.9cm, yshift=-0.85cm,
-      label={[anchor=north east, inner sep=12pt, text=psu-beaver, font=\footnotesize]north east:%
-        \textbf{LoRA adapters only} --- $W_0$ frozen, ${\sim}0.2\%$ of 7B params trainable}] {};
+    \node[draw=psu-navy, dashed, line width=3pt, rounded corners=14pt,
+      fit=(outer)(dual), inner xsep=0.8cm, inner ysep=0.6cm,
+      label={[anchor=south, inner sep=10pt, text=psu-navy, font=\bfseries]north:%
+        ALM: forget only while retain loss $\le \varepsilon$}] {};
   \end{scope}
 \end{tikzpicture}

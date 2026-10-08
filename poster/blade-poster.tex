@@ -1,425 +1,216 @@
 % =====================================================================
 % BLADE poster -- Penn State theme (PSUPoster), solid Beaver Blue, DIN A0 portrait.
 % Build: latexmk blade-poster.tex   (XeLaTeX + biber, see .latexmkrc)
+% Using this as a template: see README.md.
+%
+% This file holds the poster settings, title block and content. Look and feel live in:
+%   beamerthemePSUPoster.sty   header, footer, outer blocks (psublock, psufinalblock, plainblock)
+%   beamercolorthemepsu.sty    color palette (psu-beaver, psu-pugh, psu-pink, ...)
+%   preamble/packages.tex      packages and fonts
+%   preamble/bibliography.tex  compact reference-list style
+%   preamble/macros.tex        paper notation (\method, \Loss, ...)
+%   preamble/boxes.tex         inner boxes (probcard, compblock, benchtile, \chip, \bignum, ...)
+%
+% Content rows below (search for "Row N"):
+%   Row 1 motivation | Row 2 method | Row 3 setup + key result
+%   Row 3 experiments | Row 6 references  (old Rows 3-5 parked in parked/)
 % =====================================================================
 \documentclass[final,svgnames,english]{beamer}
 \usepackage[english]{babel}
 
-\usepackage[orientation=portrait,size=a0,scale=1.0]{beamerposter}
+\usepackage[orientation=portrait,size=a0,scale=1.125]{beamerposter}
 \usetheme{PSUPoster}
 
-\usepackage{amsmath,amsthm, amssymb, latexsym}
-\usepackage{mathspec}
-% Penn State brand typefaces: Roboto (body) and Roboto Slab (headings), both ship with TeX Live.
-\defaultfontfeatures{Ligatures=TeX}
-\setmainfont{Roboto}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
-  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
-\setsansfont{Roboto}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
-  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
-\setfontfamily\headingfont{RobotoSlab}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold]
-\IfFontExistsTF{Fira Code}
-  {\setmonofont{Fira Code}[Scale=0.74]}
-  {\setmonofont{FiraMono}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold, Scale=0.74]}
-\setmathrm[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
-  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]{Roboto}
-
-\usepackage{graphicx}
-\usepackage{booktabs}
-\usepackage{colortbl}
-\usepackage{qrcode}
-\usepackage{adjustbox}
-\usepackage{xspace}
-\usepackage{nicefrac}
-\usepackage{multiobjective}
-% fontawesome7 needs TeX Live 2025+; fall back to fontawesome5 on older systems.
-\IfFileExists{fontawesome7.sty}{\usepackage{fontawesome7}}{\usepackage{fontawesome5}}
-\urlstyle{tt}
-\usepackage{setspace}
-\usepackage{multicol}
-
-\usepackage{tikz}
-\usetikzlibrary{calc, backgrounds, arrows, arrows.meta, shapes, positioning, fit}
-
-\usepackage[backend=biber, bibstyle=apa, autocite=superscript, defernumbers=true, citestyle=numeric]{biblatex}
-\usepackage{csquotes}
-
-\makeatletter
-\RequireBibliographyStyle{numeric}
-\DeclareFieldFormat{labelnumberwidth}{#1.}
-\makeatother
-
-% Print titles exactly as in the paper's bib (biblatex-apa would sentence-case them).
-\DeclareFieldFormat{apacase}{#1}
-\DeclareFieldFormat{url}{url\addcolon\space\url{#1}}
-
-\renewbibmacro*{url+urldate}{%
-  \ifthenelse{\iffieldundef{url}\OR\NOT\iffieldundef{doi}}
-  {}
-  {\iffieldundef{urlyear}
-    {}
-    {\setunit{\addspace}}%
-\iffieldundef{url}{}{\printfield{url}\renewcommand*{\finentrypunct}{\relax}}}}
-
-\addbibresource{references.bib}
-
-\AtBeginBibliography{\setstretch{1.1}\raggedright}
-% No stretchable glue inside URLs (otherwise they print as "https : / / ...").
-\setlength{\biburlbigskip}{0mu}
-\setlength{\biburlnumskip}{0mu}
-\setlength{\biburlucskip}{0mu}
-\setlength{\biburllcskip}{0mu}
+\input{preamble/packages}
+\input{preamble/bibliography}
+\input{preamble/macros}
+\input{preamble/boxes}
 
 % ---------------------------------------------------------------------
-% Highlight boxes
+% Title block (rendered in the header by beamerthemePSUPoster.sty)
 % ---------------------------------------------------------------------
-\newtcolorbox{callout}{%
-  enhanced, sharp corners, colback=psu-beaver-tint, width=\linewidth,
-  colframe=psu-navy, boxrule=0pt, leftrule=7.4pt,
-  left=11pt, right=5pt, top=9pt, bottom=9pt,
-before skip=11pt, after skip=5pt}
-
-\newtcolorbox{takeaway}{%
-  enhanced, sharp corners, colback=psu-pugh-tint, width=\linewidth,
-  colframe=psu-beaver, boxrule=0pt, leftrule=7.4pt,
-  left=11pt, right=5pt, top=9pt, bottom=9pt,
-before skip=11pt, after skip=5pt}
-
-\newtcolorbox{inform}{%
-  enhanced, sharp corners, colback=psu-beaver-tint, width=\linewidth,
-  colframe=psu-beaver, boxrule=0pt, leftrule=7.4pt,
-  left=11pt, right=5pt, top=9pt, bottom=9pt,
-before skip=11pt, after skip=5pt}
-
-% block for the main findings of the paper
-% Header band: one solid Pugh Blue band for every finding (no gradient).
-\newtcolorbox{findingblock}[2]{%
-  enhanced, sharp corners, colback=psu-#2!3, width=\linewidth,
-  colframe=psu-#2, boxrule=0.47pt, leftrule=7.4pt, titlerule=0pt, title={#1},
-  colbacktitle=psu-pugh!70, coltitle=psu-navy, fonttitle=\bfseries,
-  lefttitle=11pt, toptitle=5pt, bottomtitle=5pt,
-  left=11pt, right=5pt, top=6pt, bottom=9pt,
-before skip=5pt, after skip=5pt}
-
-% ---------------------------------------------------------------------
-% Paper macros
-% ---------------------------------------------------------------------
-\newcommand{\method}{\textbf{BLADE}\xspace}
-\newcommand{\Loss}{\mathcal{L}}
-\newcommand{\Dforget}{\mathcal{D}_\text{forget}}
-\newcommand{\Dretain}{\mathcal{D}_\text{retain}}
-% Reset node options: inside a TikZ node the nested picture inherits its size and frame.
-\newcommand{\circnum}[1]{\tikz[baseline=(n.base)]\node[circle, fill=psu-pugh, draw=none,
-  text width={}, minimum width=0pt, minimum height=0pt, line width=0pt, align=center,
-  text=psu-navy, inner sep=0.12em, font=\bfseries\footnotesize] (n) {#1};}
-\newcommand{\best}[1]{\textbf{\textcolor{psu-pink}{#1}}}
-\newcommand{\up}{$\uparrow$}
-\newcommand{\down}{$\downarrow$}
-
 \title{BLADE: Bilevel Low-rank Augmented-Lagrangian Erasure for LLM Unlearning}
 \author{Md Toufikuzzaman\textsuperscript{1}, Ahmad Mousavi\textsuperscript{2}, and Dongwon Lee\textsuperscript{1}}
-\institute[]{\textsuperscript{1}The Pennsylvania State University, USA \quad \textsuperscript{2}American University\\[0.2ex]
+\institute[]{\textsuperscript{1}The Pennsylvania State University, USA \quad \textsuperscript{2}American University, USA\\[0.2ex]
   \{mpt5763, dongwon\}@psu.edu, \ mousavi@american.edu}
 
 \begin{document}
-\begin{frame}[fragile]{}
-  \vspace{-2em}
+\begin{frame}[t,fragile]{}
+  \vspace{0.3em}
   \begin{columns}[T]
     % Forcing left margin
     \begin{column}{0.01\linewidth}
     \end{column}
 
-    % Content
+    % Content: full-width rows, read left to right
     \begin{column}{0.98\linewidth}
-      % TL;DR
-      \begin{columns}[t]
-        \begin{column}{0.32\linewidth}
-          \begin{tldrbox}
-            \large\raggedright Unlearning is \textbf{recurring} in nature. Existing methods struggle with robustness due to unbounded losses, static trade-offs and over-forgetting.
-          \end{tldrbox}
-        \end{column}
-        \begin{column}{0.32\linewidth}
-          \begin{tldrbox}
-            \large\raggedright \method: \textbf{Repair-First Principle + Bilevel Optimization + Asymmetric ALM Ratchet + Clamped Entropy}, confined to LoRA.
-          \end{tldrbox}
-        \end{column}
-        \begin{column}{0.32\linewidth}
-          \begin{tldrbox}
-            \large\raggedright \textcolor{psu-pink}{\textbf{+6\% TOFU, +9\% MUSE Books, +7\% KnowUndo}}; stable under $4\times$ scale and 4 sequential steps.
-          \end{tldrbox}
-        \end{column}
-      \end{columns}
 
-      % Main content
+      % ======================= Row 1: motivation =======================
       \begin{columns}[T]
-        % ============================ Column 1 ============================
-        \begin{column}{.485\linewidth}
-          \begin{psublock}{Why is LLM unlearning hard?}
-            \begin{itemize}
-              \item Deployed LLMs need continuous correction: GDPR deletion requests, copyrighted text, hazardous knowledge, misinformation.
-              \item Forget and retain knowledge share \textbf{entangled representations}: every step risks collateral damage that compounds.
-              \item Fixed-weight forget/retain balancing yields three failure modes:
-                \begin{itemize}
-                  \item \textbf{Unbounded forgetting:} gradient ascent\autocite{jang2023knowledge} has arbitrarily large gradients, destroying utility.
-                  \item \textbf{Static trade-off:} GradDiff, NPO\autocite{zhang2024negative} oscillate without self-correction.
-                  \item \textbf{Over-forgetting:} unclamped entropy\autocite{yuan2025closer} keeps pushing tokens that are already forgotten.
-                \end{itemize}
-            \end{itemize}
+        \begin{column}{0.52\linewidth}
+          \begin{psublock}[equal height group=r1]{Problem Overview}
+            \centering
+            \adjustbox{width=0.82\linewidth}{\input{figs/tikz-unlearning}}
+            \vspace{2ex}
+
+            \adjustbox{width=0.9\linewidth}{\input{figs/tikz-timeline}}
           \end{psublock}
-
-          \begin{psublock}{BLADE at a glance}
-            \raggedright Unlearning as a \textbf{constrained bilevel problem}: forget as much as possible while the retain loss stays within budget~$\varepsilon$.
-            The constraint residual is $r = \Loss_{\text{CE}}(\theta;\mathcal{B}'_{\text{ret}}) - \varepsilon$ on a fresh retain batch, so $r > 0$ means the budget is violated.
-            \[
-              \min_{\theta}\ \Loss_{\text{fgt}}(\theta^*;\Dforget)
-              \quad\text{s.t.}\quad \Loss_{\text{CE}}(\theta^*;\Dretain) \le \varepsilon,
-              \qquad \theta^* \approx \argmin_{\theta}\ \Loss_{\text{CE}}(\theta;\Dretain)
-            \]
-            \vspace{-0.5ex}
-            \begin{center}
-              \input{figs/tikz-blade-loop}
-            \end{center}
-          \end{psublock}
-
-          \begin{psublock}{\circnum{1} Repair-first bilevel structure}
-            \begin{itemize}
-              \item \textbf{Inner loop = retain repair}: $K$ fast SGD steps restore retain damage \emph{before} each forget step.
-              \item \textbf{Outer loop = one small forget step}, sized so the next inner loop can fully repair it ($\eta_{\text{in}} > \eta_{\text{out}}$).
-              \item \textbf{Retain in the inner loop} (contrary to SCRUB\autocite{kurmanji2023towards}, BLUR\autocite{reisizadeh2026blur}): forgetting in the unconstrained inner loop would give $K$ unopposed destructive steps per outer step.
-            \end{itemize}
-          \end{psublock}
-
-          \begin{psublock}{\circnum{2} Augmented Lagrangian with asymmetric dual update}
-            \begin{columns}[c]
-              \begin{column}{0.5\textwidth}
-                \[
-                  \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}\big[\max(0,r)\big]^2
-                \]
-              \end{column}
-              \begin{column}{0.46\textwidth}
-                \[
-                  \lambda \leftarrow
-                  \begin{cases}
-                    \lambda + \rho\,|r| & r > 0\\
-                    \lambda - \alpha\rho\,|r| & r \le 0,\ \alpha \ll 1
-                  \end{cases}
-                \]
-              \end{column}
-            \end{columns}
-            \begin{itemize}
-              \item $r = \Loss_{\text{ret}} - \varepsilon$ is measured on a fresh retain batch, and $\varepsilon$ is set relative to the model's own retain loss (no manual calibration).
-              \item An \textbf{inequality} constraint: there is no penalty while retain loss stays below~$\varepsilon$.
-              \item \textbf{Ratchet:} $\lambda$ jumps after a violation and decays only slowly. Symmetric updates (PDU\autocite{entesari2026constrained}) oscillate instead.
-            \end{itemize}
-          \end{psublock}
-
-          \begin{psublock}{\circnum{3} Clamped entropy forget loss}
-            \begin{columns}[c]
-              \begin{column}{0.53\textwidth}
-                \[
-                  \Loss_{\text{fgt}} = \frac{1}{N}\sum_{t=1}^{N} \max\!\big(0,\ \tau\log V - H(p_t)\big)
-                \]
-                \begin{itemize}
-                  \item \textbf{Bounded:} $\Loss_{\text{fgt}} \in [0, \tau\log V]$.
-                  \item \textbf{Self-stabilising:} the gradient is \emph{exactly zero} once a token is forgotten.
-                  \item \textbf{Reference-free:} no frozen model, unlike NPO.
-                  \item \textbf{Vocabulary-invariant} $\tau$ (32K or 128K tokens).
-                \end{itemize}
-              \end{column}
-              \begin{column}{0.43\textwidth}
-                \centering
-                \adjustbox{max width=\linewidth}{\input{figs/tikz-clamped-entropy}}
-              \end{column}
-            \end{columns}
-            \begin{takeaway}
-              \raggedright\textbf{LoRA as a structural constraint:} adapters on all projections, $W' = W_0 + \tfrac{\alpha}{r}BA$. The low-rank bottleneck limits weight drift, and disabling the adapters restores the original model.
-            \end{takeaway}
-          \end{psublock}
-
-          \begin{psublock}{Experimental setup}
-            \begin{itemize}
-              \item \textbf{TOFU}\autocite{maini2024tofu}: Synthetic authors, Llama-3.2-1B/3B-Instruct, forget 1/5/10\%.
-              \item \textbf{MUSE}\autocite{shi2025muse}: Books (Harry Potter) and News (BBC), Llama-2-7B.
-              \item \textbf{KnowUndo}\autocite{tian2024knowundo}: Copyright and privacy, LoRA-fine-tuned Llama-2-7B-chat.
-              \item \textbf{Baselines} (OpenUnlearning): GradAscent, GradDiff, NPO, SimNPO\autocite{fan2025simplicity}, RMU, BLURNPO, PDU.
-              \item \textbf{Metrics:} per-benchmark harmonic mean (HM) of forget and retain axes, plus an LLM-judge composite HM$_\text{J}$ for semantic leakage. All results are averaged over 5 seeds.
-            \end{itemize}
-          \end{psublock}
-
-          \begin{psufinalblock}{Takeaways and limitations}
-            \begin{itemize}
-              \item A \textbf{bounded} forget loss, an \textbf{adaptive} retain constraint and a \textbf{low-rank} parameter space combine into a self-correcting unlearner.
-              \item Gains hold across benchmarks, \textbf{under scaling} and \textbf{under repeated application}.
-              \item \textbf{Smooth training dynamics}, and extremely robust to hyperparameter choice.
-              \item \textbf{Adversarially robust} against black-box attacks.
-              \item \textbf{Limitations:} Vulnerable to re-learning attacks. Not yet tested on concept-level unlearning or in multimodal settings.
-            \end{itemize}
-          \end{psufinalblock}
-
-          \begin{plainblock}{}
-            \begin{columns}[c]
-              \begin{column}{0.092\textwidth}
-                \qrcode[height=\textwidth,hyperlink]{https://arxiv.org/pdf/2608.22557}
-              \end{column}
-              \begin{column}{0.9\textwidth}%
-                % Proceedings not yet published, hence "To appear".
-                {\linespread{0.83}\footnotesize Toufikuzzaman, M., Mousavi, A., \& Lee, D. (2026).
-                \textcolor{psu-beaver}{BLADE: Bilevel Low-rank Augmented-Lagrangian Erasure for LLM Unlearning.}
-                To appear in \emph{Proceedings of the 2026 Conference on Empirical Methods in Natural Language Processing (EMNLP)}.
-                \href{https://arxiv.org/abs/2608.22557}{arXiv:2608.22557}\\[-1.28ex]
-                \textbf{Code \& configs:} \url{https://github.com/tzpranto/blade}}
-              \end{column}
-            \end{columns}
-          \end{plainblock}
-
-          \begin{plainblock}{}
-            \centering\footnotesize
-            \begin{minipage}{0.72\linewidth}\centering % width balances the three lines
-            This work was supported in part by U.S. NSF awards \#2438810 and \#2555559, Amazon Nova AI challenge award, and PSU Frymoyer chairship award. Some experimental results were obtained using computational resources provided by CloudBank, supported through U.S. NAIRR award \#240336.
-            \end{minipage}
-          \end{plainblock}
         \end{column}
-
-        % ============================ Column 2 ============================
-        \begin{column}{.485\linewidth}
-          \begin{plainblock}{}
-            \begin{findingblock}{Finding 1. BLADE dominates across three benchmark families.}{beaver}
-              \begin{columns}[T]
-                \begin{column}{0.44\textwidth}
-                  \centering\small
-                  \setlength{\tabcolsep}{5pt}
-                  \begin{tabular}{@{}llcc@{}}
-                    \toprule
-                    \multicolumn{2}{@{}l}{Benchmark (HM\up)} & Best baseline & \method \\
-                    \midrule
-                    TOFU 1B & fgt01 & .690 {\scriptsize PDU} & \best{.808} \\
-                            & fgt05 & .740 {\scriptsize PDU} & \best{.800} \\
-                            & fgt10 & .797 {\scriptsize PDU} & \best{.803} \\
-                    TOFU 3B & fgt01 & .742 {\scriptsize PDU} & \best{.846} \\
-                            & fgt05 & \best{.843} {\scriptsize PDU} & .842 \\
-                            & fgt10 & \best{.857} {\scriptsize PDU} & .836 \\
-                    \midrule
-                    MUSE    & Books & .753 {\scriptsize SimNPO} & \best{.818} \\
-                            & News  & \best{.577} {\scriptsize PDU} & .544 \\
-                    \midrule
-                    KnowUndo & Copyright & .461 {\scriptsize SimNPO} & \best{.477} \\
-                             & Privacy   & .546 {\scriptsize PDU} & \best{.605} \\
-                    \bottomrule
-                  \end{tabular}
-                \end{column}
-                \begin{column}{0.54\textwidth}
-                  \begin{itemize}
-                    \item TOFU 1B: \textbf{HM $\geq$ 0.80} on every split, with forget probability $\le$ .015.
-                    \item MUSE Books: \textbf{zero verbatim memorisation} (vm = .000) and the best retain score (rk = .638).
-                    \item KnowUndo Privacy: recall of target content \textbf{reduced by 81\%} while keeping 87\% of retain quality.
-                    \item MUSE News is the most \emph{entangled} benchmark (forget/retain TF-IDF cosine = 0.957). PDU leads there but collapses under stress (Finding~2).
-                  \end{itemize}
-                \end{column}
-              \end{columns}
-              \vspace{0.6ex}
-              \begin{columns}[c]
-                \begin{column}{0.72\textwidth}
-                  \includegraphics[width=\linewidth]{figures/fig_llm_judge}
-                \end{column}
-                \begin{column}{0.26\textwidth}
-                  \raggedright\small LLM-judge composite HM$_\text{J}$ (semantic leakage, retain accuracy, response quality).\\[1ex]
-                  \method is highest on \textbf{6 of 7} settings.
-                \end{column}
-              \end{columns}
-            \end{findingblock}
-
-            \begin{findingblock}{Finding 2. Robust under stress, where the strongest baseline collapses.}{navy}
-              \begin{columns}[c]
-                \begin{column}{0.55\textwidth}
-                  \begin{itemize}
-                    \item MUSE News, head-to-head against PDU, the strongest News baseline.
-                    \item \textbf{Scalability:} forget set grown up to $4\times$. PDU collapses at $4\times$ (HM = 0.005).
-                    \item \textbf{Sustainability:} sequential unlearning requests. PDU drops from 0.58 to 0.02 after only 2 steps.
-                    \item \method stays within \textbf{HM 0.523--0.552} under every condition.
-                  \end{itemize}
-                  \begin{callout}
-                    Bounded loss, the LoRA bottleneck and the ALM ratchet together prevent the model collapse at scale and under repeated application.
-                  \end{callout}
-                \end{column}
-                \begin{column}{0.43\textwidth}
-                  \centering
-                  \includegraphics[width=0.92\linewidth]{figures/fig_scalability_sustainability}
-                \end{column}
-              \end{columns}
-            \end{findingblock}
-
-            \begin{findingblock}{Finding 3. Smooth, self-correcting three-phase dynamics.}{beaver}
-              \begin{columns}[T]
-                \begin{column}{0.5\textwidth}
-                  \centering
-                  \includegraphics[width=\linewidth]{figures/fig_muse_books_dynamics}\\
-                  {\small\method: warm-up $\to$ spike-and-ratchet $\to$ convergence}
-                \end{column}
-                \begin{column}{0.5\textwidth}
-                  \centering
-                  \includegraphics[width=\linewidth]{figures/fig_muse_books_PDU_dynamics}\\
-                  {\small PDU: recurring retain oscillations}
-                \end{column}
-              \end{columns}
-              \begin{enumerate}
-                \item \textbf{Warm-up:} the forget loss falls while retain stays within $\varepsilon$.
-                \item \textbf{Spike-and-ratchet:} a transient retain violation permanently raises $\lambda$.
-                \item \textbf{Smooth convergence:} both losses decrease monotonically under the elevated $\lambda$.
-              \end{enumerate}
-              The same pattern appears on every benchmark, model scale and dataset type, which makes the forget--retain trade-off interpretable and controllable.
-            \end{findingblock}
-
-            \begin{findingblock}{Finding 4. BLADE's components complement each other.}{navy}
-              \begin{columns}[T]
-                \begin{column}{0.5\textwidth}
-                  \centering\small
-                  \setlength{\tabcolsep}{7pt}
-                  \begin{tabular}{@{}lccc@{}}
-                    \toprule
-                    MUSE Books & rk\up & HM\up & HM$_\text{J}$\up \\
-                    \midrule
-                    Full \method & .658 & \best{.823} & \best{.814} \\
-                    \midrule
-                    ALM off & .092 & .233 & .117 \\
-                    No LoRA (full FT) & .306 & .459 & .550 \\
-                    Swapped bilevel & .651 & .506 & .655 \\
-                    Unclamped ($\tau{=}1$) & .604 & .780 & .785 \\
-                    \midrule
-                    GA forget loss & .060 & .160 & .093 \\
-                    NPO forget loss & .662 & .009 & .495 \\
-                    Logit-margin loss & .000 & .000 & .000 \\
-                    \bottomrule
-                  \end{tabular}
-                \end{column}
-                \begin{column}{0.48\textwidth}
-                  \begin{itemize}
-                    \item \textbf{ALM} is the most critical piece: without it, retain collapses.
-                    \item \textbf{LoRA} prevents representational drift (full fine-tuning: rk .658 $\to$ .306).
-                    \item \textbf{Swapping the loops} makes $\lambda$ diverge, which confirms the repair-first principle.
-                    \item Only a \textbf{bounded, self-saturating} forget loss is compatible with the constrained bilevel framework.
-                  \end{itemize}
-                \end{column}
-              \end{columns}
-            \end{findingblock}
-
-            \begin{findingblock}{Finding 5. Resilient to black-box attacks and memory-efficient.}{beaver}
-              \begin{itemize}
-                \item \textbf{Extraction}, using paraphrased or perturbed queries: best adversarial HM on TOFU 1B on every split.
-                \item \textbf{Jailbreak:} lowest attack success rate on every split (0.025 vs.\ PDU 0.087 on fgt01).
-                \item \textbf{Membership inference:} the only method whose PrivLeak score is positive on every split (no membership leakage).
-                \item \textbf{Compute:} $2$--$5\times$ lower peak GPU memory than every baseline, for $1.5$--$2\times$ the wall-clock time.
-              \end{itemize}
-            \end{findingblock}
-          \end{plainblock}
-
-          \begin{plainblock}{\small References}
-            \setlength{\bibitemsep}{0.2em}
-            \begin{multicols}{2}
-              \printbibliography
-            \end{multicols}
-          \end{plainblock}
-
+        \begin{column}{0.46\linewidth}
+          \begin{psublock}[equal height group=r1]{Objectives}
+            {\psuhighsize\bfseries\color{psu-navy}Designing an unlearning method that is \dots}\\[1.2ex]
+            \setlength{\tabcolsep}{6pt}\renewcommand{\arraystretch}{1.6}
+            \begin{tabular*}{\linewidth}{@{}c@{\extracolsep{\fill}}ll@{}}
+              {\Large\color{psu-beaver}\faBalanceScale} & {\psuhighsize\color{psu-beaver}\textbf{Balanced}} & Forgets with minimal model degradation \\
+              {\Large\color{psu-beaver}\faIcon{expand-arrows-alt}} & {\psuhighsize\color{psu-beaver}\textbf{Scalable}} & Stays stable as forget set grows \\
+              {\Large\color{psu-beaver}\faIcon{sync-alt}} & {\psuhighsize\color{psu-beaver}\textbf{Sustainable}} & Handles repeated unlearning requests \\
+              {\Large\color{psu-beaver}\faShield*} & {\psuhighsize\color{psu-beaver}\textbf{Robust}} & Resists extraction, jailbreak and membership attacks \\
+              {\Large\color{psu-beaver}\faMicrochip} & {\psuhighsize\color{psu-beaver}\textbf{Efficient}} & Inexpensive finetuning with smaller memory footprint \\
+            \end{tabular*}
+          \end{psublock}
         \end{column}
       \end{columns}
+
+      % ======================= Row 2: method =======================
+      \begin{psublock}{BLADE at a glance}
+        \begin{columns}[T]
+          \begin{column}{0.39\linewidth}
+            \begin{compblock}[equal height group=r2top]{Formulation}
+              \setlength{\tabcolsep}{6pt}\renewcommand{\arraystretch}{2.1}
+              \begin{tabular}{@{}l@{\quad}l@{}}
+                {\psuhighsize\color{psu-pink}\textbf{Forget}} & $\min_{\theta}\ \Loss_{\text{fgt}}(\theta^*;\Dforget)$ \\
+                {\psuhighsize\color{psu-navy}\textbf{Retain budget}} & s.t.\ $\Loss_{\text{CE}}(\theta^*;\Dretain) \le \varepsilon$ \\
+                {\psuhighsize\color{psu-beaver}\textbf{Repair}} & $\theta^* \approx \argmin_{\theta}\ \Loss_{\text{CE}}(\theta;\Dretain)$ \\
+                {\psuhighsize\color{psu-beaver}\textbf{LoRA}} & $W' = W_0 + \tfrac{\alpha}{r}BA$,\ \ $W_0$ frozen \\
+              \end{tabular}
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.59\linewidth}
+            \begin{compblock}[equal height group=r2top]{One training step}
+              \centering\vspace{1ex}
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-blade-loop}}
+            \end{compblock}
+          \end{column}
+        \end{columns}
+
+        \begin{columns}[T]
+          \begin{column}{0.325\linewidth}
+            \begin{compblock}{Repair-first principle}
+              \centering
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-repair-sawtooth}}
+              \[
+                \theta \leftarrow \theta - \eta_{\text{in}}\nabla_\theta\Loss_{\text{CE}}(\mathcal{B}_{\text{ret}})
+                \ \times K
+              \]
+              \raggedright
+              \begin{itemize}
+                \item Forget--retain \textbf{entanglement}
+                \item Forget is \textbf{destructive} by nature
+                \item \textbf{Anchor} forget by retain
+              \end{itemize}
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.325\linewidth}
+            \begin{compblock}{Asymmetric ALM}
+              \centering
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-ratchet}}
+              \[
+                \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}[r]_+^2,
+                \quad r = \Loss_{\text{ret}} - \varepsilon
+              \]
+              \raggedright
+              \begin{itemize}
+                \item \textbf{Constrained} forget under retain
+                \item $\lambda$ grows fast, decays slowly
+              \end{itemize}
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.325\linewidth}
+            \begin{compblock}{Clamped entropy}
+              \centering
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-clamped-entropy}}
+              \[
+                \Loss_{\text{fgt}} = \tfrac{1}{N}\textstyle\sum_{t} \max\!\big(0,\, \tau\log V - H(p_t)\big)
+              \]
+              \raggedright
+              \begin{itemize}
+                \item $\nabla = 0$ \textbf{once forgotten}
+                \item \textbf{Bounded} and reference-free
+              \end{itemize}
+            \end{compblock}
+          \end{column}
+        \end{columns}
+      \end{psublock}
+
+      % ======================= Row 3: experiments =======================
+      \begin{psublock}{Experiments}
+        \begin{columns}[T]
+          \begin{column}{0.40\linewidth}
+            \begin{compblock}[equal height group=e1]{Setup}
+              \textbf{Datasets}\\[0.4ex]
+              \setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.35}
+              \begin{tabular}{@{}l@{\quad}l@{\quad}l@{}}
+                {\color{psu-beaver}\faIcon{user-friends}}\ \textbf{TOFU} & synthetic authors & Llama-3.2 1B/3B \\
+                {\color{psu-beaver}\faBook}\ \textbf{MUSE} & Books, News & Llama-2-7B \\
+                {\color{psu-beaver}\faCopyright}\ \textbf{KnowUndo} & copyright, privacy & Llama-2-7B-chat \\
+              \end{tabular}\\[1.2ex]
+              \textbf{Baselines}\\[0.4ex]
+              \chip{GradAscent\autocite{jang2023knowledge}} \chip{GradDiff} \chip{NPO\autocite{zhang2024negative}}
+              \chip{SimNPO\autocite{fan2025simplicity}} \chip{RMU} \chip{BLURNPO\autocite{reisizadeh2026blur}}
+              \chip{PDU\autocite{entesari2026constrained}}\\[1.2ex]
+              \textbf{Metric:} HM of forget \& retain axes
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.58\linewidth}
+            \begin{compblock}[equal height group=e1, boxrule=3pt, leftrule=10pt]{Key result: stable under scaling and repeated unlearning}
+              \centering
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-stress}}
+            \end{compblock}
+          \end{column}
+        \end{columns}
+
+        \begin{columns}[T]
+          \begin{column}{0.58\linewidth}
+            \begin{compblock}[equal height group=e2]{Best on three benchmark families}
+              \centering
+              {\LARGE\bfseries\color{psu-beaver}+6\%}\ TOFU \qquad
+              {\LARGE\bfseries\color{psu-beaver}+9\%}\ MUSE Books \qquad
+              {\LARGE\bfseries\color{psu-beaver}+7\%}\ KnowUndo\\[0.3ex]
+              average composite score vs.\ strongest baseline\\[0.6ex]
+              \includegraphics[width=\linewidth]{figures/fig_benchmarks}
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.40\linewidth}
+            \begin{compblock}[equal height group=e2]{Robust and efficient}
+              \raggedright
+              \setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.6}
+              \begin{tabular}{@{}c@{\ \ }l@{}}
+                {\Large\color{psu-beaver}\faSearch} & \textbf{Extraction:} best adversarial HM \\
+                {\Large\color{psu-beaver}\faIcon{user-secret}} & \textbf{Jailbreak:} lowest attack success \\
+                {\Large\color{psu-beaver}\faIcon{user-shield}} & \textbf{MIA:} no leakage \\
+                {\Large\color{psu-beaver}\faTerminal} & \textbf{GCG:} lowest attack success \\
+                {\Large\color{psu-beaver}\faMemory} & \textbf{Efficient:} 2--5$\times$ less GPU memory \\
+              \end{tabular}
+            \end{compblock}
+          \end{column}
+        \end{columns}
+      \end{psublock}
+
+      % Row 5 (dynamics + takeaways + QR) parked in parked/row5-dynamics-takeaways.tex
+
+      % ======================= Row 6: references =======================
+      \begin{plainblock}[top=0pt, bottom=0pt, before skip=0pt]{}
+        \setlength{\bibitemsep}{0.05em}
+        \renewcommand*{\bibfont}{\tiny}
+        \setbeamerfont{bibliography item}{size=\tiny}
+        \setbeamerfont{bibliography entry author}{size=\tiny}
+        \setbeamerfont{bibliography entry title}{size=\tiny}
+        \setbeamerfont{bibliography entry location}{size=\tiny}
+        \setbeamerfont{bibliography entry note}{size=\tiny}
+        \begin{multicols}{4}
+          \printbibliography[heading=none]
+        \end{multicols}
+      \end{plainblock}
     \end{column}
 
     % right margin

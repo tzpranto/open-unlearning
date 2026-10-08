@@ -15,6 +15,10 @@
 \newcommand{\posterlogoleft}{logos/psu-logo-reversed}
 \newcommand{\posterlogoright}{logos/emnlp-logo-dates-reversed}
 
+% Type scale. Body text (\normalsize) is set by the beamerposter scale in the poster (28 pt).
+\newcommand{\psuheadsize}{\fontsize{32pt}{38pt}\selectfont}  % section (block) titles
+\newcommand{\psuhighsize}{\fontsize{30pt}{36pt}\selectfont}  % highlighted keywords, sub-box titles
+
 % Heading font hook (Roboto Slab, set up in the poster preamble).
 \providecommand{\headingfont}{}
 
@@ -27,10 +31,10 @@
 \setbeamercolor{footline}{fg=psu-white, bg=psu-beaver}
 \setbeamercolor{title in headline}{fg=psu-white}
 \setbeamercolor{author in headline}{fg=psu-white}
-\setbeamercolor{institute in headline}{fg=psu-pugh}
+\setbeamercolor{institute in headline}{fg=psu-white}
 \setbeamercolor{structure}{fg=psu-beaver}
 
-\setbeamerfont{block title}{series=\bfseries, size=\large}
+\setbeamerfont{block title}{series=\bfseries, size=\psuheadsize}
 \setbeamercolor{alerted text}{fg=psu-pink}
 
 \setbeamertemplate{navigation symbols}{}  % no navigation on a poster
@@ -53,7 +57,7 @@
   boxrule=\psurule, titlerule=0pt,
   toptitle=0.45em, bottomtitle=0.45em, lefttitle=0.7em,
   left=0.7em, right=0.7em, top=0.6em, bottom=0.7em,
-  title=#2,
+  title={\strut #2},
   fonttitle=\headingfont\usebeamerfont{block title},
   before skip=0.55em, after skip=0.55em,
   #1%
@@ -67,7 +71,7 @@
   boxrule=\psurule, titlerule=0pt,
   toptitle=0.45em, bottomtitle=0.45em, lefttitle=0.7em,
   left=0.7em, right=0.7em, top=0.6em, bottom=0.7em,
-  title=#2,
+  title={\strut #2},
   fonttitle=\headingfont\usebeamerfont{block title},
   before skip=0.55em, after skip=0.55em,
   #1%
@@ -100,9 +104,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \newlength{\psuheaderheight}
-\setlength{\psuheaderheight}{0.088\paperheight}
+\setlength{\psuheaderheight}{0.105\paperheight}
 \newlength{\psulogowidth}
-\setlength{\psulogowidth}{0.215\paperwidth}
+\setlength{\psulogowidth}{0.17\paperwidth}
 
 \setbeamertemplate{headline}{%
   \leavevmode
@@ -118,12 +122,12 @@
       % title block
       \node[anchor=center, inner sep=0pt]
         at ([yshift=-0.5\psuheaderheight]current page.north) {%
-          \begin{minipage}{0.49\paperwidth}\centering
-            {\usebeamercolor[fg]{title in headline}\headingfont\bfseries\LARGE\inserttitle\par}
-            \vspace{0.7ex}
-            {\usebeamercolor[fg]{author in headline}\large\insertauthor\par}
+          \begin{minipage}{0.62\paperwidth}\centering
+            {\usebeamercolor[fg]{title in headline}\headingfont\bfseries\fontsize{62pt}{74pt}\selectfont\inserttitle\par}
+            \vspace{1ex}
+            {\usebeamercolor[fg]{author in headline}\fontsize{43pt}{52pt}\selectfont\insertauthor\par}
             \vspace{0.3ex}
-            {\usebeamercolor[fg]{institute in headline}\normalsize\insertinstitute\par}
+            {\usebeamercolor[fg]{institute in headline}\fontsize{30pt}{36pt}\selectfont\insertinstitute\par}
           \end{minipage}};
     \end{tikzpicture}%
   \end{beamercolorbox}%

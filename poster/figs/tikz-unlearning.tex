@@ -1,0 +1,24 @@
+% What unlearning is (paper, Problem Setup): from a deployed model, make outputs on D_forget
+% high-entropy while keeping the retain cross-entropy below a budget epsilon. No retraining.
+\begin{tikzpicture}[
+    model/.style={draw=psu-beaver, fill=psu-beaver, text=white, rounded corners=12pt,
+      minimum width=6cm, minimum height=3.8cm, align=center, font=\bfseries},
+    data/.style={rounded corners=10pt, minimum height=1.8cm, inner xsep=12pt, align=center,
+      text=white, font=\small\bfseries},
+    flow/.style={-{Triangle[length=18pt,width=20pt]}, line width=4pt, color=psu-beaver},
+  ]
+  \node[model] (m0) at (0,0) {\Large\faRobot\\[0.4ex]LLM $M_{\theta_0}$};
+  \node[draw=psu-navy, line width=3pt, fill=psu-pugh-tint, text=psu-navy, rounded corners=22pt,
+    minimum height=2.4cm, inner xsep=18pt, font=\bfseries] (u) at (9.6,0) {unlearning};
+  \node[model] (m1) at (19.2,0) {\Large\faRobot\\[0.4ex]unlearned $M_{\theta}$};
+  \draw[flow] (m0) -- (u);
+  \draw[flow] (u) -- (m1);
+  \node[data, fill=psu-pink] (df) at (5.0,3.9) {\faFile*\ \ $\mathcal{D}_\text{forget}$: remove};
+  \node[data, fill=psu-beaver] (dr) at (14.4,3.9) {\faFile*\ \ $\mathcal{D}_\text{retain}$: keep};
+  \draw[-{Stealth[length=14pt]}, line width=3pt, psu-pink] (df.south) -- (u.north west);
+  \draw[-{Stealth[length=14pt]}, line width=3pt, psu-beaver] (dr.south) -- (u.north east);
+  \node[anchor=west, align=left, font=\small] at ([xshift=0.6cm, yshift=0.8cm]m1.east)
+    {\textcolor{psu-pink}{\faTimes}\ \ $\mathcal{D}_\text{forget}$};
+  \node[anchor=west, align=left, font=\small] at ([xshift=0.6cm, yshift=-0.8cm]m1.east)
+    {\textcolor{psu-beaver}{\faCheck}\ \ $\mathcal{D}_\text{retain}$};
+\end{tikzpicture}

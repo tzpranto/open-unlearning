@@ -1,0 +1,73 @@
+% =====================================================================
+% Content boxes used inside the poster blocks (all tcolorbox, PSU colors).
+% The outer blocks (psublock, psufinalblock, plainblock, tldrbox) live in
+% beamerthemePSUPoster.sty; these are the smaller pieces placed inside them.
+% =====================================================================
+
+% ---------------------------------------------------------------------
+% Highlight boxes
+% ---------------------------------------------------------------------
+\newtcolorbox{callout}{%
+  enhanced, sharp corners, colback=psu-beaver-tint, width=\linewidth,
+  colframe=psu-navy, boxrule=0pt, leftrule=7.4pt,
+  left=11pt, right=5pt, top=9pt, bottom=9pt,
+before skip=11pt, after skip=5pt}
+
+\newtcolorbox{takeaway}{%
+  enhanced, sharp corners, colback=psu-pugh-tint, width=\linewidth,
+  colframe=psu-beaver, boxrule=0pt, leftrule=7.4pt,
+  left=11pt, right=5pt, top=9pt, bottom=9pt,
+before skip=11pt, after skip=5pt}
+
+\newtcolorbox{inform}{%
+  enhanced, sharp corners, colback=psu-beaver-tint, width=\linewidth,
+  colframe=psu-beaver, boxrule=0pt, leftrule=7.4pt,
+  left=11pt, right=5pt, top=9pt, bottom=9pt,
+before skip=11pt, after skip=5pt}
+
+% block for the main findings of the paper
+% Header band: one solid Pugh Blue band for every finding (no gradient).
+\newtcolorbox{findingblock}[2]{%
+  enhanced, sharp corners, colback=psu-#2!3, width=\linewidth,
+  colframe=psu-#2, boxrule=0.47pt, leftrule=7.4pt, titlerule=0pt, title={#1},
+  colbacktitle=psu-pugh!70, coltitle=psu-navy, fonttitle=\bfseries,
+  lefttitle=11pt, toptitle=5pt, bottomtitle=5pt,
+  left=11pt, right=5pt, top=6pt, bottom=9pt,
+before skip=5pt, after skip=5pt}
+
+% Numbered circle, e.g. \circnum{1} to tag a method component.
+% Reset node options: inside a TikZ node the nested picture inherits its size and frame.
+\newcommand{\circnum}[1]{\tikz[baseline=(n.base)]\node[circle, fill=psu-pugh, draw=none,
+  text width={}, minimum width=0pt, minimum height=0pt, line width=0pt, align=center,
+  text=psu-navy, inner sep=0.12em, font=\bfseries\footnotesize] (n) {#1};}
+
+% Failure-mode card (motivation) and component box (method); see figs/tikz-problems.tex.
+\newtcolorbox{probcard}[1]{%
+  enhanced, sharp corners, colback=psu-pink!4, colframe=psu-pink, boxrule=2pt,
+  colbacktitle=psu-pink, coltitle=psu-white, fonttitle=\bfseries, title={#1},
+  equal height group=prob,
+  left=6pt, right=6pt, top=10pt, bottom=8pt, toptitle=6pt, bottomtitle=6pt,
+  before skip=6pt, after skip=6pt}
+% Optional argument: extra tcolorbox keys, e.g. a different equal height group.
+\newtcolorbox{compblock}[2][]{%
+  enhanced, sharp corners, colback=psu-white, width=\linewidth,
+  colframe=psu-beaver, boxrule=0.47pt, leftrule=7.4pt, titlerule=0pt,
+  title={\strut #2}, equal height group=comp,
+  colbacktitle=psu-pugh!70, coltitle=psu-navy, fonttitle=\bfseries\psuhighsize,
+  lefttitle=11pt, righttitle=11pt, toptitle=8pt, bottomtitle=8pt,
+  left=14pt, right=10pt, top=10pt, bottom=12pt,
+  before skip=12pt, after skip=6pt, #1}
+\newcommand{\fixtag}[1]{\tcbox[on line, enhanced, frame hidden, colback=psu-pink, coltext=psu-white,
+  arc=12pt, left=8pt, right=8pt, top=3pt, bottom=3pt, fontupper=\small\bfseries]{fixes #1}}
+
+% Benchmark tile (experiments), baseline chip, and headline number (key result).
+\newtcolorbox{benchtile}[1]{%
+  enhanced, sharp corners, colback=psu-beaver-tint, colframe=psu-beaver, boxrule=2pt,
+  colbacktitle=psu-beaver, coltitle=psu-white, fonttitle=\bfseries, title={#1},
+  halign=center, halign title=center, equal height group=bench,
+  left=6pt, right=6pt, top=8pt, bottom=8pt, toptitle=6pt, bottomtitle=6pt,
+  before skip=6pt, after skip=6pt}
+\newcommand{\chip}[1]{\tcbox[on line, enhanced, frame hidden, colback=psu-pugh-tint, coltext=psu-navy,
+  arc=10pt, left=7pt, right=7pt, top=3pt, bottom=3pt, fontupper=\bfseries]{#1}}
+\newcommand{\bignum}[3]{%
+  {\color{#1}\LARGE\bfseries #2}\\[0.1ex]{\small #3}\par\vspace{1.6ex}}

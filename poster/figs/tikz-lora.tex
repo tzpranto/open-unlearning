@@ -1,0 +1,10 @@
+% LoRA as a structural constraint: frozen W0 plus a trainable low-rank update BA.
+\begin{tikzpicture}[x=1cm, y=1cm, font=\large]
+  \fill[psu-black!12] (0,0) rectangle (3.6,3.6);
+  \node[text=psu-navy, align=center] at (1.8,1.8) {$W_0$\\[0.3ex]\small\faLock};
+  \node at (4.4,1.8) {$+$};
+  \fill[psu-beaver] (5.2,0) rectangle (5.8,3.6);
+  \node[below] at (5.5,0) {$B$};
+  \fill[psu-beaver] (6.2,1.5) rectangle (9.8,2.1);
+  \node[below] at (8,1.5) {$A$};
+\end{tikzpicture}

@@ -1,0 +1,17 @@
+% Unlearning requests keep arriving after deployment.
+\begin{tikzpicture}[
+    req/.style={circle, fill=psu-pink, text=white, minimum size=2.3cm, inner sep=0pt, font=\Large},
+    lbl/.style={below=0.25cm, text=psu-navy, font=\footnotesize},
+  ]
+  \node[draw=psu-beaver, fill=psu-beaver, text=white, rounded corners=10pt, minimum height=2.3cm,
+    inner sep=14pt, font=\bfseries] (llm) at (0,0) {\faRobot\ \ deployed LLM};
+  \draw[-{Triangle[length=18pt,width=20pt]}, line width=4pt, psu-beaver]
+    (llm.east) -- ++(0.64\linewidth,0) node[right, text=psu-navy, font=\small] {time};
+  \foreach \x/\ic/\t in {0.05/\faIcon{user-shield}/privacy (GDPR),
+                          0.215/\faCopyright/copyright,
+                          0.38/\faBiohazard/hazardous,
+                          0.545/\faNewspaper/misinformation} {
+    \node[req] (r) at ([xshift=\x\linewidth+1.3cm]llm.east) {\ic};
+    \node[lbl] at (r.south) {\t};
+  }
+\end{tikzpicture}

@@ -1,0 +1,21 @@
+% Asymmetric dual update (qualitative). A symmetric update lets lambda fall as fast as it rose,
+% so retain violations recur and lambda oscillates; BLADE decays alpha times slower and stays up.
+% Drawn at print size (about 24 cm wide) so labels print at their nominal size.
+\begin{tikzpicture}[x=0.8cm, y=0.8cm, font=\normalsize]
+  \def\lo{0.8} \def\hi{4.0}
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (20.6,0) node[right] {steps};
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (0,6.6) node[above] {$\lambda$};
+  % symmetric: same slope up and down, back to the start, violated again
+  \draw[line width=4pt, psu-black!40, dashed]
+    (0.2,\lo) -- (3,\lo) -- (4,\hi) -- (5,\lo) -- (8,\lo) -- (9,\hi) -- (10,\lo)
+    -- (13,\lo) -- (14,\hi) -- (15,\lo) -- (20,\lo);
+  % BLADE: same rise, then a slow decay
+  \draw[line width=6pt, psu-beaver] (0.2,\lo) -- (3,\lo) -- (4,\hi) -- (20,3.3);
+  \fill[psu-pink] (3,0) ++(-0.4,-0.75) -- ++(0.8,0) -- ++(-0.4,0.7) -- cycle;
+  \node[text=psu-pink, font=\bfseries, anchor=north west] at (3.6,-0.15) {$r>0$: violation};
+  % legend
+  \draw[line width=6pt, psu-beaver] (1.2,5.8) -- (2.8,5.8);
+  \node[text=psu-beaver, font=\bfseries, anchor=west] at (3.0,5.8) {\method};
+  \draw[line width=4pt, psu-black!40, dashed] (9.6,5.8) -- (11.2,5.8);
+  \node[text=psu-black!60, font=\bfseries, anchor=west] at (11.4,5.8) {symmetric};
+\end{tikzpicture}

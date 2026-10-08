@@ -1,21 +1,21 @@
 % Per-token forget loss as a function of the token's output entropy H(p_t).
 % Clamped: max(0, tau*Hmax - H) with a zero-gradient deadzone; unclamped (tau = 1) keeps pushing.
-\begin{tikzpicture}[x=1cm, y=1cm, font=\footnotesize]
-  \def\W{19}    % x extent = H_max
-  \def\T{12.5}  % tau * H_max, here tau ~ 0.66
-  \def\Hgt{9.5}
+% Drawn at print size (about 24 cm wide) so labels print at their nominal size.
+\begin{tikzpicture}[x=0.8cm, y=0.8cm, font=\normalsize]
+  \def\W{17}    % x extent = H_max
+  \def\T{11}    % tau * H_max
+  \def\Hgt{6}
   \fill[psu-pugh-tint] (\T,0) rectangle (\W,\Hgt);
-  \node[text=psu-beaver, align=center, font=\footnotesize\bfseries] at ({(\T+\W)/2},{0.62*\Hgt})
-    {deadzone\\[0.2ex]$\nabla = 0$};
-  \draw[-{Stealth[length=12pt]}, line width=2pt, psu-navy] (0,0) -- (\W+1.2,0)
-    node[below left, yshift=-4pt] {$H(p_t)$};
-  \draw[-{Stealth[length=12pt]}, line width=2pt, psu-navy] (0,0) -- (0,\Hgt+0.8)
-    node[above right] {per-token loss};
-  \draw[dashed, line width=3pt, psu-black!40] (0,{0.95*\Hgt}) -- (\W,0)
-    node[pos=0.22, above right, text=psu-navy] {unclamped ($\tau{=}1$)};
-  \draw[line width=5pt, psu-pink] (0,{0.95*\Hgt*\T/\W}) -- (\T,0) -- (\W,0);
-  \node[text=psu-pink, anchor=south west, font=\footnotesize\bfseries] at (0.5,{0.95*\Hgt*\T/\W})
-    {clamped (BLADE)};
-  \draw[line width=1.5pt] (\T,0.25) -- (\T,-0.25) node[below] {$\tau\log V$};
-  \draw[line width=1.5pt] (\W,0.25) -- (\W,-0.25) node[below] {$\log V$};
+  \node[text=psu-beaver, font=\bfseries] at ({(\T+\W)/2},{0.7*\Hgt}) {deadzone};
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (\W+0.8,0)
+    node[right] {$H(p_t)$};
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (0,\Hgt+1.6)
+    node[above] {loss};
+  \draw[dashed, line width=3.5pt, psu-black!40] (0,{0.95*\Hgt}) -- (\W,0);
+  \node[anchor=south west, font=\bfseries] at (1.4,\Hgt+0.15)
+    {\textcolor{psu-black!60}{unclamped:} \textcolor{psu-pink}{over-forgetting}};
+  \draw[line width=6pt, psu-pink] (0,{0.95*\Hgt*\T/\W}) -- (\T,0) -- (\W,0);
+  \node[text=psu-pink, anchor=south west, font=\bfseries] at (\T+0.2,0.25) {clamped};
+  \draw[line width=2pt] (\T,0.3) -- (\T,-0.3) node[below] {$\tau\log V$};
+  \draw[line width=2pt] (\W,0.3) -- (\W,-0.3) node[below] {$\log V$};
 \end{tikzpicture}

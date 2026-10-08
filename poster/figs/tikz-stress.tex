@@ -1,0 +1,37 @@
+% Key result, compact: HM on MUSE News (Llama-2-7B) under scaling and sequential unlearning.
+% Same data as scripts/fig_stress.py: BLADE stays flat, PDU collapses.
+% y: HM 0..0.6 mapped to 0..8.4 cm. Drawn at print size so labels print at nominal size.
+\begin{tikzpicture}[x=1cm, y=14cm, font=\large,
+    blade/.style={line width=6pt, psu-beaver},
+    pdu/.style={line width=5pt, psu-pink, dash pattern=on 16pt off 9pt},
+  ]
+  \foreach \ox/\ttl/\ticks/\pdu/\cx/\cy in {
+      0/Scalability/{1$\times$,2$\times$,3$\times$,4$\times$}/{0.581,0.579,0.573,0.005}/3/0.005,
+      21/Sustainability/{1,2,3,4}/{0.580,0.558,0.016,0.130}/2/0.016} {
+    \begin{scope}[xshift=\ox cm]
+      \draw[line width=2.5pt, psu-navy] (0,0) -- (17.4,0);
+      \draw[line width=1.5pt, psu-black!25] (0,0.5) -- (17.4,0.5);
+      \node[anchor=east, text=psu-black!60] at (-0.2,0.5) {0.5};
+      \node[anchor=east, text=psu-black!60] at (-0.2,0) {0};
+      \node[anchor=south, font=\Large\bfseries, text=psu-beaver] at (8.7,0.64) {\ttl};
+      \foreach \t [count=\i from 0] in \ticks
+        \node[anchor=north] at ({0.7+5.3*\i},-0.02) {\t};
+      % BLADE (same in both panels up to 0.01)
+      \ifnum\ox=0
+        \draw[blade] (0.7,0.542) -- (6.0,0.547) -- (11.3,0.552) -- (16.6,0.533);
+      \else
+        \draw[blade] (0.7,0.542) -- (6.0,0.545) -- (11.3,0.523) -- (16.6,0.525);
+      \fi
+      \foreach \y [count=\i from 0] in \pdu {
+        \ifnum\i>0 \draw[pdu] ({0.7+5.3*(\i-1)},\prev) -- ({0.7+5.3*\i},\y); \fi
+        \xdef\prev{\y}
+      }
+      \node[anchor=south east, text=psu-pink, font=\Large\bfseries] at ({0.7+5.3*\cx-0.9},{\cy+0.03}) {collapse};
+    \end{scope}
+  }
+  % legend, inside the empty lower-left of the first panel
+  \draw[blade] (1.2,0.36) -- (2.8,0.36) node[right, text=psu-beaver, font=\Large\bfseries] {\method};
+  \draw[pdu] (1.2,0.25) -- (2.8,0.25) node[right, text=psu-pink, font=\Large\bfseries] {PDU};
+  \node[anchor=north, font=\large] at (8.7,-0.115) {forget set size};
+  \node[anchor=north, font=\large] at (29.7,-0.115) {sequential step};
+\end{tikzpicture}

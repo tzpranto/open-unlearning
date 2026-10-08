@@ -1,0 +1,20 @@
+% Repair-first (qualitative): each small forget step raises retain loss,
+% the following K fast repair steps bring it back before the next forget step.
+% Drawn at print size (about 24 cm wide) so labels print at their nominal size.
+\begin{tikzpicture}[x=0.8cm, y=0.8cm, font=\normalsize]
+  \def\lo{1.0} \def\hi{3.4} \def\eps{5.0}
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (20.6,0) node[right] {steps};
+  \draw[-{Stealth[length=14pt]}, line width=2.5pt, psu-navy] (0,0) -- (0,6.4) node[above right] {retain loss};
+  \draw[dashed, line width=3pt, psu-navy] (0,\eps) -- (20,\eps) node[above left] {budget $\varepsilon$};
+  \foreach \c in {0,1,2} {
+    \pgfmathsetmacro{\s}{0.6+6.4*\c}
+    \draw[line width=6pt, psu-pink] (\s,\lo) -- (\s+0.8,\hi);
+    \draw[line width=6pt, psu-beaver]
+      (\s+0.8,\hi) -- (\s+2.0,\hi) -- (\s+2.0,{\hi-0.6}) -- (\s+3.2,{\hi-0.6})
+      -- (\s+3.2,{\hi-1.2}) -- (\s+4.4,{\hi-1.2}) -- (\s+4.4,{\hi-1.8})
+      -- (\s+5.6,{\hi-1.8}) -- (\s+5.6,\lo) -- (\s+6.4,\lo);
+  }
+  \node[anchor=north, font=\bfseries] at (10,-0.4)
+    {\textcolor{psu-pink}{\rule[0.25ex]{1.4cm}{6pt}\ forget step}\qquad
+     \textcolor{psu-beaver}{\rule[0.25ex]{1.4cm}{6pt}\ repair $\times K$}};
+\end{tikzpicture}

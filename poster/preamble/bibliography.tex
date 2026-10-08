@@ -1,0 +1,47 @@
+% =====================================================================
+% Bibliography: compact numeric style (first author, title, year).
+% Bib file: references.bib. The list is printed in the last row of the poster.
+% =====================================================================
+\usepackage[backend=biber, bibstyle=numeric, autocite=superscript, defernumbers=true, citestyle=numeric,
+  maxbibnames=1, minbibnames=1, giveninits=true]{biblatex}
+\usepackage{csquotes}
+
+\makeatletter
+\RequireBibliographyStyle{numeric}
+\DeclareFieldFormat{labelnumberwidth}{#1.}
+\makeatother
+
+% Print titles exactly as in the paper's bib (biblatex-apa would sentence-case them).
+\DeclareFieldFormat{apacase}{#1}
+\DeclareFieldFormat{url}{url\addcolon\space\url{#1}}
+
+\renewbibmacro*{url+urldate}{%
+  \ifthenelse{\iffieldundef{url}\OR\NOT\iffieldundef{doi}}
+  {}
+  {\iffieldundef{urlyear}
+    {}
+    {\setunit{\addspace}}%
+\iffieldundef{url}{}{\printfield{url}\renewcommand*{\finentrypunct}{\relax}}}}
+
+\addbibresource{references.bib}
+% Poster references: first author et al., title, year.
+\AtEveryBibitem{\clearfield{url}\clearfield{doi}\clearfield{pages}\clearfield{volume}
+  \clearfield{number}\clearlist{publisher}\clearlist{location}\clearname{editor}\clearfield{eventtitle}
+  \clearfield{booktitle}\clearfield{journaltitle}\clearfield{month}\clearlist{organization}\clearlist{institution}}
+\AtEveryBibitem{\clearfield{isbn}\clearfield{issn}}
+\renewbibmacro{in:}{}
+% Narrow label column for the compact poster bibliography.
+\defbibenvironment{bibliography}
+  {\list{\printfield[labelnumberwidth]{labelnumber}}
+    {\setlength{\leftmargin}{1.5em}\setlength{\labelwidth}{1.3em}\setlength{\labelsep}{0.2em}
+     \setlength{\itemsep}{\bibitemsep}\setlength{\parsep}{0pt}}
+   \renewcommand*{\makelabel}[1]{##1\hss}}
+  {\endlist}
+  {\item}
+
+\AtBeginBibliography{\setstretch{1.1}\raggedright}
+% No stretchable glue inside URLs (otherwise they print as "https : / / ...").
+\setlength{\biburlbigskip}{0mu}
+\setlength{\biburlnumskip}{0mu}
+\setlength{\biburlucskip}{0mu}
+\setlength{\biburllcskip}{0mu}

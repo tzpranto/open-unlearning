@@ -1,0 +1,34 @@
+% =====================================================================
+% Packages and fonts. Needs XeLaTeX (fontspec/mathspec).
+% =====================================================================
+\usepackage{amsmath,amsthm, amssymb, latexsym}
+\usepackage{mathspec}
+% Penn State brand typefaces: Roboto (body) and Roboto Slab (headings), both ship with TeX Live.
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{Roboto}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
+  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
+\setsansfont{Roboto}[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
+  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]
+\setfontfamily\headingfont{RobotoSlab}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold]
+\IfFontExistsTF{Fira Code}
+  {\setmonofont{Fira Code}[Scale=0.74]}
+  {\setmonofont{FiraMono}[Extension=.otf, UprightFont=*-Regular, BoldFont=*-Bold, Scale=0.74]}
+\setmathrm[Extension=.ttf, UprightFont=*-Regular, BoldFont=*-Bold,
+  ItalicFont=*-Italic, BoldItalicFont=*-BoldItalic]{Roboto}
+
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{qrcode}
+\usepackage{adjustbox}
+\usepackage{xspace}
+\usepackage{nicefrac}
+\usepackage{multiobjective}
+% fontawesome7 needs TeX Live 2025+; fall back to fontawesome5 on older systems.
+\IfFileExists{fontawesome7.sty}{\usepackage{fontawesome7}}{\usepackage{fontawesome5}}
+\urlstyle{tt}
+\usepackage{setspace}
+\usepackage{multicol}
+
+\usepackage{tikz}
+\usetikzlibrary{calc, backgrounds, arrows, arrows.meta, shapes, positioning, fit}

@@ -1,0 +1,43 @@
+% Qualitative sketches (not data) of the central challenge and the three failure modes
+% named in the paper's introduction. Each picture is about 9 x 5 units; \probaxes draws the axes.
+\newcommand{\probaxes}[2]{%
+  \draw[-{Stealth[length=10pt]}, line width=2pt, psu-navy] (0,0) -- (9.4,0) node[below left, font=\footnotesize] {#1};
+  \draw[-{Stealth[length=10pt]}, line width=2pt, psu-navy] (0,0) -- (0,4.8) node[above, font=\footnotesize] {#2};}
+
+% P1 collateral damage: entangled forget/retain, so retain utility drops further with each request.
+\newcommand{\probdamage}{%
+  \begin{tikzpicture}[x=0.85cm, y=0.85cm]
+    \probaxes{requests}{utility}
+    \foreach \i/\h in {1/4.0, 2/3.0, 3/2.0, 4/1.0}
+      \fill[psu-pink] ({2*\i-1.2},0) rectangle ({2*\i},\h);
+  \end{tikzpicture}}
+
+% P2 unbounded forgetting: the gradient-ascent loss has no lower bound.
+\newcommand{\probunbounded}{%
+  \begin{tikzpicture}[x=0.85cm, y=0.85cm]
+    \probaxes{steps}{loss}
+    \draw[line width=5pt, psu-pink, -{Stealth[length=16pt]}]
+      (0.3,3.9) .. controls (4,3.6) and (6.5,2.5) .. (8.4,0.15);
+    \node[text=psu-pink, font=\bfseries] at (6.9,3.5) {$\to -\infty$};
+  \end{tikzpicture}}
+
+% P3 static trade-off: with fixed weights the retain loss oscillates around the budget.
+\newcommand{\probstatic}{%
+  \begin{tikzpicture}[x=0.85cm, y=0.85cm]
+    \probaxes{steps}{retain loss}
+    \draw[dashed, line width=2pt, psu-navy] (0,2.2) -- (9,2.2);
+    \draw[line width=5pt, psu-pink, domain=0.3:8.8, samples=80, smooth]
+      plot (\x, {2.2 + 1.25*sin(\x*120)*(0.5+0.06*\x)});
+  \end{tikzpicture}}
+
+% P4 over-forgetting: unclamped entropy keeps pushing tokens past the "forgotten" level.
+\newcommand{\proboverforget}{%
+  \begin{tikzpicture}[x=0.85cm, y=0.85cm]
+    \probaxes{steps}{entropy}
+    \draw[dashed, line width=2pt, psu-navy] (0,2.6) -- (9,2.6)
+      node[below left, font=\footnotesize] {forgotten};
+    \draw[line width=5pt, psu-beaver] (0.3,0.5) .. controls (2,0.8) and (3,2) .. (4,2.6);
+    \draw[line width=5pt, psu-pink, -{Stealth[length=16pt]}]
+      (4,2.6) .. controls (5,3.1) and (6.5,3.6) .. (8.4,3.9);
+    \node[text=psu-pink, font=\footnotesize\bfseries, anchor=south] at (4.4,4.1) {still pushed};
+  \end{tikzpicture}}
