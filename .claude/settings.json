@@ -13,7 +13,9 @@
       "TodoWrite",
       "Bash(*)",
       "Bash(pdfinfo paper/figures/fig_knowundo.pdf)",
-      "Bash(pdfinfo paper/figures/fig_scalability_sustainability.pdf)"
+      "Bash(pdfinfo paper/figures/fig_scalability_sustainability.pdf)",
+      "Read(//tmp/dyn/**)",
+      "Bash(python3 -I -)"
     ]
   }
 }

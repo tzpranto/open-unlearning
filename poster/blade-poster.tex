@@ -46,7 +46,7 @@
     \begin{column}{0.98\linewidth}
 
       % ======================= Row 1: motivation =======================
-      \begin{columns}[T]
+      \begin{columns}[T,onlytextwidth]
         \begin{column}{0.52\linewidth}
           \begin{psublock}[equal height group=r1]{Problem Overview}
             \centering
@@ -77,7 +77,7 @@
           \begin{column}{0.42\linewidth}
             \begin{compblock}[equal height group=r2top, valign=center]{Formulation}
               \centering
-              \adjustbox{width=0.9\linewidth}{$\begin{array}{c}
+              \adjustbox{width=0.8\linewidth}{$\begin{array}{c}
                 \displaystyle
                 \underbrace{\min_{\theta}\ \Loss_{\text{fgt}}(\theta^*;\Dforget)}_{\textcolor{psu-pink}{\textbf{Forget}}}
                 \quad\text{s.t.}\quad
@@ -143,52 +143,39 @@
 
       % ======================= Row 3: experiments =======================
       \begin{psublock}{Experiments}
-        \begin{columns}[T]
-          \begin{column}{0.40\linewidth}
-            \begin{compblock}[equal height group=e1]{Setup}
-              \textbf{Datasets}\\[0.4ex]
-              \setlength{\tabcolsep}{5pt}\renewcommand{\arraystretch}{1.35}
-              \begin{tabular}{@{}l@{\quad}l@{\quad}l@{}}
-                {\color{psu-beaver}\faIcon{user-friends}}\ \textbf{TOFU} & synthetic authors & Llama-3.2 1B/3B \\
-                {\color{psu-beaver}\faBook}\ \textbf{MUSE} & Books, News & Llama-2-7B \\
-                {\color{psu-beaver}\faCopyright}\ \textbf{KnowUndo} & copyright, privacy & Llama-2-7B-chat \\
-              \end{tabular}\\[1.2ex]
-              \textbf{Baselines}\\[0.4ex]
-              \chip{GradAscent\autocite{jang2023knowledge}} \chip{GradDiff} \chip{NPO\autocite{zhang2024negative}}
-              \chip{SimNPO\autocite{fan2025simplicity}} \chip{RMU} \chip{BLURNPO\autocite{reisizadeh2026blur}}
-              \chip{PDU\autocite{entesari2026constrained}}\\[1.2ex]
-              \textbf{Metric:} HM of forget \& retain axes
-            \end{compblock}
-          \end{column}
-          \begin{column}{0.58\linewidth}
-            \begin{compblock}[equal height group=e1, boxrule=3pt, leftrule=10pt]{Key result: stable under scaling and repeated unlearning}
-              \centering
-              \adjustbox{max width=\linewidth}{\input{figs/tikz-stress}}
-            \end{compblock}
-          \end{column}
-        \end{columns}
+        \begin{compblock}[equal height group=e0]{Dominates baselines across three benchmarks {\mdseries(avg.\ harmonic mean of forget and retain scores across 5 seeds)}}
+          \centering
+          \newcommand{\lgd}[2]{\textcolor[HTML]{#1}{\rule{0.8em}{0.8em}}\ #2\quad}
+          \lgd{E3E3E3}{GradAscent\textsuperscript{3}}\lgd{C9C9C9}{GradDiff}%
+          \lgd{AEAEAE}{NPO\textsuperscript{5}}\lgd{939393}{SimNPO\textsuperscript{2}}%
+          \lgd{787878}{RMU}\lgd{CFE0F3}{BLURNPO\textsuperscript{4}}%
+          \lgd{96BEE6}{PDU\textsuperscript{1}}\lgd{1E407C}{\textbf{\method}}\\[0.3ex]
+          \includegraphics[width=\linewidth]{figures/fig_hm_bars}
+        \end{compblock}
 
         \begin{columns}[T]
-          \begin{column}{0.58\linewidth}
-            \begin{compblock}[equal height group=e2]{Best on three benchmark families}
+          \begin{column}{0.365\linewidth}
+            \begin{compblock}[equal height group=e1]{Stable under scaling and repeated requests}
               \centering
-              {\LARGE\bfseries\color{psu-beaver}+6\%}\ TOFU \qquad
-              {\LARGE\bfseries\color{psu-beaver}+9\%}\ MUSE Books \qquad
-              {\LARGE\bfseries\color{psu-beaver}+7\%}\ KnowUndo\\[0.3ex]
-              average composite score vs.\ strongest baseline\\[0.6ex]
-              \includegraphics[width=\linewidth]{figures/fig_benchmarks}
+              \includegraphics[width=\linewidth]{figures/fig_stress}
             \end{compblock}
           \end{column}
-          \begin{column}{0.40\linewidth}
-            \begin{compblock}[equal height group=e2]{Robust and efficient}
+          \begin{column}{0.365\linewidth}
+            \begin{compblock}[equal height group=e1]{Training dynamics of \method\ (MUSE Books)}
+              \centering
+              \includegraphics[width=\linewidth]{figures/fig_dynamics}
+            \end{compblock}
+          \end{column}
+          \begin{column}{0.25\linewidth}
+            \begin{compblock}[equal height group=e1]{Robust and efficient}
               \raggedright
-              \setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.6}
+              \setlength{\tabcolsep}{4pt}\renewcommand{\arraystretch}{1.9}
               \begin{tabular}{@{}c@{\ \ }l@{}}
-                {\Large\color{psu-beaver}\faSearch} & \textbf{Extraction:} best adversarial HM \\
-                {\Large\color{psu-beaver}\faIcon{user-secret}} & \textbf{Jailbreak:} lowest attack success \\
+                {\Large\color{psu-beaver}\faSearch} & \textbf{Extraction:} best HM \\
+                {\Large\color{psu-beaver}\faIcon{user-secret}} & \textbf{Jailbreak:} lowest ASR \\
                 {\Large\color{psu-beaver}\faIcon{user-shield}} & \textbf{MIA:} no leakage \\
-                {\Large\color{psu-beaver}\faTerminal} & \textbf{GCG:} lowest attack success \\
-                {\Large\color{psu-beaver}\faMemory} & \textbf{Efficient:} 2--5$\times$ less GPU memory \\
+                {\Large\color{psu-beaver}\faTerminal} & \textbf{GCG:} lowest ASR \\
+                {\Large\color{psu-beaver}\faMemory} & \textbf{2--5$\times$} less GPU memory \\
               \end{tabular}
             \end{compblock}
           \end{column}
@@ -197,19 +184,39 @@
 
       % Row 5 (dynamics + takeaways + QR) parked in parked/row5-dynamics-takeaways.tex
 
-      % ======================= Row 6: references =======================
-      \begin{plainblock}[top=0pt, bottom=0pt, before skip=0pt]{}
-        \setlength{\bibitemsep}{0.05em}
-        \renewcommand*{\bibfont}{\tiny}
-        \setbeamerfont{bibliography item}{size=\tiny}
-        \setbeamerfont{bibliography entry author}{size=\tiny}
-        \setbeamerfont{bibliography entry title}{size=\tiny}
-        \setbeamerfont{bibliography entry location}{size=\tiny}
-        \setbeamerfont{bibliography entry note}{size=\tiny}
-        \begin{multicols}{4}
-          \printbibliography[heading=none]
-        \end{multicols}
-      \end{plainblock}
+      % ======================= Row 6: references | acknowledgments + QR =======================
+      \begin{columns}[T,onlytextwidth]
+        \begin{column}{0.60\linewidth}
+          \begin{plainblock}[before skip=0pt]{References}
+            % Written out by hand (numbers match the superscripts in the benchmark legend).
+            \fontsize{21pt}{25pt}\selectfont\raggedright\setlength{\multicolsep}{0pt}
+            \newcommand{\refi}[4]{\hangindent=1.3em\hangafter=1\makebox[1.3em][l]{#1.}#2, \textcolor{psu-beaver}{``#3''}, #4.\par\vspace{0.15em}}
+            \begin{minipage}[t]{0.49\linewidth}
+                \refi{1}{T.~Entesari et al.}{Constrained Entropic Unlearning: A Primal-Dual Framework for Large Language Models}{2025}
+                \refi{2}{C.~Fan et al.}{Simplicity Prevails: Rethinking Negative Preference Optimization for LLM Unlearning}{2025}
+                \refi{3}{J.~Jang et al.}{Knowledge Unlearning for Mitigating Privacy Risks in Language Models}{2023}
+            \end{minipage}\hfill
+            \begin{minipage}[t]{0.49\linewidth}
+                \refi{4}{H.~Reisizadeh et al.}{BLUR: A Bi-Level Optimization Approach for LLM Unlearning}{2026}
+                \refi{5}{R.~Zhang et al.}{Negative Preference Optimization: From Catastrophic Collapse to Effective Unlearning}{2024}
+            \end{minipage}
+          \end{plainblock}
+        \end{column}
+        \begin{column}{0.26\linewidth}
+          \begin{plainblock}[before skip=0pt]{Acknowledgments}
+            \small
+            Supported in part by U.S.\ NSF awards \#2438810 and \#2555559, the Amazon Nova AI challenge award,
+            and the PSU Frymoyer chairship award. Some results used CloudBank resources, supported by
+            U.S.\ NAIRR award \#240336.
+          \end{plainblock}
+        \end{column}
+        \begin{column}{0.12\linewidth}
+          \begin{plainblock}[before skip=0pt, halign=center]{Paper}
+            \qrcode[height=4.6cm,hyperlink]{https://arxiv.org/abs/2608.22557}\\[0.3ex]
+            {\footnotesize\href{https://arxiv.org/abs/2608.22557}{arXiv:2608.22557}}
+          \end{plainblock}
+        \end{column}
+      \end{columns}
     \end{column}
 
     % right margin

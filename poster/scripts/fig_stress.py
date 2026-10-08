@@ -45,12 +45,11 @@ blade_scal = [0.542, 0.547, 0.552, 0.533]
 pdu_sust = [0.580, 0.558, 0.016, 0.130]
 blade_sust = [0.542, 0.545, 0.523, 0.525]
 
-fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.7), sharey=True)
+fig, axes = plt.subplots(1, 2, figsize=(9.6, 4.6), sharey=True)
 panels = [
-    (axes[0], pdu_scal, blade_scal, '(a) Scalability', 'Forget set size',
-     [r'1$\times$' + '\n(889)', r'2$\times$' + '\n(1778)', r'3$\times$' + '\n(2667)',
-      r'4$\times$' + '\n(3554)'], (4, 0.005)),
-    (axes[1], pdu_sust, blade_sust, '(b) Sustainability', 'Sequential unlearning step',
+    (axes[0], pdu_scal, blade_scal, 'Scalability', 'forget set size',
+     [r'1$\times$', r'2$\times$', r'3$\times$', r'4$\times$'], (4, 0.005)),
+    (axes[1], pdu_sust, blade_sust, 'Sustainability', 'sequential request',
      ['1', '2', '3', '4'], (3, 0.016)),
 ]
 for ax, pdu, blade, title, xlabel, ticks, (cx, cy) in panels:
