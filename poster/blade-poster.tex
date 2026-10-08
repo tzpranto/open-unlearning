@@ -72,22 +72,27 @@
       \end{columns}
 
       % ======================= Row 2: method =======================
-      \begin{psublock}{BLADE at a glance}
+      \begin{psublock}{BLADE: Method}
         \begin{columns}[T]
-          \begin{column}{0.39\linewidth}
-            \begin{compblock}[equal height group=r2top]{Formulation}
-              \setlength{\tabcolsep}{6pt}\renewcommand{\arraystretch}{2.1}
-              \begin{tabular}{@{}l@{\quad}l@{}}
-                {\psuhighsize\color{psu-pink}\textbf{Forget}} & $\min_{\theta}\ \Loss_{\text{fgt}}(\theta^*;\Dforget)$ \\
-                {\psuhighsize\color{psu-navy}\textbf{Retain budget}} & s.t.\ $\Loss_{\text{CE}}(\theta^*;\Dretain) \le \varepsilon$ \\
-                {\psuhighsize\color{psu-beaver}\textbf{Repair}} & $\theta^* \approx \argmin_{\theta}\ \Loss_{\text{CE}}(\theta;\Dretain)$ \\
-                {\psuhighsize\color{psu-beaver}\textbf{LoRA}} & $W' = W_0 + \tfrac{\alpha}{r}BA$,\ \ $W_0$ frozen \\
-              \end{tabular}
+          \begin{column}{0.42\linewidth}
+            \begin{compblock}[equal height group=r2top, valign=center]{Formulation}
+              \centering
+              \adjustbox{width=0.9\linewidth}{$\begin{array}{c}
+                \displaystyle
+                \underbrace{\min_{\theta}\ \Loss_{\text{fgt}}(\theta^*;\Dforget)}_{\textcolor{psu-pink}{\textbf{Forget}}}
+                \quad\text{s.t.}\quad
+                \underbrace{\Loss_{\text{CE}}(\theta^*;\Dretain) \le \varepsilon}_{\textcolor{psu-navy}{\textbf{Retain budget}}}
+                \\[6ex]
+                \displaystyle
+                \underbrace{\theta^* \approx \argmin_{\theta}\ \Loss_{\text{CE}}(\theta;\Dretain)}_{\textcolor{psu-beaver}{\textbf{Repair (inner)}}}
+                \qquad
+                \underbrace{W' = W_0 + \tfrac{\alpha}{r}BA}_{\textcolor{psu-beaver}{\textbf{LoRA},\ W_0\ \text{frozen}}}
+              \end{array}$}
             \end{compblock}
           \end{column}
-          \begin{column}{0.59\linewidth}
+          \begin{column}{0.56\linewidth}
             \begin{compblock}[equal height group=r2top]{One training step}
-              \centering\vspace{1ex}
+              \centering
               \adjustbox{max width=\linewidth}{\input{figs/tikz-blade-loop}}
             \end{compblock}
           \end{column}
@@ -97,14 +102,12 @@
           \begin{column}{0.325\linewidth}
             \begin{compblock}{Repair-first principle}
               \centering
-              \adjustbox{max width=\linewidth}{\input{figs/tikz-repair-sawtooth}}
-              \[
-                \theta \leftarrow \theta - \eta_{\text{in}}\nabla_\theta\Loss_{\text{CE}}(\mathcal{B}_{\text{ret}})
-                \ \times K
-              \]
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-repair-sawtooth}}\\[0.4ex]
+              $\displaystyle \theta \leftarrow \theta - \eta_{\text{in}}\nabla_\theta\Loss_{\text{CE}}(\mathcal{B}_{\text{ret}})
+                \ \times K$\par\vspace{0.4ex}
               \raggedright
               \begin{itemize}
-                \item Forget--retain \textbf{entanglement}
+                \item Forget and retain are \textbf{entangled}
                 \item Forget is \textbf{destructive} by nature
                 \item \textbf{Anchor} forget by retain
               \end{itemize}
@@ -113,11 +116,9 @@
           \begin{column}{0.325\linewidth}
             \begin{compblock}{Asymmetric ALM}
               \centering
-              \adjustbox{max width=\linewidth}{\input{figs/tikz-ratchet}}
-              \[
-                \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}[r]_+^2,
-                \quad r = \Loss_{\text{ret}} - \varepsilon
-              \]
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-ratchet}}\\[0.4ex]
+              $\displaystyle \Loss_{\text{outer}} = \Loss_{\text{fgt}} + \lambda r + \tfrac{\rho}{2}[r]_+^2,
+                \quad r = \Loss_{\text{ret}} - \varepsilon$\par\vspace{0.4ex}
               \raggedright
               \begin{itemize}
                 \item \textbf{Constrained} forget under retain
@@ -128,10 +129,8 @@
           \begin{column}{0.325\linewidth}
             \begin{compblock}{Clamped entropy}
               \centering
-              \adjustbox{max width=\linewidth}{\input{figs/tikz-clamped-entropy}}
-              \[
-                \Loss_{\text{fgt}} = \tfrac{1}{N}\textstyle\sum_{t} \max\!\big(0,\, \tau\log V - H(p_t)\big)
-              \]
+              \adjustbox{max width=\linewidth}{\input{figs/tikz-clamped-entropy}}\\[0.4ex]
+              $\displaystyle \Loss_{\text{fgt}} = \tfrac{1}{N}\textstyle\sum_{t} \max\!\big(0,\, \tau\log V - H(p_t)\big)$\par\vspace{0.4ex}
               \raggedright
               \begin{itemize}
                 \item $\nabla = 0$ \textbf{once forgotten}
